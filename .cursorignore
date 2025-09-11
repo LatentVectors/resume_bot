@@ -1,4 +1,7 @@
+# Project specific
 data/
+*.db
+*.sqlite
 
 # Python
 __pycache__/
@@ -47,12 +50,6 @@ htmlcov/
 # Type checking
 .mypy_cache/
 .dmypy.json
-
-# Project specific
-data/
-__notes__/
-*.db
-*.sqlite
 
 # Streamlit
 .streamlit/

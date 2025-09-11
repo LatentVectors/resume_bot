@@ -3,6 +3,8 @@
 import streamlit as st
 from loguru import logger
 
+from app.services.user_service import UserService
+
 
 def main() -> None:
     """Main application entry point."""
@@ -14,12 +16,35 @@ def main() -> None:
         st.session_state.initialized = True
         logger.info("Streamlit app initialized")
 
+    # Check if users exist in database
+    try:
+        has_users = UserService.has_users()
+
+        if not has_users:
+            # No users exist, redirect to onboarding
+            logger.info("No users found, redirecting to onboarding")
+            st.switch_page("pages/_onboarding.py")
+            return
+        else:
+            # Users exist, check if we should redirect to home
+            current_user = UserService.get_current_user()
+            if current_user:
+                # Set current user in session state for easy access
+                st.session_state.current_user = current_user
+                logger.info(f"Current user: {current_user.first_name} {current_user.last_name}")
+
+    except Exception as e:
+        logger.error(f"Error checking user existence: {e}")
+        st.error("❌ Error connecting to database. Please check your connection and try again.")
+        st.stop()
+
     # Define pages using the new Streamlit navigation API
+    # Only show Home and User pages for single-user app
     home_page = st.Page("pages/home.py", title="Home", icon="🏠")
-    users_page = st.Page("pages/users.py", title="Users", icon="👥")
+    user_page = st.Page("pages/user.py", title="Profile", icon="👤")  # Renamed from Users to Profile
 
     # Create navigation
-    pg = st.navigation([home_page, users_page])
+    pg = st.navigation([home_page, user_page])
 
     # Run the selected page
     pg.run()
