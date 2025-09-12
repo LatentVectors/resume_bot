@@ -1,0 +1,18 @@
+---
+description: Rules for implementing state for LangGraph agents.
+alwaysApply: false
+---
+- The main, overall state for the agent should be defined in `src/state.py`.
+- State for sub-agents should be defined in their individual `src/agents/{agent_name}/state.py`
+- All state should be defined as Pydantic models.
+- The API for agents should be clearly defined by Input and Output states that only expose elements of the agents state that are intended as part of its public API.
+- The main internal state for the agent should be named `InternalState`, and should include all state fields required by the agent.
+- The `InternalState` should subclass the `InputState` and `OutputState` and define any additional internal state needed by the agent.
+- To help keep state organized into easy to reason about chunks, additional internal state models may be defined, the `InternalState` should be defined by including these as sub-classes to define the overall state.
+- There must not be any duplicate keys across the different state models. The subclasses of the `InternalState` must not use the same key.
+    - If multiple state models would benefit from using a similar name, add a prefix to the name to uniquely identify the piece of state.
+- All `InternalState` models should have a matching `PartialInternalState`. This `PartialInternalState` must include all the same fields as the `InternalState` but they non-required. This is essential for providing proper return-type typing for LangGraph nodes where each node can return a subset of keys defined in the `InternalState`.
+    - The `PartialInternalState` should be a TypedDict with total=False, instead of a Pydantic model.
+- The `PartialInternalState` should NOT include the reducers or annotations of the `InternalState`. Also, it should not define default types. The `PartialInternalState` should only mirror the fields and types of the `InternalState` but make all field not-required.
+- All fields on `InternalState` should define a default value.
+- State should be defined in the following order `InputState`, `OutputState`, `InternalState`, other models or types used for internal state, `PartialInternalState`.

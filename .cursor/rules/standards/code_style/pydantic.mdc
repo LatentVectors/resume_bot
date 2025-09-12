@@ -1,0 +1,59 @@
+---
+description: Rules for implementing Pydantic models in Python.
+alwaysApply: false
+---
+
+- Prefer the simpler syntax for default values in Pydantic models, over the more verbose `Field` notation whenever possible.
+```python
+from pydantic import BaseModel
+
+
+class Model(BaseModel):
+    # Use simple syntax for basic, mutable values.
+    # Pydantic creates a deep copy so this is safe.
+    item_counts: list[dict[str, int]] = [{}]
+    # Use simple `= {default}` syntax for basic values too.
+    some_number: int = 42
+```
+
+- Prefer the use of `Annotated` to attach additional metadata to models.
+```python
+from typing import Annotated
+
+from pydantic import BaseModel, Field, WithJsonSchema
+
+
+class Model(BaseModel):
+    name: Annotated[str, Field(strict=True), WithJsonSchema({'extra': 'data'})]
+```
+- However, note that certain arguments to the Field() function (namely, default, default_factory, and alias) are taken into account by static type checkers to synthesize a correct __init__ method. The annotated pattern is not understood by them, so you should use the normal assignment form instead.
+
+- Use a discriminator in scenarios with mixed types where there is a need to differentiate between the types.
+```python
+# Example of using a discriminator to identify specific models in a mixed-type situation.
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, Discriminator, Field, Tag
+
+
+class Cat(BaseModel):
+    pet_type: Literal['cat']
+    age: int
+
+
+class Dog(BaseModel):
+    pet_kind: Literal['dog']
+    age: int
+
+
+def pet_discriminator(v):
+    if isinstance(v, dict):
+        return v.get('pet_type', v.get('pet_kind'))
+    return getattr(v, 'pet_type', getattr(v, 'pet_kind', None))
+
+
+class Model(BaseModel):
+    pet: Annotated[Cat, Tag('cat')] | Annotated[Dog, Tag('dog')] = Field(
+        discriminator=Discriminator(pet_discriminator)
+    )
+```

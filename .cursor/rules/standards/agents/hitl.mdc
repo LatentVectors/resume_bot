@@ -1,0 +1,15 @@
+---
+globs: src/core/hitl.py
+alwaysApply: false
+---
+- The `src/hitl.py` file defines the data types and functions for dispatching and handling Human-In-The-Loop (HITL) workflows.
+- This code is the only place where the LangGraph `interrupt` function should be called for initiating human feedback.
+- All functions that initiate an interrupt should follow the naming pattern `dispatch_{action_type}`.
+- All dispatch functions should include types both for the data they pass to the `interrupt` function and the data they return.
+    - The name for the dispatch type should follow the pattern `{Type}Interrupt`.
+    - The name for the type returned by the dispatch should follow the pattern `{Type}InterruptResponse`.
+    - Both names should be in TitleCase.
+    - The `{Type}` in both names should match to make it easy to identify what kind of interrupt the data belong to.
+- The `handle_interrupts` function should act like a reducer for matching up Interrupt objects with the appropriate handler.
+    - Sub-handlers should be defined for handling specific dispatched interrupts.
+    - The function signature for sub-handlers should take in the defined dispatch type and return the defined response.

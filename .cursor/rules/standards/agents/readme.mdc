@@ -1,0 +1,42 @@
+---
+alwaysApply: false
+---
+
+# Agent README Structure & Notation
+An Agent's README doc, if available provides a high-level overview of the agents state, nodes, edges, and graph structure. The following sections provide details about each section and the simplified notation each section uses to communicate the structure of the agent and how information flows through it.
+
+## Overview
+Provides a simple summary of the agents main objective and behavior.
+
+## State
+Defines the input and output state for the agent. The InternalState of the agent is the union of the InputState, OutputState, all 'Returns' defined by the nodes, and all 'Sets' defined by map edges.
+- Not all 'Returns' entries include a type annotation. If an entry does not define a return type, look for other entries that do include the return type.
+- Each state key should have a single type defined across all the times it is referenced across the entire. If the README document includes multiple, non-identical type hits for a single state key, notify the user and ask them which one is correct.
+- If a state key type is not defined in one node, but does have a consistently defined type in other nodes, assume the type is the consistently defined type.
+- Some state entries are followed by comment. These comments provide additional context about the state key, such as where the type is defined, or how the value should be reduced.
+- State entries can provide a default value via `- state_key_name: type = {default_value}`.
+
+For additional rules for agent state see: @.cursor/rules/standards/agents/state.mdc
+
+## Nodes
+Defines the nodes of the agent.
+- The nodes name is indicated in bold (`**My Node Name**`). Use the snake case version of the name in the code (i.e. `my_node_name`). This includes in the Node StrEnum string, the node's filename and function name.
+- The key for the Node StrEnum is the upper-case version of the name (i.e. `Node.MY_NODE_NAME`).
+- If the node includes a Defer: True line, include defer=True when adding the node to the graph (`builder.add_node(Node.MY_NODE, my_node, defer=True)`)
+- The 'Reads' section indicates the state values the node reads from input state as part of carry out its tasks.
+- The 'Returns' section indicates the state values the node returns.
+- The title of the node is followed by a summary of the nodes purpose and behavior.
+
+## Edges
+Defines specialized edges including mapping edges for parallel map-reduce patterns or router edges for conditional routing between nodes.
+
+- 'Reads'
+- 'Sets' indicates the state keys a map edge sets with a unique value as part of a map-reduce flow. This state key is assigned a unique value for the downstream node to process.
+- 'Returns' indicates the values returned by the conditional edge. For map edges this should be a list of Send objects with a note indicating the nodes to send to. For route edges this should be the different nodes the edge can conditional route to.
+
+## Graph
+Defines the structure of the agents graph.
+- The Graph section uses snake_case names for nodes and edges.
+- The LangGraph START and END nodes are named START and END.
+- The Graph section uses `->` to indicate when two nodes are connected and the direction of the flow.
+- Special, conditional edges, such as router edges or map edges, indicate the nodes they route to by including the names of the nodes in the brackets following the edge name. i.e `my_node -> route_my_edge[next_node_option_1, next_node_option_2]`.

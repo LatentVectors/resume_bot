@@ -1,0 +1,51 @@
+---
+description: Rules for implementing agent graphs inside of LangGraph agents.
+alwaysApply: false
+---
+### Graph files (structure and rules)
+
+- **Purpose**: Each `graph.py` defines the structure and flow of a LangGraph agent: nodes, edges, compilation, and (optionally) a runtime loop.
+
+- **File layout (order and sections)**
+  - Imports: `typing`, `enum.StrEnum`, `langgraph.graph` (`StateGraph`, `START`, `END`), `langgraph.types.Send` (if needed), `RunnableConfig` (if exporting a runtime), project `logger`, `AgentContext`, node callables, and state types (`InputState`, `InternalState`, `OutputState`).
+  - `class Node(StrEnum)`: Uppercase members; values are snake_case strings. Always include `START = START` and `END = END` members.
+  - `builder = StateGraph(...)`: Instantiate with explicit schemas:
+    ```python
+    builder = StateGraph(
+        InternalState,
+        input_schema=InputState,
+        output_schema=OutputState,
+        context_schema=AgentContext,
+    )
+    ```
+  - `# === NODES ===`: Register every node via `builder.add_node(Node.X, func, defer=<bool?>)`.
+    - Use `defer=True` for nodes that should run after other nodes in the same step when applicable.
+  - `# === EDGES ===`: Register linear and conditional edges.
+    - See @.cursor/rules/standards/agents/edges.mdc for more details on implementing conditional edge.
+  - `# === GRAPH ===`: Compile and export the graph. Prefer the exported variable name `graph` (lowercase) across all agents.
+    - For interactive or resumable graphs, compile with a checkpointer:
+      ```python
+      from langgraph.checkpoint.memory import MemorySaver
+      memory = MemorySaver()
+      graph = builder.compile(checkpointer=memory)
+      ```
+
+- **Naming conventions**
+  - `Node` members: UPPER_SNAKE_CASE; member values: `"lower_snake_case"`.
+  - Compiled graph variable: `graph`.
+  - Section headers: exactly `# === NODES ===`, `# === EDGES ===`, `# === GRAPH ===`.
+  - Node callables live in the local `nodes` package and are imported in aggregate via `.nodes` or individually, matching existing patterns.
+
+- **Types and annotations**
+  - Always type the state schemas explicitly as shown above.
+  - When using conditional edges, the edge functions must be typed per `.cursor/rules/standards/agents/edges.mdc`.
+  - It is acceptable to add `# type: ignore[arg-type]` at `add_conditional_edges` call sites when needed by the checker.
+
+- **Edges (reference only)**
+  - Linear edges: `builder.add_edge(Node.A, Node.B)`.
+  - Conditional edges (routing and fan-out): `builder.add_conditional_edges(...)`.
+  - For full edge implementation rules (including `Send` with copied state), refer to @.cursor/rules/standards/agents/edges.mdc.
+
+- **Module escalation**
+  - If `graph.py` grows too large, convert it to a module that exports: `Node`, `graph`, and optional runtime functions. Custom edge functions can be moved to sibling files within the module while keeping the same import surface.
+

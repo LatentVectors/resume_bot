@@ -1,0 +1,177 @@
+---
+alwaysApply: false
+---
+You are responsible for implementing the scaffolding for a new LangGraph agent. This document outlines the steps you must follow to properly scaffold a new agent. You must follow these directions carefully. 
+
+# Workflow
+
+1) **Analyze the Agent's README**
+- Review the rules for interpreting an Agent's README file defined in @.cursor/rules/standards/agents/readme.mdc.
+- Carefully examine the Agent's README file and check the following:
+    - All required sections are defined.
+    - All state entries have a single, consistent type.
+    - There are no Node 'Returns' entries that are not used either by another node or in the OutputState.
+    - There are no nodes in the Graph that are not defined in the Nodes section.
+    - There are no nodes in the Nodes section that are not used anywhere in the Graph.
+    - All names are consistent, including state entries, nodes, state types, and edges.
+    - All state entry type definitions can be identified in the project.
+    - There is nothing unclear, confusing, or contradictory outlined in the Agent's README.
+- Notify the user of any problems you identified in your analysis.
+- If there are problems or inconsistencies you identified in the Agent's README, DO NOT CONTINUE UNTIL THE USER HAS RESOLVED THE ISSUES OR DIRECTED YOU TO CONTINUE IN THE PROCESS!
+
+2) **Implement the Agent's State**
+- If not already created, add the `state.py` file to the agent's module.
+- Review the rules for interpreting an Agent's README file defined in @.cursor/rules/standards/agents/readme.mdc.
+- Review the Agent's README file paying special attention to the Agent's State.
+- Review the rules for defining an agents state outlined in @.cursor/rules/standards/agents/state.mdc.
+- Using the InputState, OutputState and entries defined in the Nodes 'Returns' sections create the agents `state.py` file and define the InputState, OutputState, InternalState, and PartialInternalState.
+- Implement reducers for any state entry marked in the README as needing a reducer. The reduce will usually be specified in a simple note following the state entry. eg. `- iteration_count: int = 0 # Reduce increment int.
+- Define all specialized reducer functions at the top of the state file.
+- If the README does not indicate the use of a reducer, DO NOT PROVIDE ONE.
+- If the README specifies a reducer, include it exactly as written; otherwise do not add a reducer.
+- Reducers MUST be defined on InternalState fields using typing.Annotated[T, reducer_callable]. Do not add reducers on InputState, OutputState, or PartialInternalState.
+- PartialInternalState must mirror the types of InternalState fields but must NOT include reducers or defaults.
+
+State field requirement policy (required/optional/defaults):
+- InputState
+  - Only the InputState may contain required fields by default.
+  - A field is required unless the README explicitly provides a concrete default value.
+  - Do not use `None` as a default in the InputState unless the README explicitly specifies `None` as the default.
+- OutputState
+  - All OutputState fields must default to `None` unless the README explicitly specifies a concrete default value.
+  - Annotate each OutputState field as `T | None` and set its default to `None`.
+- InternalState
+  - Must subclass InputState and OutputState and include all intermediate/working fields.
+  - All InternalState fields must have defaults.
+  - For mutable collections, use `Field(default_factory=...)` to avoid shared mutable defaults.
+  - Add reducers only on InternalState fields using `typing.Annotated[T, reducer]` as indicated by the README.
+- PartialInternalState
+  - Must be a `TypedDict` with `total=False` so no keys are required.
+  - Mirror all InternalState keys. For each key, use an optional type `T | None` (even if the InternalState field is not optional) so that Partial updates can omit keys or pass `None`.
+  - Do not include reducers or defaults in the PartialInternalState.
+
+```python
+from __future__ import annotations
+
+import operator
+from typing import Annotated
+from pydantic import BaseModel, Field
+
+# Simple dict merge reducer
+def merge_dicts(left: dict, right: dict) -> dict:
+    return {**left, **right}
+
+class InternalState(InputState, OutputState, BaseModel):
+    # Counter (e.g., feedback iterations)
+    feedback_loop_iterations: Annotated[int, operator.add] = 0
+
+    # List append
+    collected_items: Annotated[list[str], operator.add] = []
+
+
+    # Shallow dict merge (e.g., keyed by experience_id)
+    experience_summary: Annotated[dict[int, str], merge_dicts] = Field(default_factory=dict)
+
+    # Last-write-wins (no reducer needed; plain assignment)
+    current_stage: str | None = None
+```
+
+3) **Mock-in the Agents's Nodes**
+- If not already created, add the `nodes` module to the agent.
+- Review the rules for interpreting an Agent's README file defined in @.cursor/rules/standards/agents/readme.mdc.
+- Review the Agent's README file paying special attention to the Agent's Nodes.
+- Review the guidelines for interpreting the README's graph section outlined below.
+- SINCE YOU ARE ONLY MOCKING IN THE NODE, DO NOT WASTE TIME REVIEWING THE RULES FOR IMPLEMENTING NODES AND JUST FOLLOW THE TEMPLATE OUTLINED IN THIS SECTION!
+- Create a file for each node in the `nodes` module using the node's snake_case name for the filename and define the node function in the file using it's snake case name.
+- DO NOT IMPLEMENT ANY NODE LOGIC AT THIS POINT! YOUR GOAL IS NOT TO IMPLEMENT A WORKING NODE, IT IS ONLY TO SCAFFOLD THE NODE FUNCTION!
+- Use the following template for creating the node function:
+    - Replace `my_node_name` with the nodes actual name.
+    - Replace `unedited_node_contents_from_agent_readme` with the full, unedited contents of the node's section in the Agent's README, including the summary, Reads, Returns, and any other content defined in that node's section.
+```python
+from ..state import InputState, PartialInputState
+
+def {my_node_name}(state: InputState) -> PartialInputState:
+    """
+    {unedited_node_contents_from_agent_readme}
+    """
+    return PartialInputState()
+``` 
+- Update `nodes/__init__.py` to import ALL node functions and export them in `__all__`.
+```python
+from .node_1 import node_1
+from .node_2 import node_2
+
+__all__ = (
+    "node_1",
+    "node_2"
+)
+```
+
+4) **Implement the Agent's Graph**
+- If not already created, add the `graph.py` file to the agent's module.
+- Review the rules for interpreting an Agent's README file defined in @.cursor/rules/standards/agents/readme.mdc.
+- Review the Agent's README file paying special attention to the Agent's Graph.
+- Review the guidelines for interpreting the README's graph section outlined below.
+- Review the rules for defining an agents graph outlined in @.cursor/rules/standards/agents/graph.mdc.
+- Review the rules for defining an agent's edges outlined in: @.cursor/rules/standards/agents/edges.mdc
+- Import the agents state.
+- Import the agents nodes.
+- Define the Node StrEnum for the agent's nodes.
+- Create the graph builder object.
+- Add the nodes to the builder.
+- Define any specialized edges, such as map or route edges.
+- Add the edges to the builder.
+- Compile the graph builder.
+- Update the agent modules `__init__.py` to export the compiled agent.
+- Update the agent modules `__init__.py` to expose the InputState, OutputState, compiled agent. Alias the compiled graph with a short, descriptive name ending with the `_agent` postfix. See the following template for an example:
+```python
+from .graph import graph as my_helpful_agent
+from .state import InputState, OutputState
+
+__all__ = (
+    "my_helpful_agent",
+    "InputState",
+    "OutputState",
+)
+```
+
+5) **Review**
+- Review the rules for interpreting an Agent's README file defined in @.cursor/rules/standards/agents/readme.mdc.
+- Note: Example names below are illustrative. Replace them with the types, context class, and model names specific to the agent you are scaffolding.
+- Perform a full verification pass with the following checklist:
+    - State
+        - Every entry in Nodes/Edges Reads, Sets, and Returns exists in `InternalState`.
+        - `InputState` and `OutputState` match README exactly (names, types, defaults), following the requirement policy: InputState fields required unless README gives a default; OutputState fields `T | None = None` unless README gives a concrete default.
+        - Iterative/reducer fields (e.g., feedback counters) are clearly named, typed as `int`, and initialized.
+        - Map context fields are present in `InternalState`.
+        - All referenced types exist in code and are importable (e.g., domain data models and output schemas used by this agent). Replace examples with your agent’s concrete types.
+        - Make sure all reducers indicated in the README are implemented and properly annotated.
+        - `PartialInternalState` is a `TypedDict` with `total=False`, mirrors all InternalState fields using optional types (`T | None`), and contains no reducers/defaults.
+    - Nodes
+        - A node file exists for every node listed in the README’s Nodes section.
+        - Each node signature is `def node_name(state: InternalState) -> PartialInternalState`.
+        - Each node docstring contains the unedited README section for that node.
+        - Nodes marked “Defer: True” in README are registered with `defer=True` in the graph.
+        - `nodes/__init__.py` imports all node functions and exports them in `__all__`.
+    - Graph
+        - `Node` StrEnum names match README Graph section exactly.
+        - Edges in code mirror README sequence and semantics.
+        - Specialized edges are defined with clear names following `{type_prefix}_{edge_name}_edge` (e.g., `map_experience_edge`, `route_feedback_edge`).
+        - Map fan-out sets required context fields and sends validated state objects.
+        - Graph compiles without errors.
+    - Integration
+        - Agent package `__init__.py` exports the compiled graph (aliased with `_agent` suffix) and state types.
+        - Agent package `__init__.py` exports the `InputState` and `OutputState`.
+    - Quality
+        - Lint/mypy are clean (or justified) for added/edited files.
+
+- Synchronize the README with the implemented code:
+    - Remove any placeholder/sketched type definitions that were moved into code (e.g., inline Pydantic model sketches). Reference the implemented models instead.
+    - Ensure naming consistency across Nodes, Graph, State entry names, and types.
+    - Ensure there are no orphan nodes (listed but unused) and no Returns that are neither consumed by another node nor included in `OutputState`.
+    - Fix obvious grammar/typos for clarity.
+
+- Acceptance Criteria for completion:
+    - README and code are fully synchronized; no redundant inline type definitions remain.
+    - All nodes are present, wired, and exported; all edges defined and named per convention.
+    - State covers all Reads/Returns/Sets with correct types and defaults; graph compiles; lint is clean.

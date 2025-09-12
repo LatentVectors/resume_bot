@@ -1,0 +1,123 @@
+---
+description: Rules for implementing nodes in LangGraph agents.
+alwaysApply: false
+---
+### Node implementation rules
+
+- **Location**: Define nodes inside an agent’s `nodes` package. Prefer one node per file named after the node (e.g., `write_cover_letter.py` contains `write_cover_letter`).
+
+- **Function signatures**
+  - Standard node: `def node_name(state: InternalState) -> PartialInternalState:`
+  - Nodes that need context or call subgraphs: `def node_name(state: InternalState, runtime: Runtime[AgentContext]) -> PartialInternalState:`
+  - Import `InternalState` and `PartialInternalState` from the agent’s `state.py`. Import `Runtime` and `AgentContext` only when needed.
+
+- **Docstring structure**
+  - Include a brief overview of the nodes purpose and functionality.
+
+- **Logging**
+  - Import `logger` from `src.logging_config`.
+  - First line of the node body logs its name:
+    - Sub-agent node: `logger.debug("NODE: <agent-name>.<node_name>")`
+  - Prefer `debug`, `warning`, `error`. Avoid `info` to reduce console noise.
+
+- **State IO contract**
+  - Do not mutate `state` in-place. Compute results and return `PartialInternalState(...)` containing only changed fields.
+  - Do not return regular dicts from nodes. Always instantiate `PartialInternalState(...)` to return from the node.
+  - If nothing changes, return `PartialInternalState()` (not `None`).
+
+- **Preconditions and validation**
+  - Validate required inputs early; raise `ValueError` with clear messages when missing.
+  - For LLM responses with structured outputs, validate into Pydantic models via `Model.model_validate(response)` before mapping to state.
+
+- **LLM chains and file layout**
+  - Inside a node module, order definitions as:
+    1) Node function(s)
+    2) Small helper functions
+    3) Prompt strings (`system_prompt`, `user_prompt`)
+    4) Pydantic models for structured output
+    5) Model acquisition: `get_model(OpenAIModels.…)`
+    6) Chain definition (`chain` at module scope)
+  - Prefer structured outputs when appropriate:
+    `llm.with_structured_output(Model).with_retry(retry_if_exception_type=(APIConnectionError,))`.
+  - For free-form text, use `StrOutputParser()`.
+  - Not all nodes need to define all of these sections.
+  - Not all nodes need to call an LLM or use LangChain.
+
+- **Sub-agent wrapper nodes**
+  - Name: `wrapped_{agent_name}_agent`.
+  - Purpose: Convert parent graph state to sub-agent input; invoke sub-agent with the current runtime context; map validated sub-agent outputs back to the parent state. No additional business logic.
+  - Always pass `runtime.context` into sub-agent calls and validate the result against the sub-agent `OutputState` before mapping.
+  - Always import the child agent's input state and use it to instantiate the input to the child agent.
+  - Always import the child agent's output state and use to add typing to the child agents return value.
+
+
+- **HITL nodes**
+  - Use dispatch helpers from `src.core.hitl` (e.g., `dispatch_message_interrupt`).
+  - Perform dispatch near the top of the node after basic precondition checks.
+  - Do not perform dispatch inside of conditional logic or loops. When dispatch values are resolved, LangGraph re-runs the nodes replacing resolved dispatch values in the same order they were invoked. To account for this, dispatch values must be resolved in the same order and same number as they were initially invoked every single time the node is executed, no matter the input passed to the node. Failing to do so will result in hard-to-find bugs. FOLLOWING THIS IS ESSENTIAL TO RELIABLE EXECUTION!
+
+- **Data access nodes**
+  - Use project DB utilities (e.g., `db_manager`) rather than ad-hoc sessions.
+
+- **Testing guidance**
+  - Nodes that make LLM calls should be covered by evals rather than unit tests.
+  - Pure helper functions can be unit-tested if exported separately.
+
+- **Exports**
+  - Add every new node to the local `nodes/__init__.py` `__all__` list so graphs can import uniformly.
+
+### Minimal templates
+
+- Regular node with structured output
+```python
+from __future__ import annotations
+
+from langchain_core.prompts.chat import ChatPromptTemplate
+from openai import APIConnectionError
+from pydantic import BaseModel, Field
+
+from src.core.models import OpenAIModels, get_model
+from src.logging_config import logger
+from ..state import InternalState, PartialInternalState
+
+def example_node(state: InternalState) -> PartialInternalState:
+    """Brief purpose."""
+    logger.debug("NODE: example_node")
+    response = chain.invoke({"input": state.some_field})
+    validated = OutputModel.model_validate(response)
+    return PartialInternalState(other_field=validated.value)
+
+
+system_prompt = """
+You are helpful.
+"""
+user_prompt = """
+{input}
+"""
+
+class OutputModel(BaseModel):
+    value: str = Field(description="Short result")
+
+llm = get_model(OpenAIModels.gpt_4o_mini)
+llm_structured = llm.with_structured_output(OutputModel).with_retry(
+    retry_if_exception_type=(APIConnectionError,)
+)
+chain = ChatPromptTemplate.from_messages([
+    ("system", system_prompt),
+    ("user", user_prompt),
+]) | llm_structured
+```
+
+- Sub-agent wrapper node
+```python
+  from src.agents.parent_agent import InternalState, PartialInternalState
+  from src.agents.child_agent import child_agent, InputState, OutputState
+  from src.logger_config import logger
+
+  def wrapped_child_agent(state: InternalState) -> PartialInternalState:
+    """Wrapped child agent."""
+    logger.debug("NODE: parent_agent.wrapped_child_agent")
+    child_input = InputState(child_value=state.parent_value)
+    child_output: OutputState = child_agent.invoke(child_input)
+    return PartialInternalState(new_value=child_output.returned_value)
+```

@@ -1,0 +1,91 @@
+---
+description: Rules for implementing custom edges in LangGraph graphs
+globs:
+alwaysApply: false
+---
+
+### Custom edges for LangGraph graphs
+
+Follow these rules to implement custom edges (routing and fan-out) consistently across graphs.
+
+- **Location and naming**
+  - **Place** edge functions in the same module as the graph builder, under a `# === EDGES ===` section.
+  - **Names**:
+    - **Fan-out/map edges**: `map_<subject>_edge` (returns a list of `Send`).
+    - **Routing/predicate edges**: `route_<subject>_edge` (returns a `Literal[NodeA, NodeB, ...]`).
+  - **Logging**: Start each edge with `logger.debug("EDGE: <module_or_graph>.<function_name>")`.
+
+- **Types and signatures**
+  - Edge functions must accept a single argument `state: InternalState`.
+  - **Fan-out edges** return `List[Send]`.
+  - **Routing edges** return `Literal[Node.<A>, Node.<B>, ...]` listing every possible next node.
+  - Import types from `typing` (`List`, `Literal`) and `Send` from `langgraph.types`.
+  - Use the graph-local `Node` `StrEnum` members as return values and in `Send` targets.
+
+- **State handling with Send (critical)**
+  - When constructing `Send`, always pass a fresh, validated copy of state.
+  - Use `InternalState.model_validate(state)` (or `state.model_copy(deep=True)` if appropriate) before mutating fields for the outgoing branch.
+  - Rationale: LangGraph bypasses typical state initialization for state passed via `Send`. Copying ensures invariants and validators run, and prevents accidental mutation of shared state.
+
+- **Registering edges**
+  - **Linear edges**: `builder.add_edge(Node.A, Node.B)`.
+  - **Fan-out edges**: `builder.add_conditional_edges(Node.SOURCE, map_fn, [Node.TARGET1, Node.TARGET2, ...])` where `map_fn -> List[Send]`.
+  - **Routing edges**: `builder.add_conditional_edges(Node.SOURCE, route_fn, [Node.A, Node.B, ...])` where `route_fn -> Literal[...]`.
+  - The list of possible targets must include every node that can be returned/sent by the edge.
+  - If the type checker complains, add `# type: ignore[arg-type]` at the call site to satisfy typing.
+
+- **Docstrings**
+  - Keep edge docstrings concise and structured. Include lines for:
+    - `Reads:` state fields consumed
+    - `Sets:` state fields mutated (only on copies for `Send`)
+    - `Returns:` return type (`List[Send]` or `Literal[...]`)
+
+- **Examples**
+  - Fan-out/map edge that branches per experience and sends copied state:
+    ```python
+    from typing import List
+    from langgraph.types import Send
+
+    def map_experience_edge(state: InternalState) -> List[Send]:
+        logger.debug("EDGE: map_experience_edge")
+        next_nodes: List[Send] = []
+        if state.experience_ids:
+            for exp_id in state.experience_ids:
+                new_state = InternalState.model_validate(state)  # copy/validate
+                new_state.current_experience_id = exp_id
+                next_nodes.append(Send(Node.WRAPPED_EXPERIENCE_AGENT, new_state))
+        return next_nodes
+    ```
+
+  - Routing edge that selects the next node via `Literal`:
+    ```python
+    from typing import Literal
+
+    def route_cover_letter_feedback_edge(
+        state: InternalState,
+    ) -> Literal[Node.WRITE_COVER_LETTER, Node.END]:
+        logger.debug("EDGE: route_cover_letter_feedback_edge")
+        return Node.WRITE_COVER_LETTER if state.cover_letter_feedback else Node.END
+    ```
+
+  - Registering edges on the builder:
+    ```python
+    builder.add_conditional_edges(
+        Node.JOB_REQUIREMENTS,
+        map_experience_edge,  # type: ignore[arg-type]
+        [Node.WRAPPED_EXPERIENCE_AGENT],
+    )
+
+    builder.add_conditional_edges(
+        Node.FEEDBACK,
+        route_cover_letter_feedback_edge,  # type: ignore[arg-type]
+        [Node.WRITE_COVER_LETTER, Node.END],
+    )
+    ```
+
+- **Do’s and don’ts**
+  - **Do** copy/validate state before modifying it for `Send`.
+  - **Do** return an empty list from map edges when no branches are needed.
+  - **Don’t** mutate the incoming `state` directly in an edge; mutate only the copied state you pass to `Send`.
+  - **Don’t** return nodes that aren’t included in the `possible_nodes` argument of `add_conditional_edges`.
+

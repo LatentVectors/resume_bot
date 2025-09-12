@@ -1,0 +1,94 @@
+---
+alwaysApply: false
+---
+
+This document outlines the workflow for fully implementing the node's of an agent in a systematic way to make sure the node can be correctly and autonomously implemented by the agent on its first attempt, eliminating wasteful rework or pausing to collect feedback.
+
+# Phase 1: Understand the Nodes Context
+GOAL: Understand and contextualize how the current node fits into the overall agent and the role it plays in helping the agent complete its objective. Identify and resolve any ambiguity in the nodes overall purpose and functionality.
+
+- Review the rules for interpreting an agent's README in @.cursor/rules/standards/agents/readme.mdc.
+- Read the agent's README file to understand the broader context of the current node.
+- Identify any ambiguity around the overall purpose or functionality of the current node.
+- Think through important questions about this node and how it relates to the agent overall. The following is a non-exhaustive list of potential questions you can ask to help you carefully think through the nodes role and what is required for a strong implementation:
+    - What nodes come before this node?
+    - What information does this node have available to it when it is run?
+    - What nodes come after this node?
+    - How do other nodes rely on or make use of the information returned by this node?
+    - Does the behavior of this node change based on the information passed in? If so how?
+    - What determines if this node runs? Does it execute every time the graph is invoked or does it depend on other conditions?
+    - How do the outputs produced by this node impact the agent in completing its objective?
+    - Does the node call and LLM? If so, what information does it have available to provide the best context for the LLM to return a high-quality output?
+- Strive to learn as much about the nodes requirements on your own before asking follow-up questions of the user.
+- If necessary, ask the user clarifying questions until you have a sufficient understanding to create the nodes design contract.
+
+# Phase 2: Refine Docstring Design Contract
+GOAL: Distill context around the node into a detailed design contract that avoid the need for rework or clarification during the nodes implementation. Codify the node's purpose and functionality into a detailed specification that can be followed to correctly implement the nodes logic. The specification should include enough information for the LLM agent to correctly implement the node on the first try.
+
+- Review rules for nodes found in @.cursor/rules/standards/agents/nodes.mdc.
+- If the node uses Human-In-The-Loop, review the rules for HITL found in @.cursor/rules/standards/agents/hitl.mdc.
+- Update the nodes docstring to include a clear and comprehensive summary and design contract, distilling the context and specifications for the node identified earlier.
+- Be sure to include the following:
+    - An overview of the nodes purpose, intended behavior, and expected outcomes.
+    - A checklist of implementation requirements that clearly define the key implementation details necessary to fully implement the node to spec.
+
+# Phase 3: Implement
+GOAL: Implement the node's logic with code to the specification of the design contract, resulting in a complete, final implementation of the node.
+
+- Follow the design contract in the docstring and implement the node.
+
+# Phase 4: Review
+GOAL: Verify the node is properly implemented, error free, and follows all best practices.
+
+- Does the node follow and fully implement the design contract?
+- Does the node pass linting and type checking?
+- Are thee any logic errors or lurking bugs in the implementation?
+- Verify all best practices and guidance on nodes have been followed:
+    - Does the node follow the guidelines found in @.cursor/rules/standards/agents/nodes.mdc?
+    - Does the agent follow the guidelines for HITL in @.cursor/rules/standards/agents/hitl.mdc, if applicable?
+    - Does the code follow coding standards outlined in @.cursor/rules/standards/code_style/python.mdc?
+This document outlines the workflow for fully implementing the node's of an agent in a systematic way to make sure the node can be correctly and autonomously implemented by the agent on its first attempt, eliminating wasteful rework or pausing to collect feedback.
+
+# Phase 1: Understand the Nodes Context
+GOAL: Understand and contextualize how the current node fits into the overall agent and the role it plays in helping the agent complete its objective. Identify and resolve any ambiguity in the nodes overall purpose and functionality.
+
+- Review the rules for interpreting an agent's README in @.cursor/rules/standards/agents/readme.mdc.
+- Read the agent's README file to understand the broader context of the current node.
+- Identify any ambiguity around the overall purpose or functionality of the current node.
+- Think through important questions about this node and how it relates to the agent overall. The following is a non-exhaustive list of potential questions you can ask to help you carefully think through the nodes role and what is required for a strong implementation:
+    - What nodes come before this node?
+    - What information does this node have available to it when it is run?
+    - What nodes come after this node?
+    - How do other nodes rely on or make use of the information returned by this node?
+    - Does the behavior of this node change based on the information passed in? If so how?
+    - What determines if this node runs? Does it execute every time the graph is invoked or does it depend on other conditions?
+    - How do the outputs produced by this node impact the agent in completing its objective?
+    - Does the node call and LLM? If so, what information does it have available to provide the best context for the LLM to return a high-quality output?
+- Strive to learn as much about the nodes requirements on your own before asking follow-up questions of the user.
+- If necessary, ask the user clarifying questions until you have a sufficient understanding to create the nodes design contract.
+
+# Phase 2: Refine Docstring Design Contract
+GOAL: Distill context around the node into a detailed design contract that avoid the need for rework or clarification during the nodes implementation. Codify the node's purpose and functionality into a detailed specification that can be followed to correctly implement the nodes logic. The specification should include enough information for the LLM agent to correctly implement the node on the first try.
+
+- Review rules for nodes found in @.cursor/rules/standards/agents/nodes.mdc.
+- If the node uses Human-In-The-Loop, review the rules for HITL found in @.cursor/rules/standards/agents/hitl.mdc.
+- Update the nodes docstring to include a clear and comprehensive summary and design contract, distilling the context and specifications for the node identified earlier.
+- Be sure to include the following:
+    - An overview of the nodes purpose, intended behavior, and expected outcomes.
+    - A checklist of implementation requirements that clearly define the key implementation details necessary to fully implement the node to spec.
+
+# Phase 3: Implement
+GOAL: Implement the node's logic with code to the specification of the design contract, resulting in a complete, final implementation of the node.
+
+- Follow the design contract in the docstring and implement the node.
+
+# Phase 4: Review
+GOAL: Verify the node is properly implemented, error free, and follows all best practices.
+
+- Does the node follow and fully implement the design contract?
+- Does the node pass linting and type checking?
+- Are thee any logic errors or lurking bugs in the implementation?
+- Verify all best practices and guidance on nodes have been followed:
+    - Does the node follow the guidelines found in @.cursor/rules/standards/agents/nodes.mdc?
+    - Does the agent follow the guidelines for HITL in @.cursor/rules/standards/agents/hitl.mdc, if applicable?
+    - Does the code follow coding standards outlined in @.cursor/rules/standards/code_style/python.mdc?
