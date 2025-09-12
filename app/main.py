@@ -1,9 +1,9 @@
 """Main Streamlit application entry point."""
 
 import streamlit as st
-from loguru import logger
 
 from app.services.user_service import UserService
+from src.logging_config import logger
 
 
 def main() -> None:

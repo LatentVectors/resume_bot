@@ -4,11 +4,11 @@ import re
 from datetime import date
 
 import streamlit as st
-from loguru import logger
 
 from app.services.education_service import EducationService
 from app.services.experience_service import ExperienceService
 from app.services.user_service import UserService
+from src.logging_config import logger
 
 
 def validate_email(email: str) -> bool:

@@ -2,9 +2,8 @@
 
 from datetime import date
 
-from loguru import logger
-
 from src.database import Experience, User, db_manager
+from src.logging_config import logger
 
 
 class ExperienceService:

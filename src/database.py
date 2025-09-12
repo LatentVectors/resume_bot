@@ -4,8 +4,9 @@ from contextlib import contextmanager
 from datetime import date, datetime
 from pathlib import Path
 
-from loguru import logger
 from sqlmodel import Field, Session, SQLModel, create_engine, select
+
+from src.logging_config import logger
 
 from .config import settings
 

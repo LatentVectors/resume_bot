@@ -3,9 +3,9 @@
 from datetime import date
 
 import streamlit as st
-from loguru import logger
 
 from app.services.education_service import EducationService
+from src.logging_config import logger
 
 
 @st.dialog("Add Education", width="large")

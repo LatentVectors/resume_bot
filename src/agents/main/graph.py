@@ -1,36 +1,51 @@
 from enum import StrEnum
 
 from langgraph.graph import END, START, StateGraph
-from pydantic import BaseModel
 
+from src.core.context import AgentContext
 
-class InputState(BaseModel):
-    user_input: str
-
-
-class OutputState(BaseModel):
-    response: str | None = None
-
-
-class InternalState(InputState, OutputState):
-    pass
+from .nodes import create_resume, generate_experience, generate_skills, generate_summary
+from .state import InputState, InternalState, OutputState
 
 
 class Node(StrEnum):
+    """Node names for the resume generation agent."""
+
     START = START
     END = END
-    BASIC = "basic"
+    GENERATE_SUMMARY = "generate_summary"
+    GENERATE_EXPERIENCE = "generate_experience"
+    GENERATE_SKILLS = "generate_skills"
+    CREATE_RESUME = "create_resume"
 
 
-def basic_node(state: InternalState) -> OutputState:
-    return OutputState(response=f"Response to {state.user_input}")
+# === GRAPH ===
+builder = StateGraph(
+    InternalState,
+    input_schema=InputState,
+    output_schema=OutputState,
+    context_schema=AgentContext,
+)
 
+# === NODES ===
+builder.add_node(Node.GENERATE_SUMMARY, generate_summary)
+builder.add_node(Node.GENERATE_EXPERIENCE, generate_experience)
+builder.add_node(Node.GENERATE_SKILLS, generate_skills)
+builder.add_node(Node.CREATE_RESUME, create_resume)
 
-builder = StateGraph(InternalState)
+# === EDGES ===
+# Start branches to all three generation nodes in parallel
+builder.add_edge(Node.START, Node.GENERATE_SUMMARY)
+builder.add_edge(Node.START, Node.GENERATE_EXPERIENCE)
+builder.add_edge(Node.START, Node.GENERATE_SKILLS)
 
-builder.add_node(Node.BASIC, basic_node)
+# All generation nodes feed into create_resume
+builder.add_edge(Node.GENERATE_SUMMARY, Node.CREATE_RESUME)
+builder.add_edge(Node.GENERATE_EXPERIENCE, Node.CREATE_RESUME)
+builder.add_edge(Node.GENERATE_SKILLS, Node.CREATE_RESUME)
 
-builder.add_edge(Node.START, Node.BASIC)
-builder.add_edge(Node.BASIC, Node.END)
+# create_resume ends the graph
+builder.add_edge(Node.CREATE_RESUME, Node.END)
 
+# === GRAPH ===
 graph = builder.compile()

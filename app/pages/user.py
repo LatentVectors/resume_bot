@@ -1,13 +1,13 @@
 """User profile page for managing single user in the Resume Bot application."""
 
 import streamlit as st
-from loguru import logger
 
 from app.dialog.education_dialog import show_add_education_dialog, show_edit_education_dialog
 from app.dialog.experience_dialog import show_add_experience_dialog, show_edit_experience_dialog
 from app.services.education_service import EducationService
 from app.services.experience_service import ExperienceService
 from app.services.user_service import UserService
+from src.logging_config import logger
 
 
 def display_user_profile():

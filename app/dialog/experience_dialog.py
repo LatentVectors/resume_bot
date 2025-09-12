@@ -3,9 +3,9 @@
 from datetime import date
 
 import streamlit as st
-from loguru import logger
 
 from app.services.experience_service import ExperienceService
+from src.logging_config import logger
 
 
 @st.dialog("Add Experience", width="large")

@@ -153,6 +153,7 @@
     "editor.formatOnSave": true,
     "python.defaultInterpreterPath": "./.venv/bin/python",
     "python.terminal.activateEnvironment": true,
+    "python.languageServer": "None",
     "[python]": {
         "editor.formatOnSave": true,
         "editor.codeActionsOnSave": {

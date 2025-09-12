@@ -1,6 +1,5 @@
-from loguru import logger
-
 from src.database import User, db_manager
+from src.logging_config import logger
 
 
 class UserService:
