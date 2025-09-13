@@ -18,7 +18,7 @@ def create_resume(state: InternalState) -> PartialInternalState:
     Process:
     1. Validate inputs (professional_summary, experiences, skills)
     2. Transform data to ResumeData-compatible structure
-    3. Render HTML template (resume_001.html)
+    3. Render HTML template (resume_000.html)
     4. Convert HTML to PDF and save to data/resumes/{UUID}.pdf
     5. Return filename for downstream storage
     """
@@ -96,7 +96,7 @@ def create_resume(state: InternalState) -> PartialInternalState:
     output_path = output_dir / filename
 
     render_template_to_pdf(
-        template_name="resume_001.html",
+        template_name="resume_000.html",
         context=context,
         output_path=output_path,
         templates_dir=templates_dir,

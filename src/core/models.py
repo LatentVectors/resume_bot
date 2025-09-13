@@ -16,6 +16,8 @@ class OpenAIModels(Enum):
     """GPT-4o"""
     gpt_3_5_turbo = f"{OPENAI_PREFIX}gpt-3.5-turbo"
     """GPT-3.5 Turbo"""
+    gpt_5 = f"{OPENAI_PREFIX}gpt-5"
+    """GPT-5"""
 
 
 ModelName = OpenAIModels

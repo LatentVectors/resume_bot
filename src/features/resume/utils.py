@@ -32,14 +32,12 @@ def get_template_environment(templates_dir: str | Path) -> jinja2.Environment:
     )
 
 
-def render_template_to_html(
-    template_name: str, context: Dict[str, Any], templates_dir: str | Path
-) -> str:
+def render_template_to_html(template_name: str, context: Dict[str, Any], templates_dir: str | Path) -> str:
     """
     Render a Jinja2 template to HTML string.
 
     Args:
-        template_name: Name of the template file (e.g., 'resume_001.html')
+        template_name: Name of the template file (e.g., 'resume_000.html')
         context: Data context for template rendering
         templates_dir: Path to the templates directory
 
@@ -63,9 +61,7 @@ def render_template_to_html(
         raise
 
 
-def convert_html_to_pdf(
-    html_content: str, output_path: str | Path, css_string: Optional[str] = None
-) -> Path:
+def convert_html_to_pdf(html_content: str, output_path: str | Path, css_string: Optional[str] = None) -> Path:
     """
     Convert HTML content to PDF file.
 
@@ -114,7 +110,7 @@ def render_template_to_pdf(
     Render a Jinja2 template to PDF file.
 
     Args:
-        template_name: Name of the template file (e.g., 'resume_001.html')
+        template_name: Name of the template file (e.g., 'resume_000.html')
         context: Data context for template rendering
         output_path: Path where PDF should be saved
         templates_dir: Path to the templates directory
@@ -452,9 +448,7 @@ def list_available_templates(templates_dir: str | Path) -> list[str]:
         if not templates_path.exists():
             raise FileNotFoundError(f"Templates directory not found: {templates_path}")
 
-        templates = [
-            f.name for f in templates_path.iterdir() if f.is_file() and f.suffix.lower() == ".html"
-        ]
+        templates = [f.name for f in templates_path.iterdir() if f.is_file() and f.suffix.lower() == ".html"]
 
         logger.debug(f"Found {len(templates)} templates in {templates_path}")
         return sorted(templates)
