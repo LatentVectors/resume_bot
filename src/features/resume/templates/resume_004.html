@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ name }} - Resume</title>
+    <style>
+        /* --- Base Styles --- */
+        body {
+            font-family: Garamond, Georgia, 'Times New Roman', serif;
+            font-size: 12pt;
+            line-height: 1.35;
+            background: #fff;
+            color: #2d2d2d;
+            max-width: 820px;
+            margin: 0 auto;
+            padding: 13px;
+        }
+
+        /* --- Typography & Hierarchy --- */
+        h1,
+        h2,
+        h3 {
+            font-family: 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            color: #1a1a1a;
+            margin: 0;
+            font-weight: normal;
+        }
+
+        h1 {
+            font-size: 28pt;
+            font-weight: bold;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+
+        h2 {
+            font-size: 16pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #333;
+            border-bottom: 1px solid #333;
+            margin-top: 28px;
+            margin-bottom: 18px;
+            padding-bottom: 7px;
+        }
+
+        h3 {
+            font-size: 13pt;
+            font-weight: bold;
+            margin-bottom: 0;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+
+        /* --- Header & Contact Info --- */
+        .header-title {
+            text-align: center;
+            font-family: 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            font-size: 14pt;
+            color: #333;
+            margin: 4px 0;
+        }
+
+        .contact-info {
+            text-align: center;
+            font-size: 11pt;
+            margin-bottom: 25px;
+        }
+
+        .contact-info a {
+            color: #1a1a1a;
+            text-decoration: none;
+        }
+
+        .contact-info a:hover {
+            text-decoration: underline;
+        }
+
+        /* --- Reusable Components & Sections --- */
+        .entry {
+            margin-bottom: 24px;
+        }
+
+        .job-line,
+        .edu-line {
+            display: block;
+            /* Ensures elements stack vertically */
+            margin-top: 2px;
+        }
+
+        .company-location {
+            font-style: italic;
+            font-size: 11pt;
+            color: #454545;
+        }
+
+        .dates {
+            font-family: 'Helvetica Neue', Arial, Helvetica, sans-serif;
+            font-size: 10pt;
+            color: #555;
+        }
+
+        /* --- List Styling --- */
+        ul {
+            margin-top: 8px;
+            padding-left: 22px;
+            list-style-type: disc;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        /* Approved Exception for Skills Section */
+        .skills-list {
+            padding-left: 0;
+            list-style: none;
+            column-count: 3;
+            column-gap: 20px;
+        }
+
+        .skills-list li {
+            margin-bottom: 5px;
+            font-size: 11pt;
+        }
+
+        .summary-text,
+        .certification-entry {
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        {% if name %}<h1>{{ name }}</h1>{% endif %}
+        {% if title %}<p class="header-title">{{ title }}</p>{% endif %}
+        <p class="contact-info">
+            {% if email %}<a href="mailto:{{ email }}">{{ email }}</a>{% endif %}
+            {% if phone and email %} | {% endif %}
+            {% if phone %}{{ phone }}{% endif %}
+            {% if (email or phone) and linkedin_url %} | {% endif %}
+            {% if linkedin_url %}<a href="{{ linkedin_url }}">{{ linkedin_url }}</a>{% endif %}
+        </p>
+    </header>
+
+    {% if professional_summary %}
+    <section>
+        <h2>Summary</h2>
+        <p class="summary-text">{{ professional_summary }}</p>
+    </section>
+    {% endif %}
+
+    {% if experience %}
+    <section>
+        <h2>Professional Experience</h2>
+        {% for job in experience %}
+        <div class="entry">
+            <h3>{{ job.title }}</h3>
+            <span class="job-line">
+                <strong class="company-location">{{ job.company }}</strong>
+                {% if job.location %} — <span class="company-location">{{ job.location }}</span>{% endif %}
+            </span>
+            <span class="job-line">
+                <em class="dates">{{ job.start_date }} – {{ job.end_date }}</em>
+            </span>
+            <ul>
+                {% for point in job.points %}<li>{{ point }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if education %}
+    <section>
+        <h2>Education</h2>
+        {% for edu in education %}
+        <div class="entry">
+            <h3>{{ edu.degree }}{% if edu.major %}, {{ edu.major }}{% endif %}</h3>
+            <span class="edu-line">
+                <strong class="company-location">{{ edu.institution }}</strong>
+            </span>
+            <span class="edu-line">
+                <em class="dates">{{ edu.grad_date }}</em>
+            </span>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if skills %}
+    <section>
+        <h2>Key Skills</h2>
+        <ul class="skills-list">
+            {% for skill in skills %}
+            <li>{{ skill }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    {% if certifications %}
+    <section>
+        <h2>Certifications and Licenses</h2>
+        {% for cert in certifications %}
+        <div class="certification-entry">
+            <p><strong>{{ cert.title }}</strong>{% if cert.date %}, Issued {{ cert.date }}{% endif %}</p>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+</body>
+
+</html>

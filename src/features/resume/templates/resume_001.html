@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ name }} - Resume</title>
+    <style>
+        body {
+            font-family: Georgia, 'Times New Roman', Times, serif;
+            font-size: 11pt;
+            line-height: 1.35;
+            background-color: #FFFFFF;
+            color: #333333;
+            margin: 0 auto;
+            max-width: 800px;
+            padding: 13px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            font-family: Calibri, Arial, Helvetica, sans-serif;
+            color: #000000;
+            margin: 0;
+        }
+
+        h1 {
+            font-size: 24pt;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 2px;
+        }
+
+        h2 {
+            font-size: 14pt;
+            font-weight: bold;
+            border-bottom: 2px solid #000000;
+            margin-top: 20px;
+            margin-bottom: 15px;
+            padding-bottom: 5px;
+        }
+
+        h3 {
+            font-size: 12pt;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .current-title {
+            text-align: center;
+            font-family: Calibri, Arial, Helvetica, sans-serif;
+            font-size: 12pt;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 5px;
+        }
+
+        .contact-info {
+            text-align: center;
+            font-size: 10pt;
+            margin-bottom: 20px;
+        }
+
+        .job,
+        .education-entry,
+        .certification-entry {
+            margin-bottom: 20px;
+        }
+
+        .job-subheader p {
+            margin: 0;
+            font-size: 11pt;
+            font-style: italic;
+            color: #444;
+        }
+
+        ul {
+            padding-left: 20px;
+            margin-top: 10px;
+        }
+
+        li {
+            margin-bottom: 7px;
+        }
+
+        .skills-list {
+            padding-left: 0;
+            list-style-position: inside;
+            column-count: 3;
+            column-gap: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <h1>{{ name }}</h1>
+        <p class="current-title">{{ title }}</p>
+        <p class="contact-info">{{ email }} | {{ phone }} | {{ linkedin_url }}</p>
+    </header>
+
+    {% if professional_summary %}
+    <section>
+        <h2>Professional Summary</h2>
+        <p>{{ professional_summary }}</p>
+    </section>
+    {% endif %}
+
+    {% if experience %}
+    <section>
+        <h2>Professional Experience</h2>
+        {% for job in experience %}
+        <div class="job">
+            <h3>{{ job.title }}</h3>
+            <div class="job-subheader">
+                <p><strong>{{ job.company }}</strong> | {{ job.location }} | <em>{{ job.start_date }} – {{ job.end_date
+                        }}</em></p>
+            </div>
+            <ul>
+                {% for point in job.points %}<li>{{ point }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if skills %}
+    <section>
+        <h2>Technical Skills</h2>
+        <ul class="skills-list">
+            {% for skill in skills %}
+            <li>{{ skill }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    {% if certifications %}
+    <section>
+        <h2>Certifications</h2>
+        {% for cert in certifications %}
+        <div class="certification-entry">
+            <p><strong>{{ cert.title }}</strong>, {{ cert.date }}</p>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if education %}
+    <section>
+        <h2>Education</h2>
+        {% for edu in education %}
+        <div class="education-entry">
+            <h3>{{ edu.degree }}, {{ edu.major }}</h3>
+            <p><strong>{{ edu.institution }}</strong> | {{ edu.grad_date }}</p>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+</body>
+
+</html>

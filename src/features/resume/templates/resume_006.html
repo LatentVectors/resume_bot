@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>{{ name }} - Resume</title>
+    <style>
+        /* --- Base & Typography --- */
+        body {
+            font-family: Verdana, Geneva, sans-serif;
+            font-size: 10pt;
+            line-height: 1.44;
+            background: #FFFFFF;
+            color: #333333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 13px;
+        }
+
+        h1,
+        h2,
+        h3 {
+            font-family: Arial, Helvetica, sans-serif;
+            color: #111111;
+            margin: 0;
+        }
+
+        strong {
+            font-weight: bold;
+        }
+
+        em {
+            font-style: italic;
+        }
+
+        /* --- Header --- */
+        .header-main {
+            text-align: center;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid #ddd;
+        }
+
+        h1 {
+            font-size: 25pt;
+            font-weight: bold;
+            margin-bottom: 2px;
+        }
+
+        .header-title {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #222;
+            margin-bottom: 8px;
+        }
+
+        .contact-info {
+            font-size: 10pt;
+            color: #444;
+        }
+
+        .contact-info a {
+            color: #444;
+            text-decoration: none;
+        }
+
+        .contact-info a:hover {
+            text-decoration: underline;
+        }
+
+
+        /* --- Sections --- */
+        h2 {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #000;
+            margin-top: 24px;
+            margin-bottom: 16px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #ccc;
+        }
+
+        /* --- Content Entries --- */
+        .entry {
+            margin-bottom: 24px;
+        }
+
+        h3 {
+            font-size: 11.5pt;
+            font-weight: bold;
+            margin-bottom: 4px;
+        }
+
+        .job-subheader {
+            display: block;
+            /* Use block to stack lines */
+            margin-bottom: 12px;
+        }
+
+        .job-company {
+            font-size: 11pt;
+            font-weight: bold;
+            color: #111;
+        }
+
+        .job-meta {
+            font-size: 10pt;
+            color: #555;
+            font-style: italic;
+        }
+
+        /* --- List Styling for Experience & Skills --- */
+        ul {
+            padding-left: 18px;
+            margin: 0;
+            list-style-type: square;
+        }
+
+        li {
+            margin-bottom: 8px;
+        }
+
+        /* Approved Skills Section Exception */
+        .skills-list {
+            padding-left: 0;
+            list-style: none;
+            column-count: 3;
+            column-gap: 30px;
+        }
+
+        .skills-list li {
+            font-size: 10pt;
+            margin-bottom: 5px;
+        }
+
+        .summary-text,
+        .certification-entry,
+        .education-entry {
+            margin-bottom: 15px;
+        }
+
+        .certification-entry p,
+        .education-entry p {
+            margin: 0;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header class="header-main">
+        {% if name %}<h1>{{ name }}</h1>{% endif %}
+        {% if title %}<p class="header-title">{{ title }}</p>{% endif %}
+        <p class="contact-info">
+            {% if email %}<a href="mailto:{{ email }}">{{ email }}</a>{% endif %}
+            {% if phone and email %}  |  {% endif %}
+            {% if phone %}{{ phone }}{% endif %}
+            {% if (email or phone) and linkedin_url %}  |  {% endif %}
+            {% if linkedin_url %}<a href="{{ linkedin_url }}" target="_blank">{{ linkedin_url }}</a>{% endif %}
+        </p>
+    </header>
+
+    {% if professional_summary %}
+    <section>
+        <h2>Summary</h2>
+        <p class="summary-text">{{ professional_summary }}</p>
+    </section>
+    {% endif %}
+
+    {% if skills %}
+    <section>
+        <h2>Technical Skills</h2>
+        <ul class="skills-list">
+            {% for skill in skills %}
+            <li>{{ skill }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    {% if experience %}
+    <section>
+        <h2>Professional Experience</h2>
+        {% for job in experience %}
+        <div class="entry">
+            <h3>{{ job.title }}</h3>
+            <div class="job-subheader">
+                <span class="job-company">{{ job.company }}</span>
+                <span class="job-meta"> | {{ job.location }} | {{ job.start_date }} - {{ job.end_date }}</span>
+            </div>
+            <ul>
+                {% for point in job.points %}<li>{{ point }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if certifications %}
+    <section>
+        <h2>Certifications</h2>
+        {% for cert in certifications %}
+        <div class="certification-entry">
+            <p><strong>{{ cert.title }}</strong>{% if cert.date %}, {{ cert.date }}{% endif %}</p>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if education %}
+    <section>
+        <h2>Education</h2>
+        {% for edu in education %}
+        <div class="education-entry">
+            <h3>{{ edu.degree }}{% if edu.major %}, {{ edu.major }}{% endif %}</h3>
+            <p><strong>{{ edu.institution }}</strong> | Graduated: {{ edu.grad_date }}</p>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+</body>
+
+</html>

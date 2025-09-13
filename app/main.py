@@ -42,9 +42,10 @@ def main() -> None:
     # Only show Home and User pages for single-user app
     home_page = st.Page("pages/home.py", title="Home", icon="🏠")
     user_page = st.Page("pages/user.py", title="Profile", icon="👤")  # Renamed from Users to Profile
+    jobs_page = st.Page("pages/jobs.py", title="Jobs", icon="💼")
 
     # Create navigation
-    pg = st.navigation([home_page, user_page])
+    pg = st.navigation([home_page, user_page, jobs_page])
 
     # Run the selected page
     pg.run()

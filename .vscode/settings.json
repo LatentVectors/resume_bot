@@ -150,7 +150,13 @@
     ],
     "editor.wordWrap": "wordWrapColumn",
     "editor.wordWrapColumn": 120,
+    "editor.wrappingIndent": "deepIndent",
     "editor.formatOnSave": true,
+    "[markdown]": {
+        "editor.wordWrap": "wordWrapColumn",
+        "editor.wordWrapColumn": 120,
+        "editor.wrappingIndent": "deepIndent"
+    },
     "python.defaultInterpreterPath": "./.venv/bin/python",
     "python.terminal.activateEnvironment": true,
     "python.languageServer": "None",

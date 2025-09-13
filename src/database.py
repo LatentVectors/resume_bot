@@ -57,6 +57,19 @@ class Education(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.now)
 
 
+class Job(SQLModel, table=True):
+    """Job application model for tracking resumes generated for specific jobs."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    job_description: str
+    company_name: str | None = Field(default=None)
+    job_title: str | None = Field(default=None)
+    resume_filename: str
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
 class DatabaseManager:
     """Manages database connections and operations using SQLModel."""
 
@@ -243,6 +256,57 @@ class DatabaseManager:
                 session.delete(education)
                 session.commit()
                 logger.info(f"Deleted education {education_id}")
+                return True
+            return False
+
+    # Job methods
+    def add_job(self, job: Job) -> int:
+        """Add a new job to the database."""
+        with self.get_session() as session:
+            if not job.created_at:
+                job.created_at = datetime.now()
+            if not job.updated_at:
+                job.updated_at = datetime.now()
+
+            session.add(job)
+            session.commit()
+            session.refresh(job)
+            logger.info(f"Added job (ID: {job.id}) for user {job.user_id}")
+            return job.id
+
+    def get_job(self, job_id: int) -> Job | None:
+        """Get a job by ID."""
+        with self.get_session() as session:
+            return session.get(Job, job_id)
+
+    def list_jobs_by_user_id(self, user_id: int) -> list[Job]:
+        """List all jobs for a given user, newest first."""
+        with self.get_session() as session:
+            statement = select(Job).where(Job.user_id == user_id).order_by(Job.created_at.desc())
+            return list(session.exec(statement))
+
+    def update_job(self, job_id: int, **updates) -> Job | None:
+        """Update a job by ID."""
+        with self.get_session() as session:
+            job = session.get(Job, job_id)
+            if job:
+                for key, value in updates.items():
+                    setattr(job, key, value)
+                job.updated_at = datetime.now()
+                session.add(job)
+                session.commit()
+                session.refresh(job)
+                logger.info(f"Updated job {job_id}")
+            return job
+
+    def delete_job(self, job_id: int) -> bool:
+        """Delete a job by ID."""
+        with self.get_session() as session:
+            job = session.get(Job, job_id)
+            if job:
+                session.delete(job)
+                session.commit()
+                logger.info(f"Deleted job {job_id}")
                 return True
             return False
 

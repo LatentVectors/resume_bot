@@ -17,7 +17,10 @@ class Experience(BaseModel):
     content: str
     points: list[str] = Field(default_factory=list)
 
-def create_experience(id: str, company: str, title: str, start_date: date, end_date: date | None, content: str, points: list[str]) -> Experience:
+
+def create_experience(
+    id: str, company: str, title: str, start_date: date, end_date: date | None, content: str, points: list[str]
+) -> Experience:
     """Create an experience object."""
     return Experience(
         id=id,
@@ -36,6 +39,12 @@ class InputState(BaseModel):
     job_description: str
     experiences: list[Experience]
     responses: str
+    # User information fields
+    user_name: str
+    user_email: str
+    user_phone: str | None = None
+    user_linkedin_url: str | None = None
+    user_education: list[dict] | None = None
 
 
 class OutputState(BaseModel):
@@ -60,6 +69,11 @@ class PartialInternalState(TypedDict, total=False):
     job_description: str
     experiences: list[Experience]
     responses: str
+    user_name: str
+    user_email: str
+    user_phone: str | None
+    user_linkedin_url: str | None
+    user_education: list[dict] | None
 
     # OutputState fields
     resume: str | None
