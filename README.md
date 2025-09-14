@@ -1,167 +1,116 @@
 # Resume Bot
 
-AI-powered resume generation system built with Python, Streamlit, and LangGraph.
+An AI‑powered Streamlit application that turns a job description and your background into a polished, ATS‑safe PDF resume. It provides a streamlined onboarding flow to capture your profile, lets you generate tailored resumes in seconds, preview and download PDFs, and experiment with HTML templates powered by an LLM.
 
-## Features
+## Highlights
+- **Generate customized resumes**: Rapidly generate tailored resumes to a target job description.
+- **Template lab**: Generate personalized ATS-safe resume templates.
+- **Local storage**: Uses SQLite by default; no external DB required.
 
-- 🤖 LangGraph-powered workflow for resume generation
-- 📄 Modern Streamlit web interface with multi-page navigation
-- 🗄️ SQLite database for user management
-- 🔧 Type checking with mypy and linting with ruff
-- 🧪 Comprehensive test suite with pytest
+## Architecture (at a glance)
+- Streamlit app entry: `app/main.py`, launcher: `run.py`
+- Pages: `app/pages/` (`_onboarding.py`, `home.py`, `jobs.py`, `templates.py`, `user.py`)
+- Services & DB: `app/services/`, `src/database.py` (SQLModel + SQLite), `src/config.py`
+- AI workflow: `src/generate_resume.py`, `src/agents/main/*` (LangGraph nodes and state)
+- Templates: `src/features/resume/templates/*.html` + LLM generator in `src/features/resume/`
 
-## Project Structure
-
-```
-resume-bot/
-├── src/                    # Core business logic
-│   ├── config.py          # Configuration management
-│   ├── database.py        # Database models and operations
-│   └── workflow.py        # LangGraph workflow
-├── app/                   # Streamlit application
-│   ├── main.py           # Main app entry point
-│   ├── pages/            # Streamlit pages
-│   │   ├── home.py       # Home page
-│   │   └── users.py      # User management page
-│   └── services/         # Business logic services
-│       └── resume_service.py
-├── tests/                # Test suite
-├── data/                 # Local data storage (not in repo)
-└── pyproject.toml        # Project configuration
-```
-
-## Setup
-
-### Prerequisites
-
+## Prerequisites
 - Python 3.12+
-- uv package manager
+- macOS/Linux/Windows
+- An OpenAI API key to enable LLM-powered features
 
-### Installation
-
-1. **Clone and navigate to the project:**
-   ```bash
-   cd /Users/mjlindow/projects/resume
-   ```
-
-2. **Create and activate virtual environment:**
-   ```bash
-   uv venv
-   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-   ```
-
-3. **Install the project in editable mode:**
-   ```bash
-   uv pip install -e .
-   ```
-
-4. **Install development dependencies:**
-   ```bash
-   uv pip install -e ".[dev]"
-   ```
-
-5. **Set up environment variables:**
-   ```bash
-   cp .example.env .env
-   # Edit .env with your API keys
-   ```
-
-6. **Initialize the database:**
-   The database will be created automatically when you first run the app.
-
-## Running the Application
-
-### Streamlit App
-
-**Option 1: Direct command**
+## Quickstart
+1) Clone the repo
 ```bash
-streamlit run app/main.py
+git clone https://github.com/<your-org-or-user>/resume.git
+cd resume
 ```
 
-**Option 2: Using the run script**
+2) Create and activate a virtual environment
+```bash
+python3.12 -m venv .venv
+source .venv/bin/activate  # Windows: .venv\\Scripts\\activate
+```
+
+3) Install dependencies
+```bash
+pip install -U pip
+pip install -e .[dev]
+```
+
+4) Configure environment
+- Copy `.env.example` to `.env` and fill in values (see details below).
+```bash
+cp .env.example .env
+```
+
+5) Run the Streamlit app
 ```bash
 python run.py
 ```
+Streamlit will print a local URL such as `http://localhost:8501`. Open it in your browser.
 
-The app will be available at `http://localhost:8501`
+## Environment Configuration
+Configuration is managed with Pydantic Settings (`src/config.py`) and loaded from `.env` if present.
 
-### Development Commands
+Key variables (see `.env.example`):
+- `OPENAI_API_KEY` — required for LLM features (resume generation, template chat).
 
-**Type checking:**
+Notes:
+- Data directory defaults to `data/`; PDFs are written to `data/resumes/`.
+- Logs are written to `log/` and rotated automatically.
+
+## Using the App
+When you first launch, the app checks if a user exists and will guide you through onboarding if needed.
+
+### Onboarding
+Create your profile in three quick steps:
+- **Basic info**: name, contact, and links.
+- **Experience (optional)**: roles, dates, and descriptions.
+- **Education (optional)**: schools and degrees.
+
+Once complete, you’ll land on the main app with your profile saved.
+
+### Home
+- Paste a job description and click **Generate Resume**.
+- The app runs an agentic workflow to tailor your content and produce a PDF.
+- A preview renders inline; download the file or jump to the Jobs page.
+
+### Jobs
+- View a table of all generated resumes tied to job descriptions.
+- Click **View** to open a dialog with the full description and embedded PDF.
+- Download the PDF directly from the table or the dialog.
+
+### Templates
+- Use a chat-like interface to generate or edit clean, ATS‑safe HTML templates with an LLM.
+- Each response creates a new version; navigate versions, preview as PDF, and download HTML.
+
+### Profile
+- Review and edit your saved profile details.
+- Add, edit, or remove experiences and education entries at any time.
+
+## CLI Utilities (optional)
+A small CLI exists under `src/features/resume/cli.py` for working with templates and sample renders.
+
+- Generate PDF samples for all built-in templates (uses dummy data):
 ```bash
-mypy src/ app/
+python -m src.features.resume.cli generate
 ```
 
-**Linting and formatting:**
+- Generate a new template with the LLM and optional image guidance, saving HTML (and optional PDF preview) under `data/templates/generated/`:
 ```bash
-ruff check src/ app/
-ruff format src/ app/
+python -m src.features.resume.cli new-template "Clean ATS-safe single-column resume" --pdf
 ```
 
-**Running tests:**
-```bash
-pytest
-```
-
-## Usage
-
-1. **Home Page**: Enter your requirements and click "Generate Resume" to test the LangGraph workflow
-2. **Users Page**: Add and manage users in the system
-
-## Key Features Explained
-
-### Import Structure
-
-The project uses a proper package structure where:
-- `src/` contains the core business logic
-- `app/` contains the Streamlit application
-- The project is installed in editable mode, allowing clean imports like `from src.workflow import resume_workflow`
-
-### LangGraph Integration
-
-The workflow in `src/workflow.py` demonstrates:
-- Simple state management with `WorkflowState`
-- Basic node creation and workflow compilation
-- Easy extensibility for more complex resume generation logic
-
-### Database Management
-
-- SQLite database with Pydantic models
-- Automatic database initialization
-- Clean separation between models and operations
-
-### Streamlit Architecture
-
-- Multi-page structure for scalability
-- Service layer for business logic
-- Clean separation of concerns between UI and backend
+## Troubleshooting
+- "OpenAI API key is not set": Ensure `OPENAI_API_KEY` is present in `.env` and your shell session.
+- Port already in use: Stop other Streamlit instances or run `streamlit run app/main.py --server.port 8502`.
+- PDFs not appearing: Confirm files exist under `data/resumes/` and that the app has write permissions.
+- Template preview issues: If LLM output contains fenced code, the app auto-cleans fences; retry if rendering fails.
 
 ## Development
+- Linting/type checks are configured via Ruff/Mypy in `pyproject.toml`.
+- Project code lives under `src/` (added to the wheel in build config).
 
-### Adding New Features
-
-1. **New LangGraph nodes**: Add to `src/workflow.py`
-2. **New database models**: Add to `src/database.py`
-3. **New Streamlit pages**: Add to `app/pages/`
-4. **New services**: Add to `app/services/`
-
-### Testing
-
-All tests are in the `tests/` directory. Run with:
-```bash
-pytest -v
-```
-
-## Configuration
-
-Edit `.env` file for:
-- Database URL
-- API keys for LangChain/OpenAI
-- App settings
-
-## Next Steps
-
-- Expand the LangGraph workflow with actual resume generation
-- Add more sophisticated UI components
-- Implement user authentication
-- Add resume templates and customization options
+## License
+MIT (or your preferred license).
