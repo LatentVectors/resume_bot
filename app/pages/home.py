@@ -8,7 +8,7 @@ from app.services.user_service import UserService
 from src.config import settings
 from src.logging_config import logger
 
-st.title("🏠 Home")
+st.title("Home")
 
 st.markdown("---")
 
@@ -74,7 +74,7 @@ with st.form("resume_form"):
                     st.success("Resume generated successfully! View it below or in Jobs.")
 
                     # Success link to Jobs page
-                    st.page_link("pages/jobs.py", label="Go to Jobs 💼", icon="💼")
+                    st.page_link("pages/jobs.py", label="Go to Jobs", icon=":material/work:")
 
                     # Display the generated PDF inline
                     try:

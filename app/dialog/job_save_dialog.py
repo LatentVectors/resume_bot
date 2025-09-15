@@ -53,7 +53,7 @@ def show_save_job_dialog(
                         # Provide link to Job page with query params
                         st.success("Job saved!")
                         job_url = build_app_url(f"/job?job_id={job.id}")
-                        st.page_link(job_url, label="Open Job", icon="🔎", width="content")
+                        st.page_link(job_url, label="Open Job", icon=":material/search:", width="content")
                     except Exception as exc:  # noqa: BLE001
                         st.error("Failed to save job. Please try again.")
                         logger.error(f"Save Job failed: {exc}")

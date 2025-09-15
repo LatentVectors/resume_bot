@@ -179,16 +179,16 @@ def main() -> None:
         with cols[4]:
             st.write(_format_dt(getattr(job, "applied_at", None)))
         with cols[5]:
-            st.write("★" if getattr(job, "is_favorite", False) else "—")
+            st.write(":material/star:" if getattr(job, "is_favorite", False) else "—")
         with cols[6]:
-            st.write("✅" if getattr(job, "has_resume", False) else "—")
+            st.write(":material/task_alt:" if getattr(job, "has_resume", False) else "—")
         with cols[7]:
-            st.write("✅" if getattr(job, "has_cover_letter", False) else "—")
+            st.write(":material/task_alt:" if getattr(job, "has_cover_letter", False) else "—")
         with cols[8]:
             st.page_link(
                 build_app_url(f"/job?job_id={job.id}"),
                 label="View",
-                icon="🔎",
+                icon=":material/search:",
             )
 
 

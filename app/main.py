@@ -9,7 +9,9 @@ from src.logging_config import logger
 def main() -> None:
     """Main application entry point."""
     # Configure Streamlit page
-    st.set_page_config(page_title="Resume Bot", page_icon="📄", layout="wide", initial_sidebar_state="expanded")
+    st.set_page_config(
+        page_title="Resume Bot", page_icon=":material/description:", layout="wide", initial_sidebar_state="expanded"
+    )
 
     # Initialize session state
     if "initialized" not in st.session_state:
@@ -40,12 +42,12 @@ def main() -> None:
 
     # Define pages using the new Streamlit navigation API
     # Only show Home and User pages for single-user app
-    home_page = st.Page("pages/home.py", title="Home", icon="🏠")
-    user_page = st.Page("pages/user.py", title="Profile", icon="👤")  # Renamed from Users to Profile
-    jobs_page = st.Page("pages/jobs.py", title="Jobs", icon="💼")
-    job_detail_page = st.Page("pages/job.py", title="Job", icon="🔎")
-    templates_page = st.Page("pages/templates.py", title="Templates", icon="🧩")
-    responses_page = st.Page("pages/responses.py", title="Responses", icon="🗂️")
+    home_page = st.Page("pages/home.py", title="Home", icon=":material/home:")
+    user_page = st.Page("pages/user.py", title="Profile", icon=":material/person:")  # Renamed from Users to Profile
+    jobs_page = st.Page("pages/jobs.py", title="Jobs", icon=":material/work:")
+    job_detail_page = st.Page("pages/job.py", title="Job", icon=":material/search:")
+    templates_page = st.Page("pages/templates.py", title="Templates", icon=":material/extension:")
+    responses_page = st.Page("pages/responses.py", title="Responses", icon=":material/inbox:")
 
     # Create navigation
     pg = st.navigation([home_page, user_page, jobs_page, job_detail_page, templates_page, responses_page])

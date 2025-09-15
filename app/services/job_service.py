@@ -453,3 +453,37 @@ class JobService:
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to count messages for job %s: %s", job_id, exc)
             return 0
+
+    # ---------- Notes helpers ----------
+    @staticmethod
+    def list_notes(job_id: int) -> list[DbNote]:
+        """List notes for a job ordered by created_at desc.
+
+        Args:
+            job_id: Parent job identifier.
+
+        Returns:
+            A list of notes, newest first. Empty list on error/none.
+        """
+        if not isinstance(job_id, int) or job_id <= 0:
+            return []
+        try:
+            with db_manager.get_session() as session:
+                stmt = select(DbNote).where(DbNote.job_id == job_id).order_by(DbNote.created_at.desc())
+                return list(session.exec(stmt))
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to list notes for job %s: %s", job_id, exc)
+            return []
+
+    @staticmethod
+    def count_job_notes(job_id: int) -> int:
+        """Return number of `Note` rows linked to this job."""
+        if not isinstance(job_id, int) or job_id <= 0:
+            return 0
+        try:
+            with db_manager.get_session() as session:
+                stmt = select(DbNote).where(DbNote.job_id == job_id)
+                return len(list(session.exec(stmt)))
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to count notes for job %s: %s", job_id, exc)
+            return 0

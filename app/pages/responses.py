@@ -21,7 +21,7 @@ def _fmt_dt(dt: datetime | None) -> str:
 
 
 def main() -> None:
-    st.title("🗂️ Responses")
+    st.title("Responses")
 
     user = UserService.get_current_user()
     if not user:
@@ -97,13 +97,13 @@ def main() -> None:
         with row[3]:
             st.write((r.response[:140] + "…") if len(r.response) > 140 else r.response)
         with row[4]:
-            st.write("✅" if r.ignore else "—")
+            st.write(":material/task_alt:" if r.ignore else "—")
         with row[5]:
             if r.job_id:
                 st.page_link(
                     build_app_url(f"/job?job_id={r.job_id}"),
                     label=f"View Job #{r.job_id}",
-                    icon="🔗",
+                    icon=":material/link:",
                     width="content",
                 )
             else:
