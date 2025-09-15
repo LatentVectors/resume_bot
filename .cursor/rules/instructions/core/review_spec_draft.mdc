@@ -1,0 +1,8 @@
+---
+alwaysApply: false
+---
+I am working on developing a comprehensive spec document for the next development sprint.
+@spec_draft.md provides rough notes on what needs to be done and the expected end result. The final spec document we will generate from these rough nodes is intended to provide you with all the necessary context and technical details required to independently implement this sprint. As such is critical to make sure you fully understand what is expected up-front and all the important details are decided in advance.
+Please carefully review this spec_draft document and identify anything that is confusing, conflicting, unclear, or missing. Identify any important decisions that need to be made. If necessary, review the current state of the project to identify to fully understand how these new requirements fit into what already exists.
+Once you have gathered these insights, ask any follow-up questions necessary to fill in these gaps. Where appropriate provide your own recommendations.
+Do not move forward with writing the final spec until you have gathered all the necessary information and are directed to do so. For now the focus is on understanding requirements, making decisions, and resolving unclear or ambiguous information. Do not edit any files.
