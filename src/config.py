@@ -35,6 +35,7 @@ class Settings(BaseSettings):
     # App
     app_name: str = Field(default="Resume Bot")
     debug: bool = Field(default=False)
+    app_base_url: str = Field(default="http://localhost:8501")
 
     # Paths
     data_dir: Path = Field(default=Path("data"))

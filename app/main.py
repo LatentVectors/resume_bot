@@ -43,10 +43,12 @@ def main() -> None:
     home_page = st.Page("pages/home.py", title="Home", icon="🏠")
     user_page = st.Page("pages/user.py", title="Profile", icon="👤")  # Renamed from Users to Profile
     jobs_page = st.Page("pages/jobs.py", title="Jobs", icon="💼")
+    job_detail_page = st.Page("pages/job.py", title="Job", icon="🔎")
     templates_page = st.Page("pages/templates.py", title="Templates", icon="🧩")
+    responses_page = st.Page("pages/responses.py", title="Responses", icon="🗂️")
 
     # Create navigation
-    pg = st.navigation([home_page, user_page, jobs_page, templates_page])
+    pg = st.navigation([home_page, user_page, jobs_page, job_detail_page, templates_page, responses_page])
 
     # Run the selected page
     pg.run()

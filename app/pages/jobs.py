@@ -1,172 +1,195 @@
-"""Jobs page showing generated resumes and details with PDF viewer."""
+"""Jobs index with filters and status/favorite columns."""
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import datetime
 
 import streamlit as st
 
+from app.services.job_service import AllowedStatus, JobService
 from app.services.user_service import UserService
-from src.config import settings
-from src.database import Job as DbJob
-from src.database import db_manager
 from src.logging_config import logger
+from src.utils.url import build_app_url
+
+AllowedStatuses: tuple[AllowedStatus, ...] = (
+    "Saved",
+    "Applied",
+    "Interviewing",
+    "Not Selected",
+    "No Offer",
+    "Hired",
+)
 
 
-def _truncate(text: str, max_len: int = 140) -> str:
-    if not text:
-        return ""
-    text = text.strip()
-    return text if len(text) <= max_len else text[: max_len - 1] + "…"
-
-
-@st.dialog("Job Details", width="large")
-def show_job_detail_dialog(job: DbJob) -> None:
-    """Display full job details and render the associated PDF resume."""
-    st.subheader("Job Description")
-    st.write(job.job_description)
-
-    st.markdown("---")
-    st.subheader("Resume")
-
-    pdf_path = (settings.data_dir / "resumes" / job.resume_filename).resolve()
+def _parse_status_params(value: object) -> list[AllowedStatus]:
+    if value is None:
+        return []
+    # Streamlit may return str or list[str]
     try:
-        if not pdf_path.exists():
-            st.error(f"PDF file not found: {pdf_path}")
+        if isinstance(value, str):
+            raw = [v.strip() for v in value.split(",") if v.strip()]
+        elif isinstance(value, Sequence):
+            raw = []
+            for item in value:  # type: ignore[assignment]
+                if isinstance(item, str):
+                    raw.extend([v.strip() for v in item.split(",") if v.strip()])
         else:
-            pdf_bytes = pdf_path.read_bytes()
-            # Use Streamlit's native PDF component (1.38+) with stretch height
-            st.pdf(data=pdf_bytes, height="stretch")
-            st.download_button(
-                label="Download Resume",
-                data=pdf_bytes,
-                file_name=job.resume_filename,
-                mime="application/pdf",
-                type="primary",
-                key=f"download_job_{job.id}",
-            )
-    except Exception as e:  # noqa: BLE001
-        st.error("Failed to display PDF.")
-        logger.error(f"Error displaying PDF '{pdf_path}': {e}")
+            raw = []
+    except Exception:
+        raw = []
 
-    st.markdown("---")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.caption(f"Filename: {job.resume_filename}")
-    with col2:
-        created_str = (
-            job.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            if isinstance(job.created_at, datetime)
-            else str(job.created_at)
-        )
-        st.caption(f"Created: {created_str}")
+    result: list[AllowedStatus] = []
+    for v in raw:
+        if v in AllowedStatuses:
+            result.append(v)  # type: ignore[arg-type]
+    return result
 
-    if st.button("Close"):
-        st.rerun()
+
+def _bool_param(value: object, default: bool = False) -> bool:
+    if value is None:
+        return default
+    if isinstance(value, bool):
+        return value
+    s = str(value).lower().strip()
+    return s in ("1", "true", "yes", "on")
+
+
+def _status_pill(status: AllowedStatus) -> str:
+    # Colors per spec
+    if status == "Saved":
+        return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#e5e7eb;color:#111827;font-size:12px;">Saved</span>'
+    if status == "Applied":
+        return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #10b981;color:#065f46;background:#ffffff;font-size:12px;">Applied</span>'
+    if status == "Interviewing":
+        return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#10b981;color:#ffffff;font-size:12px;">Interviewing</span>'
+    if status == "Not Selected":
+        return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #ef4444;color:#991b1b;background:#ffffff;font-size:12px;">Not Selected</span>'
+    if status == "No Offer":
+        return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#ef4444;color:#ffffff;font-size:12px;">No Offer</span>'
+    # Hired
+    return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#10b981;color:#ffffff;font-size:12px;">Hired</span>'
+
+
+def _format_dt(dt: object) -> str:
+    if not dt:
+        return "—"
+    try:
+        if isinstance(dt, datetime):
+            return dt.strftime("%Y-%m-%d %H:%M:%S")
+        return str(dt)
+    except Exception:
+        return str(dt)
 
 
 def main() -> None:
-    st.title("💼 Jobs")
-
     user = UserService.get_current_user()
     if not user:
         st.error("No user found. Please complete onboarding first.")
         return
 
+    # Read query params and establish defaults
+    qp = st.query_params
+    default_statuses: list[AllowedStatus] = ["Saved", "Applied", "Interviewing"]
+    selected_statuses = _parse_status_params(qp.get("status")) or default_statuses
+    favorites_only = _bool_param(qp.get("fav"), default=False)
+
+    st.markdown("---")
+    st.subheader("Filters")
+    fcol1, fcol2, fcol3 = st.columns([3, 1, 1])
+    with fcol1:
+        statuses_widget = st.multiselect(
+            label="Status",
+            options=list(AllowedStatuses),
+            default=selected_statuses,
+            placeholder="Select statuses...",
+            key="jobs_filter_statuses",
+        )
+    with fcol2:
+        favorites_widget = st.toggle("Favorites only", value=favorites_only, key="jobs_filter_fav")
+    with fcol3:
+        if st.button("Reset", use_container_width=True):
+            st.query_params.clear()
+            st.rerun()
+
+    # Persist filters in query params when changed
+    changed = False
+    if set(statuses_widget) != set(selected_statuses):
+        if statuses_widget:
+            st.query_params["status"] = ",".join(statuses_widget)
+        else:
+            # If none selected, drop param so defaults apply
+            st.query_params.pop("status", None)
+        changed = True
+    if bool(favorites_widget) != bool(favorites_only):
+        if favorites_widget:
+            st.query_params["fav"] = "1"
+        else:
+            st.query_params.pop("fav", None)
+        changed = True
+    if changed:
+        st.rerun()
+
+    # Query jobs via service with default sort by created desc
     try:
-        jobs = db_manager.list_jobs_by_user_id(user.id)
+        jobs = JobService.list_jobs(user.id, statuses_widget or default_statuses, favorites_widget)
     except Exception as e:  # noqa: BLE001
         st.error("Failed to load jobs. Please try again later.")
-        logger.error(f"Error listing jobs for user {user.id}: {e}")
+        logger.exception("Error listing jobs for user %s: %s", user.id, e)
         return
 
     if not jobs:
-        st.info("No jobs found yet. Generate a resume from the Home page to see it here.")
+        st.info("No jobs match the current filters.")
         return
 
     st.markdown("---")
     st.subheader("Job Applications")
 
-    # Header row
-    header_cols = st.columns([5, 2, 2, 2, 1, 1])
+    # Header row: Title | Company | Status | Created | Applied | Favorite | Resume | Cover Letter | View
+    header_cols = st.columns([3, 3, 2, 2, 2, 1.5, 1.5, 2, 1.5])
     with header_cols[0]:
-        st.markdown("**Job Description**")
+        st.markdown("**Title**")
     with header_cols[1]:
         st.markdown("**Company**")
     with header_cols[2]:
-        st.markdown("**Job Title**")
+        st.markdown("**Status**")
     with header_cols[3]:
-        st.markdown("**Created Date**")
+        st.markdown("**Created**")
     with header_cols[4]:
-        st.markdown("**View**")
+        st.markdown("**Applied**")
     with header_cols[5]:
-        st.markdown('<div style="text-align:center"><strong>⬇️</strong></div>', unsafe_allow_html=True)
+        st.markdown("**Favorite**")
+    with header_cols[6]:
+        st.markdown("**Resume**")
+    with header_cols[7]:
+        st.markdown("**Cover Letter**")
+    with header_cols[8]:
+        st.markdown("**View**")
 
-    # Rows (already newest-first from DB)
     for job in jobs:
-        cols = st.columns([5, 2, 2, 2, 1, 1])
+        cols = st.columns([3, 3, 2, 2, 2, 1.5, 1.5, 2, 1.5])
         with cols[0]:
-            st.write(_truncate(job.job_description, 180))
+            st.write(job.job_title or "—")
         with cols[1]:
             st.write(job.company_name or "—")
         with cols[2]:
-            st.write(job.job_title or "—")
+            st.markdown(_status_pill(job.status), unsafe_allow_html=True)  # type: ignore[arg-type]
         with cols[3]:
-            created_str = (
-                job.created_at.strftime("%Y-%m-%d %H:%M:%S")
-                if isinstance(job.created_at, datetime)
-                else str(job.created_at)
-            )
-            st.write(created_str)
+            st.write(_format_dt(getattr(job, "created_at", None)))
         with cols[4]:
-            if st.button("View", key=f"view_job_{job.id}"):
-                show_job_detail_dialog(job)
+            st.write(_format_dt(getattr(job, "applied_at", None)))
         with cols[5]:
-            try:
-                if not getattr(job, "resume_filename", None):
-                    st.download_button(
-                        label="⬇️",
-                        data=b"",
-                        file_name="resume.pdf",
-                        mime="application/pdf",
-                        disabled=True,
-                        help="Download PDF",
-                        key=f"download_job_row_{job.id}",
-                    )
-                else:
-                    pdf_path = (settings.data_dir / "resumes" / job.resume_filename).resolve()
-                    if not pdf_path.exists():
-                        st.download_button(
-                            label="⬇️",
-                            data=b"",
-                            file_name=job.resume_filename or "resume.pdf",
-                            mime="application/pdf",
-                            disabled=True,
-                            help="Download PDF",
-                            key=f"download_job_row_{job.id}",
-                        )
-                    else:
-                        pdf_bytes = pdf_path.read_bytes()
-                        st.download_button(
-                            label="⬇️",
-                            data=pdf_bytes,
-                            file_name=job.resume_filename,
-                            mime="application/pdf",
-                            type="primary",
-                            help="Download PDF",
-                            key=f"download_job_row_{job.id}",
-                        )
-            except Exception as e:  # noqa: BLE001
-                logger.error(f"Error rendering download for job {job.id}: {e}")
-                st.download_button(
-                    label="⬇️",
-                    data=b"",
-                    file_name=job.resume_filename or "resume.pdf",
-                    mime="application/pdf",
-                    disabled=True,
-                    help="Download PDF",
-                    key=f"download_job_row_{job.id}",
-                )
+            st.write("★" if getattr(job, "is_favorite", False) else "—")
+        with cols[6]:
+            st.write("✅" if getattr(job, "has_resume", False) else "—")
+        with cols[7]:
+            st.write("✅" if getattr(job, "has_cover_letter", False) else "—")
+        with cols[8]:
+            st.page_link(
+                build_app_url(f"/job?job_id={job.id}"),
+                label="View",
+                icon="🔎",
+            )
 
 
 main()

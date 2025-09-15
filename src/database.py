@@ -1,7 +1,10 @@
 """Database models and connection management using SQLModel."""
 
+from __future__ import annotations
+
 from contextlib import contextmanager
 from datetime import date, datetime
+from enum import Enum
 from pathlib import Path
 
 from sqlmodel import Field, Session, SQLModel, create_engine, select
@@ -9,6 +12,26 @@ from sqlmodel import Field, Session, SQLModel, create_engine, select
 from src.logging_config import logger
 
 from .config import settings
+
+
+# Enums for constrained fields
+class JobStatus(str, Enum):
+    Saved = "Saved"
+    Applied = "Applied"
+    Interviewing = "Interviewing"
+    NotSelected = "Not Selected"
+    NoOffer = "No Offer"
+    Hired = "Hired"
+
+
+class MessageChannel(str, Enum):
+    email = "email"
+    linkedin = "linkedin"
+
+
+class ResponseSource(str, Enum):
+    manual = "manual"
+    application = "application"
 
 
 class User(SQLModel, table=True):
@@ -66,6 +89,74 @@ class Job(SQLModel, table=True):
     company_name: str | None = Field(default=None)
     job_title: str | None = Field(default=None)
     resume_filename: str
+    status: JobStatus = Field(default="Saved")
+    is_favorite: bool = Field(default=False)
+    applied_at: datetime | None = Field(default=None)
+    has_resume: bool = Field(default=False)
+    has_cover_letter: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class Resume(SQLModel, table=True):
+    """Placeholder Resume entity for future versioning and migration of resume files."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="job.id")
+    pdf_filename: str
+    locked: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class CoverLetter(SQLModel, table=True):
+    """Placeholder Cover Letter entity storing simple text content."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="job.id")
+    content: str
+    locked: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class Message(SQLModel, table=True):
+    """Minimal Message entity. Locked derives from whether the message was sent."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="job.id")
+    channel: MessageChannel
+    body: str
+    sent_at: datetime | None = Field(default=None)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+    @property
+    def locked(self) -> bool:
+        """Message becomes locked once it has been sent."""
+        return self.sent_at is not None
+
+
+class Response(SQLModel, table=True):
+    """Minimal Response entity for storing generated or manual responses."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int | None = Field(default=None, foreign_key="job.id")
+    prompt: str
+    response: str
+    source: ResponseSource
+    ignore: bool = Field(default=False)
+    locked: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class Note(SQLModel, table=True):
+    """Simple note attached to a Job."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="job.id")
+    content: str
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
@@ -103,11 +194,7 @@ class DatabaseManager:
     def add_user(self, user: User) -> int:
         """Add a new user to the database."""
         with self.get_session() as session:
-            # Set timestamps if not already set
-            if not user.created_at:
-                user.created_at = datetime.now()
-            if not user.updated_at:
-                user.updated_at = datetime.now()
+            _set_timestamps_on_create(user)
 
             session.add(user)
             session.commit()
@@ -134,8 +221,7 @@ class DatabaseManager:
             if user:
                 for key, value in updates.items():
                     setattr(user, key, value)
-                # Always update the updated_at timestamp
-                user.updated_at = datetime.now()
+                _touch_updated_at(user)
                 session.add(user)
                 session.commit()
                 session.refresh(user)
@@ -157,11 +243,7 @@ class DatabaseManager:
     def add_experience(self, experience: Experience) -> int:
         """Add a new experience to the database."""
         with self.get_session() as session:
-            # Set timestamps if not already set
-            if not experience.created_at:
-                experience.created_at = datetime.now()
-            if not experience.updated_at:
-                experience.updated_at = datetime.now()
+            _set_timestamps_on_create(experience)
 
             session.add(experience)
             session.commit()
@@ -187,8 +269,7 @@ class DatabaseManager:
             if experience:
                 for key, value in updates.items():
                     setattr(experience, key, value)
-                # Always update the updated_at timestamp
-                experience.updated_at = datetime.now()
+                _touch_updated_at(experience)
                 session.add(experience)
                 session.commit()
                 session.refresh(experience)
@@ -210,11 +291,7 @@ class DatabaseManager:
     def add_education(self, education: Education) -> int:
         """Add a new education to the database."""
         with self.get_session() as session:
-            # Set timestamps if not already set
-            if not education.created_at:
-                education.created_at = datetime.now()
-            if not education.updated_at:
-                education.updated_at = datetime.now()
+            _set_timestamps_on_create(education)
 
             session.add(education)
             session.commit()
@@ -240,8 +317,7 @@ class DatabaseManager:
             if education:
                 for key, value in updates.items():
                     setattr(education, key, value)
-                # Always update the updated_at timestamp
-                education.updated_at = datetime.now()
+                _touch_updated_at(education)
                 session.add(education)
                 session.commit()
                 session.refresh(education)
@@ -263,10 +339,7 @@ class DatabaseManager:
     def add_job(self, job: Job) -> int:
         """Add a new job to the database."""
         with self.get_session() as session:
-            if not job.created_at:
-                job.created_at = datetime.now()
-            if not job.updated_at:
-                job.updated_at = datetime.now()
+            _set_timestamps_on_create(job)
 
             session.add(job)
             session.commit()
@@ -292,7 +365,7 @@ class DatabaseManager:
             if job:
                 for key, value in updates.items():
                     setattr(job, key, value)
-                job.updated_at = datetime.now()
+                _touch_updated_at(job)
                 session.add(job)
                 session.commit()
                 session.refresh(job)
@@ -310,6 +383,40 @@ class DatabaseManager:
                 return True
             return False
 
+    # Response methods
+    def list_responses(self, sources: list[str] | None = None, ignore: bool | None = None) -> list[Response]:
+        """List responses with optional filters for source and ignore flag.
+
+        Args:
+            sources: Optional list of sources to include (e.g., ["manual", "application"]). If None or empty, includes all.
+            ignore: Optional flag to filter ignored status. If None, includes both ignored and not ignored.
+
+        Returns:
+            A list of Response rows ordered by created_at desc.
+        """
+        with self.get_session() as session:
+            statement = select(Response)
+            if sources:
+                statement = statement.where(Response.source.in_(tuple(sources)))
+            if ignore is not None:
+                statement = statement.where(Response.ignore == ignore)
+            statement = statement.order_by(Response.created_at.desc())
+            return list(session.exec(statement))
+
 
 # Global database manager instance
 db_manager = DatabaseManager()
+
+
+# Timestamp helpers
+def _set_timestamps_on_create(obj: SQLModel) -> None:
+    """Ensure created_at/updated_at are set on object creation."""
+    if getattr(obj, "created_at", None) is None:
+        setattr(obj, "created_at", datetime.now())
+    if getattr(obj, "updated_at", None) is None:
+        setattr(obj, "updated_at", datetime.now())
+
+
+def _touch_updated_at(obj: SQLModel) -> None:
+    """Update the updated_at timestamp to now."""
+    setattr(obj, "updated_at", datetime.now())
