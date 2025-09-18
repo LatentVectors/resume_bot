@@ -12,7 +12,7 @@ from .notes import render_notes
 from .overview import render_overview
 from .responses import render_responses
 from .resume import render_resume
-from .utils import SupportsJob, badge, fmt_datetime, resume_exists
+from .utils import SupportsJob, badge, fmt_datetime
 
 __all__ = [
     "render_overview",

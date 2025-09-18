@@ -4,7 +4,7 @@ from langgraph.graph import END, START, StateGraph
 
 from src.core.context import AgentContext
 
-from .nodes import create_resume, generate_experience, generate_skills, generate_summary
+from .nodes import assemble_resume_data, generate_experience, generate_skills, generate_summary
 from .state import InputState, InternalState, OutputState
 
 
@@ -16,7 +16,7 @@ class Node(StrEnum):
     GENERATE_SUMMARY = "generate_summary"
     GENERATE_EXPERIENCE = "generate_experience"
     GENERATE_SKILLS = "generate_skills"
-    CREATE_RESUME = "create_resume"
+    ASSEMBLE_RESUME_DATA = "assemble_resume_data"
 
 
 # === GRAPH ===
@@ -31,7 +31,7 @@ builder = StateGraph(
 builder.add_node(Node.GENERATE_SUMMARY, generate_summary)
 builder.add_node(Node.GENERATE_EXPERIENCE, generate_experience)
 builder.add_node(Node.GENERATE_SKILLS, generate_skills)
-builder.add_node(Node.CREATE_RESUME, create_resume)
+builder.add_node(Node.ASSEMBLE_RESUME_DATA, assemble_resume_data)
 
 # === EDGES ===
 # Start branches to all three generation nodes in parallel
@@ -39,13 +39,13 @@ builder.add_edge(Node.START, Node.GENERATE_SUMMARY)
 builder.add_edge(Node.START, Node.GENERATE_EXPERIENCE)
 builder.add_edge(Node.START, Node.GENERATE_SKILLS)
 
-# All generation nodes feed into create_resume
-builder.add_edge(Node.GENERATE_SUMMARY, Node.CREATE_RESUME)
-builder.add_edge(Node.GENERATE_EXPERIENCE, Node.CREATE_RESUME)
-builder.add_edge(Node.GENERATE_SKILLS, Node.CREATE_RESUME)
+# All generation nodes feed into assemble_resume_data
+builder.add_edge(Node.GENERATE_SUMMARY, Node.ASSEMBLE_RESUME_DATA)
+builder.add_edge(Node.GENERATE_EXPERIENCE, Node.ASSEMBLE_RESUME_DATA)
+builder.add_edge(Node.GENERATE_SKILLS, Node.ASSEMBLE_RESUME_DATA)
 
-# create_resume ends the graph
-builder.add_edge(Node.CREATE_RESUME, Node.END)
+# assemble_resume_data ends the graph
+builder.add_edge(Node.ASSEMBLE_RESUME_DATA, Node.END)
 
 # === GRAPH ===
 graph = builder.compile()

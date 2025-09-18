@@ -1,119 +1,224 @@
-"""Service for resume generation operations."""
+"""Service for resume draft generation, saving, and preview rendering."""
 
-from src.agents.main import create_experience
+from pathlib import Path
+from uuid import uuid4
+
+from sqlmodel import select
+
 from src.config import settings
-from src.database import Education as DbEducation
-from src.database import Experience as DbExperience
-from src.database import Job as DbJob
-from src.database import User as DbUser
+from src.database import Resume as DbResume
 from src.database import db_manager
-from src.generate_resume import generate_resume as run_workflow
+from src.features.resume.data_adapter import (
+    detect_missing_required_data,
+    fetch_experience_data,
+    fetch_user_data,
+    transform_user_to_resume_data,
+)
+from src.features.resume.types import ResumeData
 from src.logging_config import logger
+
+from .job_service import JobService
+from .render_pdf import render_preview_pdf, render_resume_pdf
 
 
 class ResumeService:
     """Service class for resume-related operations."""
 
+    # ---- New APIs per spec ----
     @staticmethod
-    def generate_resume(
-        job_description: str, experiences: list[DbExperience], responses: str = "", user_id: int | None = None
-    ) -> DbJob:
-        """Generate a PDF resume via agent workflow and create a Job record.
+    def generate_resume_for_job(
+        user_id: int, job_id: int, prompt: str, existing_draft: ResumeData | None
+    ) -> ResumeData:
+        """Return an updated ResumeData draft via the agent.
 
-        Returns:
-            DbJob: Persisted Job record containing the generated resume filename.
-
-        Raises:
-            ValueError: If required inputs are missing (e.g., user_id).
-            Exception: For failures during generation or database operations.
+        - Validates job exists and is not Applied.
+        - Builds a base ResumeData from user/profile and merges with existing draft.
+        - Calls the agent graph to update AI-editable fields.
+        - Returns the draft (no persistence).
         """
-        logger.info(
-            f"Generating resume for user {user_id} with job description length={len(job_description)} and experiences={len(experiences) if experiences else 0}"
+        if not isinstance(user_id, int) or user_id <= 0:
+            raise ValueError("Invalid user_id")
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+
+        job = JobService.get_job(job_id)
+        if not job:
+            raise ValueError(f"Job {job_id} not found")
+        if job.applied_at is not None:
+            raise PermissionError("Job is applied; resume generation is locked")
+
+        # Build base ResumeData from DB
+        user_data = fetch_user_data(user_id)
+        missing_required = detect_missing_required_data(user_data)
+        if missing_required:
+            raise ValueError(f"Missing required identity fields: {', '.join(missing_required)}")
+
+        experiences = fetch_experience_data(user_id)
+        if not experiences:
+            # Agent requires at least one non-empty experience; fail fast with a clear error
+            raise ValueError("At least one experience on your profile is required to generate a resume")
+        base_resume = transform_user_to_resume_data(
+            user_data=user_data,
+            experience_data=experiences,
+            job_title=job.job_title or "",
         )
 
-        if not user_id or not isinstance(user_id, int) or user_id <= 0:
-            raise ValueError("user_id is required to create a Job record")
+        # Merge existing draft over base for user-editable identity and any prior AI fields
+        draft = existing_draft or base_resume
+        if existing_draft is not None:
+            draft = ResumeData.model_validate({**base_resume.model_dump(), **existing_draft.model_dump()})
 
-        resume_filename: str | None = None
+        # Call agent nodes to update AI-editable fields
+        try:
+            from src.agents.main import InputState, OutputState, create_experience, main_agent
+            from src.agents.main.state import Experience as AgentExperience
+
+            agent_experiences: list[AgentExperience] = []
+            # Use user's raw experiences; points may be empty initially
+            for exp in experiences:
+                agent_experiences.append(
+                    create_experience(
+                        id=str(exp.id or ""),
+                        company=exp.company_name,
+                        title=exp.job_title,
+                        start_date=exp.start_date,
+                        end_date=exp.end_date,
+                        content=exp.content,
+                        points=[],
+                    )
+                )
+
+            # Build InputState from current draft and job context
+            initial_state = InputState(
+                job_description=job.job_description,
+                experiences=agent_experiences,
+                responses=prompt or "",
+                user_name=draft.name,
+                user_email=draft.email,
+                user_phone=draft.phone or None,
+                user_linkedin_url=draft.linkedin_url or None,
+                user_education=[
+                    {"school": edu.institution, "degree": edu.degree, "start_date": None, "end_date": edu.grad_date}
+                    for edu in draft.education
+                ]
+                or None,
+            )
+
+            result = main_agent.invoke(initial_state)
+            out = OutputState.model_validate(result)
+
+            # Apply AI-editable fields to draft (read from out.resume_data)
+            updated = draft.model_copy(deep=True)
+            rd = out.resume_data
+            if rd is not None:
+                if rd.title:
+                    updated.title = rd.title
+                if rd.professional_summary:
+                    updated.professional_summary = rd.professional_summary
+                if rd.skills:
+                    updated.skills = rd.skills
+
+            # Experience points updates are produced by generate_experience node via state.experiences,
+            # but OutputState currently doesn't expose them. Until section 7 updates, keep prior points.
+            # UI can pass back updated draft on subsequent calls.
+
+            return updated
+        except Exception as e:  # noqa: BLE001
+            logger.exception(e)
+            raise
+
+    @staticmethod
+    def save_resume(job_id: int, resume_data: ResumeData, template_name: str) -> DbResume:
+        """Persist Resume JSON and render/overwrite PDF for the job.
+
+        - Creates or updates the single Resume row per job.
+        - If a pdf_filename exists, overwrite the same file; else create a new UUID.
+        - Recomputes job denorm flags.
+        """
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+        if not template_name or not template_name.strip():
+            raise ValueError("template_name is required")
+
+        job = JobService.get_job(job_id)
+        if not job:
+            raise ValueError(f"Job {job_id} not found")
+        if job.applied_at is not None:
+            raise PermissionError("Job is applied; resume save is locked")
 
         try:
-            # Fetch user and education data
-            user: DbUser | None = db_manager.get_user(user_id)
-            educations: list[DbEducation] = db_manager.list_user_educations(user_id)
-
-            # Convert DB experiences to agent experiences
-            agent_experiences = [
-                create_experience(
-                    id=str(exp.id) if exp.id is not None else "",
-                    company=exp.company_name,
-                    title=exp.job_title,
-                    start_date=exp.start_date,
-                    end_date=exp.end_date,
-                    content=exp.content,
-                    points=[],
-                )
-                for exp in (experiences or [])
-            ]
-
-            # Prepare user info fields
-            user_name = f"{user.first_name} {user.last_name}" if user else ""
-            user_email = user.email if user and user.email else ""
-            user_phone = user.phone_number if user else None
-            user_linkedin_url = user.linkedin_url if user else None
-            user_education = (
-                [
-                    {
-                        "school": edu.school,
-                        "degree": edu.degree,
-                        "start_date": edu.start_date,
-                        "end_date": edu.end_date,
-                    }
-                    for edu in educations
-                ]
-                if educations
-                else None
+            logger.info(
+                "Saving resume",
+                extra={
+                    "job_id": job_id,
+                    "template_name": template_name,
+                },
             )
+            payload = resume_data.model_dump()
+            payload_json = ResumeData.model_validate(payload).model_dump_json()
 
-            # Run the workflow (returns PDF filename)
-            resume_filename = run_workflow(
-                job_description,
-                agent_experiences,
-                responses or "",
-                user_name=user_name,
-                user_email=user_email,
-                user_phone=user_phone,
-                user_linkedin_url=user_linkedin_url,
-                user_education=user_education,
-            )
+            with db_manager.get_session() as session:
+                # Find existing resume
+                existing = session.exec(
+                    select(DbResume).where(DbResume.job_id == job_id)  # type: ignore[name-defined]
+                ).first()
 
-            if not resume_filename or not isinstance(resume_filename, str):
-                raise RuntimeError("Resume generation returned no filename")
+                if existing:
+                    existing.template_name = template_name
+                    existing.resume_json = payload_json
+                    pdf_filename = existing.pdf_filename or f"{uuid4()}.pdf"
+                else:
+                    existing = DbResume(
+                        job_id=job_id,
+                        template_name=template_name,
+                        resume_json=payload_json,
+                        pdf_filename=None,
+                        locked=False,
+                    )
+                    session.add(existing)
+                    pdf_filename = f"{uuid4()}.pdf"
 
-            # Create Job record
-            job = DbJob(
-                user_id=user_id,
-                job_description=job_description,
-                company_name=None,
-                job_title=None,
-                resume_filename=resume_filename,
-            )
-            db_manager.add_job(job)
+                # Render PDF to canonical location
+                output_dir = (settings.data_dir / "resumes").resolve()
+                output_dir.mkdir(parents=True, exist_ok=True)
+                output_path = output_dir / pdf_filename
 
-            logger.info("Resume generation completed and Job record created successfully")
-            return job
+                try:
+                    render_resume_pdf(payload, template_name, output_path)
+                    existing.pdf_filename = pdf_filename
+                except Exception as e:  # noqa: BLE001
+                    # Log and keep JSON changes; clear pdf filename so denorm reflects missing PDF
+                    logger.exception(e)
+                    existing.pdf_filename = None
 
-        except Exception as e:
+                session.add(existing)
+                session.commit()
+                session.refresh(existing)
+
+            # Refresh denorm flags on parent job
+            JobService.refresh_denorm_flags(job_id)
+            return existing
+        except Exception as e:  # noqa: BLE001
             logger.exception(e)
+            raise
 
-            # Cleanup orphaned PDF file if it was generated but DB failed
-            try:
-                if resume_filename:
-                    output_path = (settings.data_dir / "resumes" / resume_filename).resolve()
-                    if output_path.exists():
-                        output_path.unlink(missing_ok=True)  # type: ignore[arg-type]
-                        logger.info(f"Cleaned up orphaned resume file: {output_path}")
-            except Exception as cleanup_err:  # noqa: BLE001
-                logger.error(f"Failed to cleanup resume file '{resume_filename}': {cleanup_err}", exception=True)
+    @staticmethod
+    def render_preview(job_id: int, resume_data: ResumeData, template_name: str) -> Path:
+        """Render a temporary preview PDF for this job; does not persist or update DB.
 
-            # Re-raise so callers can handle appropriately
+        Returns the preview file path.
+        """
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+        if not template_name or not template_name.strip():
+            raise ValueError("template_name is required")
+
+        try:
+            preview_dir = (settings.data_dir / "resumes" / "previews").resolve()
+            preview_dir.mkdir(parents=True, exist_ok=True)
+            preview_path = preview_dir / f"{job_id}.pdf"
+            payload = resume_data.model_dump()
+            return render_preview_pdf(payload, template_name, preview_path)
+        except Exception as e:  # noqa: BLE001
+            logger.exception(e)
             raise

@@ -65,13 +65,12 @@ class JobService:
             company = (extracted.company or "").strip() or None
             title = (extracted.title or "").strip() or None
 
-            # resume_filename is required in the model; use empty string to indicate none
+            # Create Job without resume filename (single Resume per Job is modeled separately)
             job = DbJob(
                 user_id=current_user.id,
                 job_description=description.strip(),
                 company_name=company,
                 job_title=title,
-                resume_filename="",
                 is_favorite=bool(favorite),
                 status="Saved",
                 has_resume=False,
@@ -219,6 +218,22 @@ class JobService:
             raise
 
     # ---------- Child entities ----------
+    @staticmethod
+    def get_resume_for_job(job_id: int) -> DbResume | None:
+        """Return the single `Resume` row for a job, if present.
+
+        Enforces the one-resume-per-job expectation by returning the first match.
+        """
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+
+        try:
+            with db_manager.get_session() as session:
+                return session.exec(select(DbResume).where(DbResume.job_id == job_id)).first()
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to get resume for job %s: %s", job_id, exc)
+            return None
+
     @staticmethod
     def create_resume(job_id: int, pdf_filename: str) -> DbResume:
         """Create a Resume row and refresh denormalized flags.
@@ -389,7 +404,7 @@ class JobService:
     def refresh_denorm_flags(job_id: int) -> DbJob | None:
         """Recompute `has_resume` and `has_cover_letter` for a job.
 
-        - has_resume is True if a Resume row exists for the job or if `resume_filename` is non-empty.
+        - has_resume is True if a Resume row exists for the job AND it has a non-empty pdf_filename.
         - has_cover_letter is True if a CoverLetter row exists for the job.
         """
         if not isinstance(job_id, int) or job_id <= 0:
@@ -401,12 +416,12 @@ class JobService:
                 if not job:
                     return None
 
-                has_resume_row = session.exec(select(DbResume).where(DbResume.job_id == job_id)).first() is not None
+                resume_row = session.exec(select(DbResume).where(DbResume.job_id == job_id)).first()
                 has_cover_letter_row = (
                     session.exec(select(DbCoverLetter).where(DbCoverLetter.job_id == job_id)).first() is not None
                 )
 
-                has_resume = bool(job.resume_filename) or has_resume_row
+                has_resume = bool(resume_row and (resume_row.pdf_filename or "").strip())
                 has_cover_letter = has_cover_letter_row
 
                 changed = False

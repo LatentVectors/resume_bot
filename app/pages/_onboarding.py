@@ -126,7 +126,7 @@ def render_step1_basic_info():
 def render_step2_experience():
     """Render Step 2: Work Experience setup."""
     st.subheader("💼 Work Experience")
-    st.markdown("Add your work experience (optional). You can skip this step and add experience later.")
+    st.markdown("Add at least one work experience. This is required for AI resume generation.")
 
     # Display existing experiences
     if st.session_state.onboarding_data["experiences"]:
@@ -173,7 +173,7 @@ def render_step2_experience():
             with col1:
                 add_experience = st.form_submit_button("Add Experience", type="primary")
             with col2:
-                skip_experience = st.form_submit_button("Skip This Step")
+                skip_experience = st.form_submit_button("Skip This Step", disabled=True)
 
             if add_experience:
                 if not company_name.strip() or not job_title.strip() or not content.strip():
@@ -195,8 +195,7 @@ def render_step2_experience():
                         st.rerun()
 
             if skip_experience:
-                st.session_state.onboarding_step = 3
-                st.rerun()
+                st.info("Experience is required to continue.")
 
     # Navigation buttons
     col1, col2, col3 = st.columns([1, 1, 1])
@@ -205,7 +204,8 @@ def render_step2_experience():
             st.session_state.onboarding_step = 1
             st.rerun()
     with col3:
-        if st.button("Next →"):
+        can_continue = len(st.session_state.onboarding_data["experiences"]) > 0
+        if st.button("Next →", disabled=not can_continue):
             st.session_state.onboarding_step = 3
             st.rerun()
 

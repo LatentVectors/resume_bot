@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Protocol, runtime_checkable
 
-from src.config import settings
+import streamlit as st
 
 
 def fmt_datetime(dt: datetime | None) -> str:
@@ -35,24 +35,6 @@ def badge(has_content: bool) -> str:
     return ":material/radio_button_checked:" if has_content else ":material/radio_button_unchecked:"
 
 
-def resume_exists(filename: str | None) -> bool:
-    """Check if a resume PDF exists by filename under the data directory.
-
-    Args:
-        filename: The resume file name stored for the job.
-
-    Returns:
-        True if the resolved file exists, otherwise False.
-    """
-    if not filename:
-        return False
-    try:
-        pdf_path = (settings.data_dir / "resumes" / filename).resolve()
-        return pdf_path.exists()
-    except Exception:  # pragma: no cover - defensive fallback
-        return False
-
-
 @runtime_checkable
 class SupportsJob(Protocol):
     """Structural type for Job objects used by tab renderers."""
@@ -69,8 +51,32 @@ class SupportsJob(Protocol):
     created_at: datetime | None
     applied_at: datetime | None
 
-    # Flags and filenames
+    # Flags
     is_favorite: bool | None
     has_resume: bool | None
     has_cover_letter: bool | None
-    resume_filename: str | None
+
+
+def navigate_to_job(job_id: int) -> None:
+    """Navigate to the Job detail page for the given job id.
+
+    This sets session state keys and switches the page, resetting per-job state.
+
+    Args:
+        job_id: The job identifier to navigate to.
+    """
+    if not isinstance(job_id, int) or job_id <= 0:
+        st.toast("Invalid job id", icon=":material/error_outline:")
+        return
+
+    # Only update if changed to avoid unnecessary reruns
+    current = st.session_state.get("selected_job_id")
+    if current != job_id:
+        st.session_state["selected_job_id"] = job_id
+        # Reset tab and any per-job temporary state
+        st.session_state["selected_job_tab"] = "Overview"
+        st.session_state.pop("resume_draft", None)
+        st.session_state.pop("resume_template", None)
+        st.session_state.pop("resume_instructions", None)
+
+    st.switch_page("pages/job.py")

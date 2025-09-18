@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import streamlit as st
 
+from app.pages.job_tabs.utils import navigate_to_job
 from app.services.job_service import JobService
 from src.logging_config import logger
-from src.utils.url import build_app_url
 
 
 @st.dialog("Save Job", width="large")
@@ -27,36 +27,31 @@ def show_save_job_dialog(
     """
     st.subheader("Confirm Job Details")
 
-    with st.form("save_job_dialog_form"):
-        col1, col2 = st.columns(2)
-        with col1:
-            title = st.text_input("Title *", value=initial_title or "", help="Required")
-        with col2:
-            company = st.text_input("Company *", value=initial_company or "", help="Required")
+    col1, col2 = st.columns(2)
+    with col1:
+        title = st.text_input("Title *", value=initial_title or "", help="Required", key="save_job_title")
+    with col2:
+        company = st.text_input("Company *", value=initial_company or "", help="Required", key="save_job_company")
 
-        favorite = st.toggle("Favorite", value=bool(initial_favorite))
-        description = st.text_area("Job Description *", value=initial_description or "", height=200, help="Required")
+    favorite = st.toggle("Favorite", value=bool(initial_favorite), key="save_job_favorite")
+    description = st.text_area(
+        "Job Description *", value=initial_description or "", height=200, help="Required", key="save_job_desc"
+    )
 
-        left, right = st.columns(2)
-        with left:
-            save_disabled = not (title.strip() and company.strip() and description.strip())
-            if st.form_submit_button("Save", type="primary", disabled=save_disabled):
-                if not title.strip() or not company.strip() or not description.strip():
-                    st.error("Title, Company, and Job Description are required.")
-                else:
-                    try:
-                        # Create base job (with extraction already applied in service)
-                        job = JobService.save_job_with_extraction(description=description.strip(), favorite=favorite)
-                        # Ensure user-entered values override extraction if changed
-                        JobService.update_job_fields(job.id, title=title.strip(), company=company.strip())
+    left, right = st.columns(2)
+    save_disabled = not (title.strip() and company.strip() and description.strip())
+    with left:
+        if st.button("Save", type="primary", disabled=save_disabled, key="save_job_submit"):
+            try:
+                job = JobService.save_job_with_extraction(description=description.strip(), favorite=favorite)
+                JobService.update_job_fields(job.id, title=title.strip(), company=company.strip())
 
-                        # Provide link to Job page with query params
-                        st.success("Job saved!")
-                        job_url = build_app_url(f"/job?job_id={job.id}")
-                        st.page_link(job_url, label="Open Job", icon=":material/search:", width="content")
-                    except Exception as exc:  # noqa: BLE001
-                        st.error("Failed to save job. Please try again.")
-                        logger.error(f"Save Job failed: {exc}")
-        with right:
-            if st.form_submit_button("Cancel"):
-                st.rerun()
+                st.success("Job saved!")
+                if st.button("Open Job", icon=":material/search:", use_container_width=False, key="open_job_btn"):
+                    navigate_to_job(int(job.id))
+            except Exception as exc:  # noqa: BLE001
+                st.error("Failed to save job. Please try again.")
+                logger.error(f"Save Job failed: {exc}")
+    with right:
+        if st.button("Cancel", key="save_job_cancel"):
+            st.rerun()

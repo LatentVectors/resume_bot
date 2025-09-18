@@ -4,11 +4,11 @@ from datetime import datetime
 
 import streamlit as st
 
+from app.pages.job_tabs.utils import navigate_to_job
 from app.services.user_service import UserService
 from src.database import Response as DbResponse
 from src.database import db_manager
 from src.logging_config import logger
-from src.utils.url import build_app_url
 
 
 def _fmt_dt(dt: datetime | None) -> str:
@@ -100,12 +100,8 @@ def main() -> None:
             st.write(":material/task_alt:" if r.ignore else "—")
         with row[5]:
             if r.job_id:
-                st.page_link(
-                    build_app_url(f"/job?job_id={r.job_id}"),
-                    label=f"View Job #{r.job_id}",
-                    icon=":material/link:",
-                    width="content",
-                )
+                if st.button(f"View Job #{r.job_id}", key=f"resp_view_job_{r.id}", icon=":material/link:"):
+                    navigate_to_job(int(r.job_id))
             else:
                 st.write("—")
 

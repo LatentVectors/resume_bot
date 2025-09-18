@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts.chat import ChatPromptTemplate
 from openai import APIConnectionError
+from pydantic import BaseModel, Field
 
 from src.core.models import OpenAIModels, get_model
 from src.logging_config import logger
@@ -13,15 +13,18 @@ from .utils import format_experiences_for_prompt
 
 def generate_summary(state: InternalState) -> PartialInternalState:
     """
-    Generate a professional summary grounded in the user's experience and free-form responses to career-related questions, targeted for a specific job description.
+    Generate a candidate title and professional summary grounded in the user's experience and
+    free-form responses to career-related questions, targeted for a specific job description.
 
-    This node creates a compelling professional summary that highlights the candidate's most relevant experience and skills as they relate to the target job. The summary is generated using an LLM that analyzes the job description, work experience, and additional responses to craft a personalized, impactful summary.
+    This node creates a compelling professional summary and proposes a concise professional
+    title that best positions the candidate for the target role. The LLM analyzes the job
+    description, work experience, and additional responses to craft output tailored to the role.
 
     Implementation Requirements:
     - Validate required inputs (job_description, experiences, responses) early
-    - Use string parser for free-form text output
+    - Use structured LLM output to return both title and professional_summary
     - Format experience data appropriately for the prompt
-    - Return only the professional_summary field in PartialInternalState
+    - Return only the title and professional_summary fields in PartialInternalState
     - Handle LLM errors gracefully with retry logic
     - Log node execution for debugging
 
@@ -31,6 +34,7 @@ def generate_summary(state: InternalState) -> PartialInternalState:
     - responses: str - Additional free-form responses about career goals/background
 
     Returns:
+    - title: str - Candidate professional title for the resume header
     - professional_summary: str - Generated professional summary text
     """
     logger.debug("NODE: generate_summary")
@@ -44,7 +48,7 @@ def generate_summary(state: InternalState) -> PartialInternalState:
     # Format experiences for the prompt
     formatted_experiences = format_experiences_for_prompt(state.experiences)
 
-    # Generate summary using LLM
+    # Generate title and summary using LLM (structured output)
     response = chain.invoke(
         {
             "job_description": state.job_description,
@@ -53,21 +57,27 @@ def generate_summary(state: InternalState) -> PartialInternalState:
         }
     )
 
-    return PartialInternalState(professional_summary=response)
+    validated = SummaryOutput.model_validate(response)
+
+    return PartialInternalState(title=validated.title, professional_summary=validated.professional_summary)
 
 
 # Prompt templates
 system_prompt = """
-You are an expert resume writer specializing in creating compelling professional summaries.
-Your task is to write a professional summary that effectively markets the candidate for the specific job they're applying to.
+You are an expert resume writer. Produce BOTH a concise professional TITLE and a compelling
+PROFESSIONAL SUMMARY tailored to the target job.
 
-Guidelines:
-- Keep the summary concise (3-4 sentences, 50-75 words)
-- Highlight the most relevant experience and skills for the target role
-- Use strong action words and quantifiable achievements when possible
-- Tailor the language to match the job description's tone and requirements
-- Focus on value proposition and career progression
-- Avoid generic phrases and clichés
+Guidelines (Title):
+- 2-5 words, concise and role-aligned (e.g., "Senior Data Scientist")
+- Reflect candidate's seniority and expertise relative to the job description
+- Avoid company-specific or overly generic titles (e.g., not just "Engineer")
+
+Guidelines (Professional Summary):
+- 3-4 sentences, roughly 50-90 words
+- Highlight the most relevant experience, impact, and skills for the role
+- Use action verbs and quantifiable achievements when possible
+- Match tone and keywords from the job description
+- Avoid clichés and fluff; be specific and value-focused
 """
 
 user_prompt = """
@@ -80,12 +90,22 @@ Candidate's Work Experience:
 Additional Information:
 {responses}
 
-Write a professional summary that positions this candidate as an ideal fit for the role.
+Produce a JSON object with fields:
+  - title: string (concise, role-aligned professional title)
+  - professional_summary: string (3-4 sentences tailored to the role)
 """
+
+
+class SummaryOutput(BaseModel):
+    """Structured output for title and professional summary generation."""
+
+    title: str = Field(description="Concise professional title for the resume header")
+    professional_summary: str = Field(description="3-4 sentence professional summary tailored to the role")
+
 
 # Model and chain setup
 llm = get_model(OpenAIModels.gpt_4o_mini)
-llm_with_retry = llm.with_retry(retry_if_exception_type=(APIConnectionError,))
+llm_structured = llm.with_structured_output(SummaryOutput).with_retry(retry_if_exception_type=(APIConnectionError,))
 chain = (
     ChatPromptTemplate.from_messages(
         [
@@ -93,6 +113,5 @@ chain = (
             ("user", user_prompt),
         ]
     )
-    | llm_with_retry
-    | StrOutputParser()
+    | llm_structured
 )

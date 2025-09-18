@@ -7,10 +7,10 @@ from datetime import datetime
 
 import streamlit as st
 
+from app.pages.job_tabs.utils import navigate_to_job
 from app.services.job_service import AllowedStatus, JobService
 from app.services.user_service import UserService
 from src.logging_config import logger
-from src.utils.url import build_app_url
 
 AllowedStatuses: tuple[AllowedStatus, ...] = (
     "Saved",
@@ -55,20 +55,64 @@ def _bool_param(value: object, default: bool = False) -> bool:
     return s in ("1", "true", "yes", "on")
 
 
-def _status_pill(status: AllowedStatus) -> str:
-    # Colors per spec
-    if status == "Saved":
-        return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#e5e7eb;color:#111827;font-size:12px;">Saved</span>'
-    if status == "Applied":
-        return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #10b981;color:#065f46;background:#ffffff;font-size:12px;">Applied</span>'
-    if status == "Interviewing":
-        return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#10b981;color:#ffffff;font-size:12px;">Interviewing</span>'
-    if status == "Not Selected":
-        return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid #ef4444;color:#991b1b;background:#ffffff;font-size:12px;">Not Selected</span>'
-    if status == "No Offer":
-        return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#ef4444;color:#ffffff;font-size:12px;">No Offer</span>'
-    # Hired
-    return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;background:#10b981;color:#ffffff;font-size:12px;">Hired</span>'
+def _normalize_status_label(status: object) -> AllowedStatus:
+    """Return a user-facing status label from a string or Enum-like value."""
+    # Raw string from enum.value or fallback to str(status)
+    raw: str
+    if isinstance(status, str):
+        raw = status
+    else:
+        val = getattr(status, "value", None)
+        raw = val if isinstance(val, str) else str(status)
+
+    raw = raw.strip()
+
+    # Direct match to allowed labels
+    if raw in AllowedStatuses:
+        return raw  # type: ignore[return-value]
+
+    # Handle forms like "JobStatus.Saved" or enum names without spaces
+    if "." in raw:
+        raw = raw.split(".")[-1]
+
+    name_to_label: dict[str, AllowedStatus] = {
+        "Saved": "Saved",
+        "Applied": "Applied",
+        "Interviewing": "Interviewing",
+        "NotSelected": "Not Selected",
+        "NoOffer": "No Offer",
+        "Hired": "Hired",
+    }
+    label = name_to_label.get(raw)
+    if label:
+        return label
+
+    # Fallback
+    return "Saved"  # type: ignore[return-value]
+
+
+def _status_badge(status: object) -> None:
+    """Render a status badge with a Material icon and color scheme."""
+    label: AllowedStatus = _normalize_status_label(status)
+    icon_prefix_map: dict[AllowedStatus, str] = {
+        "Saved": ":material/bookmark:",
+        "Applied": ":material/send:",
+        "Interviewing": ":material/question_answer:",
+        "Not Selected": ":material/cancel:",
+        "No Offer": ":material/thumb_down:",
+        "Hired": ":material/task_alt:",
+    }
+    color_map: dict[AllowedStatus, str] = {
+        "Saved": "gray",
+        "Applied": "green",
+        "Interviewing": "green",
+        "Not Selected": "red",
+        "No Offer": "red",
+        "Hired": "green",
+    }
+
+    # Prefix label with Material icon per requirement
+    st.badge(label=f"{icon_prefix_map[label]} {label}", color=color_map[label])
 
 
 def _format_dt(dt: object) -> str:
@@ -76,7 +120,7 @@ def _format_dt(dt: object) -> str:
         return "—"
     try:
         if isinstance(dt, datetime):
-            return dt.strftime("%Y-%m-%d %H:%M:%S")
+            return dt.strftime("%Y-%m-%d")
         return str(dt)
     except Exception:
         return str(dt)
@@ -173,7 +217,7 @@ def main() -> None:
         with cols[1]:
             st.write(job.company_name or "—")
         with cols[2]:
-            st.markdown(_status_pill(job.status), unsafe_allow_html=True)  # type: ignore[arg-type]
+            _status_badge(job.status)
         with cols[3]:
             st.write(_format_dt(getattr(job, "created_at", None)))
         with cols[4]:
@@ -185,11 +229,8 @@ def main() -> None:
         with cols[7]:
             st.write(":material/task_alt:" if getattr(job, "has_cover_letter", False) else "—")
         with cols[8]:
-            st.page_link(
-                build_app_url(f"/job?job_id={job.id}"),
-                label="View",
-                icon=":material/search:",
-            )
+            if st.button("", key=f"view_job_{job.id}", icon=":material/visibility:", help="View job"):
+                navigate_to_job(int(job.id))
 
 
 main()

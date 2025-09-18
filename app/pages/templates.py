@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import streamlit as st
+from streamlit_pdf_viewer import pdf_viewer
 
 from app.services.template_service import TemplateService
 
@@ -163,7 +164,7 @@ with right_col:
     if 0 <= idx < len(versions):
         sel = versions[idx]
         try:
-            st.pdf(data=sel["pdf_bytes"], height="stretch")
+            pdf_viewer(sel["pdf_bytes"], width="100%", height="stretch", zoom_level="auto")
         except Exception:
             st.error("Failed to render PDF preview.")
     else:

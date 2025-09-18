@@ -13,9 +13,6 @@ from app.pages.job_tabs import (
     render_responses,
     render_resume,
 )
-from app.pages.job_tabs import (
-    resume_exists as _resume_exists,
-)
 from app.services.job_service import JobService
 
 
@@ -29,16 +26,10 @@ class JobTab(StrEnum):
 
 
 def main() -> None:
-    # Query param handling
-    qp = st.query_params
-    job_id_param = qp.get("job_id")
-    try:
-        job_id = int(job_id_param) if job_id_param is not None else None
-    except Exception:
-        job_id = None
-
-    if not job_id:
-        st.error("Unknown or missing job_id. Return to Jobs.")
+    # Session-state based routing
+    job_id = st.session_state.get("selected_job_id")
+    if not isinstance(job_id, int):
+        st.error("No job selected. Return to Jobs.")
         st.page_link("pages/jobs.py", label="Back to Jobs", icon=":material/work:")
         return
 
@@ -53,7 +44,7 @@ def main() -> None:
     msg_count = JobService.count_job_messages(job.id)
     notes_count = JobService.count_job_notes(job.id)
 
-    resume_badge = _badge(bool(job.has_resume or _resume_exists(getattr(job, "resume_filename", None))))
+    resume_badge = _badge(bool(job.has_resume))
     cover_badge = _badge(bool(job.has_cover_letter))
     responses_badge = _badge(resp_count > 0)
     messages_badge = _badge(msg_count > 0)
@@ -68,16 +59,24 @@ def main() -> None:
         JobTab.NOTES: f"{JobTab.NOTES.value} {notes_badge}",
     }
 
+    # Seed persisted tab selection
+    if "selected_job_tab" not in st.session_state:
+        st.session_state["selected_job_tab"] = JobTab.OVERVIEW
+
     selection = st.segmented_control(
-        "",
+        "Job tabs",
         options=list(option_labels.keys()),
         format_func=lambda tab: option_labels[tab],
         selection_mode="single",
-        default=JobTab.OVERVIEW,
+        default=st.session_state.get("selected_job_tab", JobTab.OVERVIEW),
         key="job_tab_segmented",
         label_visibility="collapsed",
         width="stretch",
     )
+
+    # Persist selection
+    if selection != st.session_state.get("selected_job_tab"):
+        st.session_state["selected_job_tab"] = selection
 
     if selection == JobTab.OVERVIEW:
         render_overview(job)  # type: ignore[arg-type]

@@ -1,6 +1,3 @@
----
-alwaysApply: false
----
 Generate tasks from a spec document. The task should be broken into numbered sections with clear, cohesive, focused units of work. The generated tasks document must fully implement the requirements specified in the spec document.
 
 <guidelines>

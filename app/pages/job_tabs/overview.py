@@ -1,14 +1,19 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import streamlit as st
 
 from app.services.job_service import JobService
+from app.services.user_service import UserService
+from app.shared.filenames import build_resume_download_filename
 from src.config import settings
-from src.logging_config import logger
+from src.features.resume.types import ResumeData
 
-from .utils import SupportsJob, fmt_datetime, resume_exists
+from .utils import SupportsJob, fmt_datetime
+
+
+def _build_download_filename(job: SupportsJob, full_name: str) -> str:
+    """Builds: "Resume - {company} - {title} - {name} - {yyyy_mm_dd}.pdf"""
+    return build_resume_download_filename(job.company_name, job.job_title, full_name)
 
 
 def render_overview(job: SupportsJob) -> None:
@@ -92,24 +97,39 @@ def render_overview(job: SupportsJob) -> None:
 
     with right:
         st.subheader("Quick Actions")
-        pdf_filename = getattr(job, "resume_filename", "")
-        exists = resume_exists(pdf_filename)
-        pdf_path: Path | None = (settings.data_dir / "resumes" / pdf_filename).resolve() if exists else None
-
-        if exists and pdf_path is not None:
-            try:
-                pdf_bytes = pdf_path.read_bytes()
-                st.download_button(
-                    label="Download Resume PDF",
-                    data=pdf_bytes,
-                    file_name=pdf_filename,
-                    mime="application/pdf",
-                    type="primary",
-                    key=f"download_resume_{job.id}",
+        resume = JobService.get_resume_for_job(job.id)
+        pdf_filename = (getattr(resume, "pdf_filename", None) or "").strip()
+        if pdf_filename:
+            pdf_path = (settings.data_dir / "resumes" / pdf_filename).resolve()
+            if pdf_path.exists():
+                with pdf_path.open("rb") as fh:
+                    # Prefer the name saved in the resume JSON, fallback to current user profile
+                    full_name = ""
+                    try:
+                        if getattr(resume, "resume_json", None):
+                            rd = ResumeData.model_validate_json(resume.resume_json)  # type: ignore[arg-type]
+                            full_name = (rd.name or "").strip()
+                    except Exception:
+                        full_name = ""
+                    if not full_name:
+                        user = UserService.get_current_user()
+                        full_name = (
+                            f"{(user.first_name if user else '') or ''} {(user.last_name if user else '') or ''}"
+                        ).strip()
+                    st.download_button(
+                        label="Download Resume PDF",
+                        data=fh.read(),
+                        file_name=_build_download_filename(job, full_name),
+                        mime="application/pdf",
+                        type="primary",
+                        help="Download the saved resume PDF",
+                    )
+            else:
+                st.button(
+                    "Download Resume PDF",
+                    disabled=True,
+                    help="Resume PDF not found on disk. Try re-saving from the Resume tab.",
                 )
-            except Exception as e:  # noqa: BLE001
-                logger.error(f"Error preparing resume download for job {job.id}: {e}")
-                st.button("Download Resume PDF", disabled=True)
         else:
             st.button("Download Resume PDF", disabled=True, help="No resume file found")
 

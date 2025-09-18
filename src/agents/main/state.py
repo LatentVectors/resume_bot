@@ -5,6 +5,8 @@ from typing import TypedDict
 
 from pydantic import BaseModel, Field
 
+from src.features.resume.types import ResumeData
+
 
 class Experience(BaseModel):
     """Experience model for resume generation."""
@@ -50,16 +52,14 @@ class InputState(BaseModel):
 class OutputState(BaseModel):
     """Output state for resume generation agent."""
 
-    resume: str | None = None
+    title: str | None = None
     professional_summary: str | None = None
     skills: list[str] | None = None
+    resume_data: ResumeData | None = None
 
 
 class InternalState(InputState, OutputState, BaseModel):
     """Internal state for resume generation agent."""
-
-    # All fields from InputState and OutputState are included
-    # No additional internal fields needed for this agent
 
 
 class PartialInternalState(TypedDict, total=False):
@@ -76,6 +76,7 @@ class PartialInternalState(TypedDict, total=False):
     user_education: list[dict] | None
 
     # OutputState fields
-    resume: str | None
+    title: str | None
     professional_summary: str | None
     skills: list[str] | None
+    resume_data: ResumeData | None

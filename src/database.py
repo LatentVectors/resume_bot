@@ -7,6 +7,7 @@ from datetime import date, datetime
 from enum import Enum
 from pathlib import Path
 
+from sqlalchemy import UniqueConstraint
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 from src.logging_config import logger
@@ -88,7 +89,6 @@ class Job(SQLModel, table=True):
     job_description: str
     company_name: str | None = Field(default=None)
     job_title: str | None = Field(default=None)
-    resume_filename: str
     status: JobStatus = Field(default="Saved")
     is_favorite: bool = Field(default=False)
     applied_at: datetime | None = Field(default=None)
@@ -99,11 +99,18 @@ class Job(SQLModel, table=True):
 
 
 class Resume(SQLModel, table=True):
-    """Placeholder Resume entity for future versioning and migration of resume files."""
+    """Resume entity storing JSON content and rendered PDF for a single job.
+
+    Enforces a single resume per job via a uniqueness constraint on job_id.
+    """
+
+    __table_args__ = (UniqueConstraint("job_id", name="uq_resume_job_id"),)
 
     id: int | None = Field(default=None, primary_key=True)
     job_id: int = Field(foreign_key="job.id")
-    pdf_filename: str
+    template_name: str
+    resume_json: str
+    pdf_filename: str | None = Field(default=None)
     locked: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
@@ -176,14 +183,27 @@ class DatabaseManager:
             db_path = self.db_url.replace("sqlite:///", "")
             # Ensure parent directory exists
             Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+            logger.info(
+                "Initializing database engine",
+                extra={"database_url": self.db_url, "db_path": str(Path(db_path).resolve())},
+            )
             return create_engine(f"sqlite:///{db_path}")
-        else:
-            return create_engine("sqlite:///:memory:")
+        # Do not silently fall back to in-memory; this hides persistence issues
+        raise ValueError("Unsupported database_url. Only sqlite:/// paths are supported. Set database_url in .env.")
 
     def _init_database(self) -> None:
         """Initialize the database and create tables."""
         SQLModel.metadata.create_all(self.engine)
         logger.info("Database initialized successfully")
+
+    def reset_database(self) -> None:
+        """Drop and recreate all tables.
+
+        Intended for local development when making non-migrated schema changes.
+        """
+        SQLModel.metadata.drop_all(self.engine)
+        SQLModel.metadata.create_all(self.engine)
+        logger.info("Database schema reset successfully")
 
     @contextmanager
     def get_session(self):
@@ -412,11 +432,11 @@ db_manager = DatabaseManager()
 def _set_timestamps_on_create(obj: SQLModel) -> None:
     """Ensure created_at/updated_at are set on object creation."""
     if getattr(obj, "created_at", None) is None:
-        setattr(obj, "created_at", datetime.now())
+        obj.created_at = datetime.now()  # type: ignore[attr-defined]
     if getattr(obj, "updated_at", None) is None:
-        setattr(obj, "updated_at", datetime.now())
+        obj.updated_at = datetime.now()  # type: ignore[attr-defined]
 
 
 def _touch_updated_at(obj: SQLModel) -> None:
     """Update the updated_at timestamp to now."""
-    setattr(obj, "updated_at", datetime.now())
+    obj.updated_at = datetime.now()  # type: ignore[attr-defined]
