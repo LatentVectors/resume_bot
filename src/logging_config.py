@@ -31,11 +31,11 @@ logger.add(
 
 # File sink
 logger.add(
-    str(LOG_DIR / "resume-bot_{time}.log"),
+    str(LOG_DIR / "resume-bot.log"),
     format=LOG_FORMAT,
     level="DEBUG",
     rotation="20 MB",
-    retention="14 days",
+    retention=1,
     encoding="utf-8",
     enqueue=True,
 )

@@ -5,6 +5,7 @@ from datetime import date
 
 import streamlit as st
 
+from app.constants import MIN_DATE
 from app.services.education_service import EducationService
 from app.services.experience_service import ExperienceService
 from app.services.user_service import UserService
@@ -40,7 +41,7 @@ def render_progress_indicator():
 
 def render_step1_basic_info():
     """Render Step 1: Basic User Information form."""
-    st.subheader("👤 Basic Information")
+    st.subheader("Basic Information")
     st.markdown("Let's start with your basic information. Only first and last name are required.")
 
     with st.form("basic_info_form"):
@@ -125,7 +126,7 @@ def render_step1_basic_info():
 
 def render_step2_experience():
     """Render Step 2: Work Experience setup."""
-    st.subheader("💼 Work Experience")
+    st.subheader("Work Experience")
     st.markdown("Add at least one work experience. This is required for AI resume generation.")
 
     # Display existing experiences
@@ -154,19 +155,17 @@ def render_step2_experience():
             with col1:
                 company_name = st.text_input("Company Name")
                 job_title = st.text_input("Job Title")
-                start_date = st.date_input(
-                    "Start Date", value=date.today(), min_value=date(1950, 1, 1), max_value=date(2050, 12, 31)
-                )
+                start_date = st.date_input("Start Date", value=date.today(), min_value=MIN_DATE)
 
             with col2:
                 end_date = st.date_input(
                     "End Date (leave empty if current)",
                     value=None,
-                    min_value=date(1950, 1, 1),
-                    max_value=date(2050, 12, 31),
+                    min_value=MIN_DATE,
                 )
                 is_current = st.checkbox("This is my current position")
 
+            location = st.text_input("Location")
             content = st.text_area("Job Description", height=100)
 
             col1, col2 = st.columns(2)
@@ -185,6 +184,7 @@ def render_step2_experience():
                         "start_date": start_date.isoformat(),
                         "end_date": None if is_current else end_date.isoformat() if end_date else None,
                         "content": content.strip(),
+                        "location": location.strip() if location.strip() else None,
                     }
 
                     # Validate dates
@@ -200,30 +200,32 @@ def render_step2_experience():
     # Navigation buttons
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
-        if st.button("← Previous"):
+        if st.button("Previous"):
             st.session_state.onboarding_step = 1
             st.rerun()
     with col3:
         can_continue = len(st.session_state.onboarding_data["experiences"]) > 0
-        if st.button("Next →", disabled=not can_continue):
+        if st.button("Next", disabled=not can_continue):
             st.session_state.onboarding_step = 3
             st.rerun()
 
 
 def render_step3_education():
     """Render Step 3: Education setup."""
-    st.subheader("🎓 Education")
+    st.subheader("Education")
     st.markdown("Add your education (optional). You can skip this step and add education later.")
 
     # Display existing educations
     if st.session_state.onboarding_data["educations"]:
         st.markdown("**Added Education:**")
         for i, edu in enumerate(st.session_state.onboarding_data["educations"]):
-            with st.expander(f"{edu['degree']} from {edu['school']}"):
-                st.write(f"**School:** {edu['school']}")
-                st.write(f"**Degree:** {edu['degree']}")
-                st.write(f"**Start Date:** {edu['start_date']}")
-                st.write(f"**End Date:** {edu['end_date']}")
+            inst = edu.get("institution") or edu.get("school") or ""
+            with st.expander(f"{edu.get('degree', '')} from {inst}"):
+                st.write(f"**Institution:** {inst}")
+                if edu.get("major"):
+                    st.write(f"**Major:** {edu['major']}")
+                if edu.get("grad_date"):
+                    st.write(f"**Graduation Date:** {edu['grad_date']}")
 
                 if st.button(f"Remove Education {i + 1}", key=f"remove_edu_{i}"):
                     st.session_state.onboarding_data["educations"].pop(i)
@@ -235,16 +237,12 @@ def render_step3_education():
             col1, col2 = st.columns(2)
 
             with col1:
-                school = st.text_input("School/Institution")
+                school = st.text_input("Institution")
                 degree = st.text_input("Degree")
 
             with col2:
-                start_date = st.date_input(
-                    "Start Date", value=date.today(), min_value=date(1950, 1, 1), max_value=date(2050, 12, 31)
-                )
-                end_date = st.date_input(
-                    "End Date", value=date.today(), min_value=date(1950, 1, 1), max_value=date(2050, 12, 31)
-                )
+                major = st.text_input("Major")
+                grad_date = st.date_input("Graduation Date", value=date.today(), min_value=MIN_DATE)
 
             col1, col2 = st.columns(2)
             with col1:
@@ -254,15 +252,13 @@ def render_step3_education():
 
             if add_education:
                 if not school.strip() or not degree.strip():
-                    st.error("School and degree are required")
-                elif start_date > end_date:
-                    st.error("Start date must be before end date")
+                    st.error("Institution and Degree are required")
                 else:
                     education_data = {
-                        "school": school.strip(),
+                        "institution": school.strip(),
                         "degree": degree.strip(),
-                        "start_date": start_date.isoformat(),
-                        "end_date": end_date.isoformat(),
+                        "major": major.strip() if major.strip() else "",
+                        "grad_date": grad_date.isoformat(),
                     }
 
                     st.session_state.onboarding_data["educations"].append(education_data)
@@ -274,7 +270,7 @@ def render_step3_education():
     # Navigation buttons
     col1, col2, col3 = st.columns([1, 1, 1])
     with col1:
-        if st.button("← Previous"):
+        if st.button("Previous"):
             st.session_state.onboarding_step = 2
             st.rerun()
     with col3:
@@ -301,8 +297,7 @@ def complete_onboarding():
         if "onboarding_data" in st.session_state:
             del st.session_state.onboarding_data
 
-        st.success("🎉 Welcome! Your profile has been set up successfully.")
-        st.balloons()
+        st.success("Welcome! Your profile has been set up successfully.")
 
         # Redirect to home page
         st.switch_page("pages/home.py")

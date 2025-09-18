@@ -43,7 +43,7 @@ def main() -> None:
     # Define pages using the new Streamlit navigation API
     # Only show Home and User pages for single-user app
     home_page = st.Page("pages/home.py", title="Home", icon=":material/home:")
-    user_page = st.Page("pages/user.py", title="Profile", icon=":material/person:")  # Renamed from Users to Profile
+    user_page = st.Page("pages/profile.py", title="Profile", icon=":material/person:")  # Renamed from Users to Profile
     jobs_page = st.Page("pages/jobs.py", title="Jobs", icon=":material/work:")
     job_detail_page = st.Page("pages/job.py", title="Job", icon=":material/search:")
     templates_page = st.Page("pages/templates.py", title="Templates", icon=":material/extension:")

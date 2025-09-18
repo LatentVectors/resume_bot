@@ -107,9 +107,7 @@ def generate() -> None:
 
             try:
                 # Generate PDF
-                pdf_path = render_template_to_pdf(
-                    template_name, context, output_path, templates_dir
-                )
+                pdf_path = render_template_to_pdf(template_name, context, output_path, templates_dir)
 
                 # Get PDF info
                 info = get_pdf_info(pdf_path)
@@ -120,7 +118,7 @@ def generate() -> None:
                     profile_name.replace("_", " ").title(),
                     str(info["page_count"]),
                     f"{info['file_size_mb']:.2f}",
-                    "✅ Generated",
+                    "Generated",
                 )
 
             except Exception as e:
@@ -129,7 +127,7 @@ def generate() -> None:
                     profile_name.replace("_", " ").title(),
                     "-",
                     "-",
-                    f"❌ Error: {str(e)[:50]}...",
+                    f"Error: {str(e)[:50]}...",
                 )
 
             progress.advance(task)
@@ -168,9 +166,7 @@ def new_template(
         "--outdir",
         help="Base output directory for generated templates.",
     ),
-    pdf: bool = typer.Option(
-        False, "--pdf/--no-pdf", help="Also save a PDF preview alongside the HTML."
-    ),
+    pdf: bool = typer.Option(False, "--pdf/--no-pdf", help="Also save a PDF preview alongside the HTML."),
 ) -> None:
     """Generate a new ATS-safe Jinja2 HTML resume template via LLM, render, and save."""
     from datetime import datetime
@@ -269,9 +265,7 @@ def new_template(
     console.print(f"Raw template: {template_path}")
     if pdf and pdf_path.exists():
         console.print(f"PDF preview: {pdf_path}")
-    console.print(
-        "\nNext steps: Review outputs and copy approved template into `src/features/resume/templates/`."
-    )
+    console.print("\nNext steps: Review outputs and copy approved template into `src/features/resume/templates/`.")
 
 
 def _build_context_from_profile(profile_data: ResumeData) -> dict:
@@ -303,9 +297,7 @@ def _build_context_from_profile(profile_data: ResumeData) -> dict:
             }
             for edu in profile_data.education
         ],
-        "certifications": [
-            {"title": cert.title, "date": cert.date} for cert in profile_data.certifications
-        ],
+        "certifications": [{"title": cert.title, "date": cert.date} for cert in profile_data.certifications],
     }
 
 
@@ -368,13 +360,9 @@ def _validate_template_minimal(html_text: str) -> tuple[bool, list[str]]:
         ok = False
         warnings.append("Missing one or more required placeholders: {{ name }}, {{ title }}")
     # Heuristic for at least one list section placeholder
-    if not any(
-        token in html_text for token in ["skills", "experience", "education", "certifications"]
-    ):
+    if not any(token in html_text for token in ["skills", "experience", "education", "certifications"]):
         ok = False
-        warnings.append(
-            "Template seems to lack list sections (skills/experience/education/certifications)."
-        )
+        warnings.append("Template seems to lack list sections (skills/experience/education/certifications).")
     # Encourage if-wrapping but don't fail hard
     if "{% if" not in html_text:
         warnings.append(

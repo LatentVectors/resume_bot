@@ -3,12 +3,13 @@ from __future__ import annotations
 import streamlit as st
 
 from app.services.job_service import JobService
+from src.database import Job as DbJob
 from src.logging_config import logger
 
-from .utils import SupportsJob, fmt_datetime
+from .utils import fmt_datetime
 
 
-def render_notes(job: SupportsJob) -> None:
+def render_notes(job: DbJob) -> None:
     """Render the Notes tab for a job."""
     st.subheader("Notes")
     with st.form(f"add_note_{job.id}"):
@@ -35,5 +36,3 @@ def render_notes(job: SupportsJob) -> None:
             st.caption(fmt_datetime(getattr(note, "created_at", None)))
             st.write(getattr(note, "content", ""))
             st.markdown("---")
-
-

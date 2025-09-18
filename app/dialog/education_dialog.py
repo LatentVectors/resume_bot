@@ -4,41 +4,43 @@ from datetime import date
 
 import streamlit as st
 
+from app.constants import MIN_DATE
 from app.services.education_service import EducationService
 from src.logging_config import logger
 
 
 @st.dialog("Add Education", width="large")
 def show_add_education_dialog(user_id):
-    """Show dialog for adding new education entry."""
+    """Show dialog for adding new education entry aligned to new schema."""
     st.subheader("Add New Education")
 
     with st.form("add_education_dialog_form"):
-        # School and Degree in a single column
-        school = st.text_input("School/Institution *", help="Required")
-        degree = st.text_input("Degree *", help="Required")
+        institution = st.text_input("Institution *", help="Required")
+        col_deg, col_major = st.columns(2)
+        with col_deg:
+            degree = st.text_input("Degree *", help="Required")
+        with col_major:
+            major = st.text_input("Major *", help="Required")
 
-        # Start and End dates inline at the bottom
+        grad_date = st.date_input(
+            "Graduation Date *",
+            value=date.today(),
+            min_value=MIN_DATE,
+            help="Required",
+        )
+
         col1, col2 = st.columns(2)
         with col1:
-            start_date = st.date_input("Start Date *", value=date.today(), help="Required")
-        with col2:
-            end_date = st.date_input("End Date *", value=date.today(), help="Required")
-
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.form_submit_button("Add Education", type="primary"):
-                if not school.strip() or not degree.strip():
-                    st.error("School and degree are required.")
-                elif start_date > end_date:
-                    st.error("Start date must be before end date.")
+            if st.form_submit_button("Add", type="primary"):
+                if not institution.strip() or not degree.strip() or not major.strip():
+                    st.error("Institution, degree, and major are required.")
                 else:
                     try:
                         education_data = {
-                            "school": school.strip(),
+                            "institution": institution.strip(),
                             "degree": degree.strip(),
-                            "start_date": start_date.isoformat(),
-                            "end_date": end_date.isoformat(),
+                            "major": major.strip(),
+                            "grad_date": grad_date.isoformat(),
                         }
 
                         EducationService.create_education(user_id, **education_data)
@@ -55,35 +57,38 @@ def show_add_education_dialog(user_id):
 
 @st.dialog("Edit Education", width="large")
 def show_edit_education_dialog(education, user_id):
-    """Show dialog for editing existing education entry."""
+    """Show dialog for editing existing education entry aligned to new schema."""
     st.subheader("Edit Education")
 
     with st.form(f"edit_education_dialog_form_{education.id}"):
-        # School and Degree in a single column
-        school = st.text_input("School/Institution *", value=education.school, help="Required")
-        degree = st.text_input("Degree *", value=education.degree, help="Required")
+        institution = st.text_input("Institution *", value=education.institution, help="Required")
+        col_deg, col_major = st.columns(2)
+        with col_deg:
+            degree = st.text_input("Degree *", value=education.degree, help="Required")
+        with col_major:
+            major = st.text_input("Major *", value=education.major, help="Required")
 
-        # Start and End dates inline at the bottom
-        col1, col2 = st.columns(2)
-        with col1:
-            start_date = st.date_input("Start Date *", value=education.start_date, help="Required")
-        with col2:
-            end_date = st.date_input("End Date *", value=education.end_date, help="Required")
+        grad_date = st.date_input(
+            "Graduation Date *",
+            value=education.grad_date,
+            min_value=MIN_DATE,
+            help="Required",
+        )
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.form_submit_button("Save Changes", type="primary"):
-                if not school.strip() or not degree.strip():
-                    st.error("School and degree are required.")
-                elif start_date > end_date:
-                    st.error("Start date must be before end date.")
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if st.form_submit_button("Cancel"):
+                st.rerun()
+
+            if st.form_submit_button("Save", type="primary"):
+                if not institution.strip() or not degree.strip() or not major.strip():
+                    st.error("Institution, degree, and major are required.")
                 else:
                     try:
                         update_data = {
-                            "school": school.strip(),
+                            "institution": institution.strip(),
                             "degree": degree.strip(),
-                            "start_date": start_date.isoformat(),
-                            "end_date": end_date.isoformat(),
+                            "major": major.strip(),
+                            "grad_date": grad_date.isoformat(),
                         }
 
                         EducationService.update_education(education.id, **update_data)
@@ -92,7 +97,3 @@ def show_edit_education_dialog(education, user_id):
                     except Exception as e:
                         st.error(f"Error updating education: {str(e)}")
                         logger.error(f"Error updating education: {e}")
-
-        with col2:
-            if st.form_submit_button("Cancel"):
-                st.rerun()

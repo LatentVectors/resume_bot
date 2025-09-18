@@ -38,20 +38,18 @@ def show_save_job_dialog(
         "Job Description *", value=initial_description or "", height=200, help="Required", key="save_job_desc"
     )
 
-    left, right = st.columns(2)
     save_disabled = not (title.strip() and company.strip() and description.strip())
-    with left:
+    with st.container(horizontal=True, horizontal_alignment="right"):
+        if st.button("Cancel", key="save_job_cancel"):
+            st.rerun()
+
         if st.button("Save", type="primary", disabled=save_disabled, key="save_job_submit"):
             try:
                 job = JobService.save_job_with_extraction(description=description.strip(), favorite=favorite)
                 JobService.update_job_fields(job.id, title=title.strip(), company=company.strip())
 
-                st.success("Job saved!")
-                if st.button("Open Job", icon=":material/search:", use_container_width=False, key="open_job_btn"):
-                    navigate_to_job(int(job.id))
+                navigate_to_job(int(job.id))
+                return
             except Exception as exc:  # noqa: BLE001
                 st.error("Failed to save job. Please try again.")
                 logger.error(f"Save Job failed: {exc}")
-    with right:
-        if st.button("Cancel", key="save_job_cancel"):
-            st.rerun()

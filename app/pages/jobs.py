@@ -7,6 +7,7 @@ from datetime import datetime
 
 import streamlit as st
 
+from app.components.status_badge import render_status_badge
 from app.pages.job_tabs.utils import navigate_to_job
 from app.services.job_service import AllowedStatus, JobService
 from app.services.user_service import UserService
@@ -92,27 +93,7 @@ def _normalize_status_label(status: object) -> AllowedStatus:
 
 
 def _status_badge(status: object) -> None:
-    """Render a status badge with a Material icon and color scheme."""
-    label: AllowedStatus = _normalize_status_label(status)
-    icon_prefix_map: dict[AllowedStatus, str] = {
-        "Saved": ":material/bookmark:",
-        "Applied": ":material/send:",
-        "Interviewing": ":material/question_answer:",
-        "Not Selected": ":material/cancel:",
-        "No Offer": ":material/thumb_down:",
-        "Hired": ":material/task_alt:",
-    }
-    color_map: dict[AllowedStatus, str] = {
-        "Saved": "gray",
-        "Applied": "green",
-        "Interviewing": "green",
-        "Not Selected": "red",
-        "No Offer": "red",
-        "Hired": "green",
-    }
-
-    # Prefix label with Material icon per requirement
-    st.badge(label=f"{icon_prefix_map[label]} {label}", color=color_map[label])
+    render_status_badge(status)
 
 
 def _format_dt(dt: object) -> str:
@@ -219,15 +200,15 @@ def main() -> None:
         with cols[2]:
             _status_badge(job.status)
         with cols[3]:
-            st.write(_format_dt(getattr(job, "created_at", None)))
+            st.write(_format_dt(job.created_at))
         with cols[4]:
-            st.write(_format_dt(getattr(job, "applied_at", None)))
+            st.write(_format_dt(job.applied_at))
         with cols[5]:
-            st.write(":material/star:" if getattr(job, "is_favorite", False) else "—")
+            st.write(":material/star:" if job.is_favorite else "—")
         with cols[6]:
-            st.write(":material/task_alt:" if getattr(job, "has_resume", False) else "—")
+            st.write(":material/task_alt:" if job.has_resume else "—")
         with cols[7]:
-            st.write(":material/task_alt:" if getattr(job, "has_cover_letter", False) else "—")
+            st.write(":material/task_alt:" if job.has_cover_letter else "—")
         with cols[8]:
             if st.button("", key=f"view_job_{job.id}", icon=":material/visibility:", help="View job"):
                 navigate_to_job(int(job.id))

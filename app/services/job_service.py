@@ -142,6 +142,7 @@ class JobService:
         *,
         title: str | None = None,
         company: str | None = None,
+        job_description: str | None = None,
         is_favorite: bool | None = None,
     ) -> DbJob | None:
         """Update basic editable fields for a job.
@@ -156,6 +157,8 @@ class JobService:
             updates["job_title"] = title.strip() or None
         if company is not None:
             updates["company_name"] = company.strip() or None
+        if job_description is not None:
+            updates["job_description"] = job_description.strip() or None
         if is_favorite is not None:
             updates["is_favorite"] = bool(is_favorite)
 

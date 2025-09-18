@@ -61,6 +61,7 @@ class Experience(SQLModel, table=True):
     user_id: int = Field(foreign_key="user.id")
     company_name: str
     job_title: str
+    location: str | None = Field(default=None)
     start_date: date  # ISO date format (YYYY-MM-DD)
     end_date: date | None = Field(default=None)  # ISO date format (YYYY-MM-DD)
     content: str
@@ -73,10 +74,22 @@ class Education(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
-    school: str
+    institution: str
     degree: str
-    start_date: date  # ISO date format (YYYY-MM-DD)
-    end_date: date  # ISO date format (YYYY-MM-DD)
+    major: str
+    grad_date: date  # ISO date format (YYYY-MM-DD)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class Certification(SQLModel, table=True):
+    """Certification model for professional certifications."""
+
+    id: int | None = Field(default=None, primary_key=True)
+    user_id: int = Field(foreign_key="user.id")
+    title: str
+    institution: str | None = Field(default=None)
+    date: date
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
@@ -307,6 +320,58 @@ class DatabaseManager:
                 return True
             return False
 
+    # Certification methods
+    def add_certification(self, certification: Certification) -> int:
+        """Add a new certification to the database."""
+        with self.get_session() as session:
+            _set_timestamps_on_create(certification)
+
+            session.add(certification)
+            session.commit()
+            session.refresh(certification)
+            logger.info(
+                f"Added certification: {certification.title} (ID: {certification.id}) for user {certification.user_id}"
+            )
+            return certification.id
+
+    def get_certification(self, certification_id: int) -> Certification | None:
+        """Get a certification by ID."""
+        with self.get_session() as session:
+            return session.get(Certification, certification_id)
+
+    def list_user_certifications(self, user_id: int) -> list[Certification]:
+        """Get all certifications for a user."""
+        with self.get_session() as session:
+            statement = (
+                select(Certification).where(Certification.user_id == user_id).order_by(Certification.date.desc())
+            )
+            return list(session.exec(statement))
+
+    def update_certification(self, certification_id: int, **updates) -> Certification | None:
+        """Update a certification by ID."""
+        with self.get_session() as session:
+            certification = session.get(Certification, certification_id)
+            if certification:
+                for key, value in updates.items():
+                    setattr(certification, key, value)
+                _touch_updated_at(certification)
+                session.add(certification)
+                session.commit()
+                session.refresh(certification)
+                logger.info(f"Updated certification {certification_id}")
+            return certification
+
+    def delete_certification(self, certification_id: int) -> bool:
+        """Delete a certification by ID."""
+        with self.get_session() as session:
+            certification = session.get(Certification, certification_id)
+            if certification:
+                session.delete(certification)
+                session.commit()
+                logger.info(f"Deleted certification {certification_id}")
+                return True
+            return False
+
     # Education methods
     def add_education(self, education: Education) -> int:
         """Add a new education to the database."""
@@ -316,7 +381,7 @@ class DatabaseManager:
             session.add(education)
             session.commit()
             session.refresh(education)
-            logger.info(f"Added education: {education.degree} at {education.school} (ID: {education.id})")
+            logger.info(f"Added education: {education.degree} at {education.institution} (ID: {education.id})")
             return education.id
 
     def get_education(self, education_id: int) -> Education | None:
@@ -327,7 +392,7 @@ class DatabaseManager:
     def list_user_educations(self, user_id: int) -> list[Education]:
         """Get all educations for a user."""
         with self.get_session() as session:
-            statement = select(Education).where(Education.user_id == user_id).order_by(Education.start_date.desc())
+            statement = select(Education).where(Education.user_id == user_id).order_by(Education.grad_date.desc())
             return list(session.exec(statement))
 
     def update_education(self, education_id: int, **updates) -> Education | None:

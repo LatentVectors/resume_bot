@@ -4,6 +4,7 @@ from datetime import date
 
 import streamlit as st
 
+from app.constants import MIN_DATE
 from app.services.experience_service import ExperienceService
 from src.logging_config import logger
 
@@ -18,31 +19,32 @@ def show_add_experience_dialog(user_id):
         company_name = st.text_input("Company Name *", help="Required")
         job_title = st.text_input("Job Title *", help="Required")
 
+        # Location (optional)
+        location = st.text_input("Location", help="Optional")
+
         # Start and End dates inline on the same row
         col1, col2 = st.columns(2)
         with col1:
             start_date = st.date_input(
                 "Start Date *",
                 value=date.today(),
-                min_value=date(1950, 1, 1),
-                max_value=date(2050, 12, 31),
+                min_value=MIN_DATE,
                 help="Required",
             )
         with col2:
             end_date = st.date_input(
                 "End Date",
                 value=None,
-                min_value=date(1950, 1, 1),
-                max_value=date(2050, 12, 31),
+                min_value=MIN_DATE,
                 help="Leave empty for current position",
             )
 
         # Description with stretch height
-        content = st.text_area("Description *", help="Required - describe your role and achievements", height=200)
+        content = st.text_area("Description *", help="Required - describe your role and achievements", height=300)
 
         col1, col2 = st.columns(2)
         with col1:
-            if st.form_submit_button("Add Experience", type="primary"):
+            if st.form_submit_button("Add", type="primary"):
                 if not company_name.strip() or not job_title.strip() or not content.strip():
                     st.error("Company name, job title, and description are required.")
                 elif end_date and start_date > end_date:
@@ -55,6 +57,8 @@ def show_add_experience_dialog(user_id):
                             "start_date": start_date.isoformat(),
                             "content": content.strip(),
                         }
+                        if location is not None:
+                            experience_data["location"] = location
                         if end_date:
                             experience_data["end_date"] = end_date.isoformat()
 
@@ -80,22 +84,23 @@ def show_edit_experience_dialog(experience, user_id):
         company_name = st.text_input("Company Name *", value=experience.company_name, help="Required")
         job_title = st.text_input("Job Title *", value=experience.job_title, help="Required")
 
+        # Location (optional)
+        location = st.text_input("Location", value=getattr(experience, "location", None) or "", help="Optional")
+
         # Start and End dates inline on the same row
         col1, col2 = st.columns(2)
         with col1:
             start_date = st.date_input(
                 "Start Date *",
                 value=experience.start_date,
-                min_value=date(1950, 1, 1),
-                max_value=date(2050, 12, 31),
+                min_value=MIN_DATE,
                 help="Required",
             )
         with col2:
             end_date = st.date_input(
                 "End Date",
                 value=experience.end_date,
-                min_value=date(1950, 1, 1),
-                max_value=date(2050, 12, 31),
+                min_value=MIN_DATE,
                 help="Leave empty for current position",
             )
 
@@ -104,12 +109,14 @@ def show_edit_experience_dialog(experience, user_id):
             "Description *",
             value=experience.content,
             help="Required - describe your role and achievements",
-            height=200,
+            height=300,
         )
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.form_submit_button("Save Changes", type="primary"):
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if st.form_submit_button("Cancel"):
+                st.rerun()
+
+            if st.form_submit_button("Save", type="primary"):
                 if not company_name.strip() or not job_title.strip() or not content.strip():
                     st.error("Company name, job title, and description are required.")
                 elif end_date and start_date > end_date:
@@ -122,6 +129,7 @@ def show_edit_experience_dialog(experience, user_id):
                             "start_date": start_date.isoformat(),
                             "content": content.strip(),
                         }
+                        update_data["location"] = location
                         if end_date:
                             update_data["end_date"] = end_date.isoformat()
                         else:
@@ -133,7 +141,3 @@ def show_edit_experience_dialog(experience, user_id):
                     except Exception as e:
                         st.error(f"Error updating experience: {str(e)}")
                         logger.error(f"Error updating experience: {e}")
-
-        with col2:
-            if st.form_submit_button("Cancel"):
-                st.rerun()

@@ -11,6 +11,7 @@ from typing import Literal, TypedDict
 
 from src.database import DatabaseManager, Education, Experience, User, db_manager
 from src.features.resume.types import (
+    ResumeCertification,
     ResumeData,
     ResumeEducation,
     ResumeExperience,
@@ -159,20 +160,20 @@ def transform_user_to_resume_data(
         logger.warning(f"User {user.id} missing email address")
         user.email = ""
 
-    # Transform education data
+    # Transform education data (aligned with DB schema: institution/degree/major/grad_date)
     resume_education = []
     for edu in education_list:
         resume_education.append(
             ResumeEducation(
                 degree=edu.degree,
-                major="",
-                institution=edu.school,
-                grad_date=_format_date(edu.end_date),
+                major=edu.major,
+                institution=edu.institution,
+                grad_date=_format_date(edu.grad_date),
             )
         )
 
-    # Certifications are not part of the current schema
-    resume_certifications: list[str] = []  # kept for type compatibility
+    # Certifications are not part of the current schema in this adapter path
+    resume_certifications: list[ResumeCertification] = []
 
     # Transform experience data
     resume_experiences = []
@@ -181,7 +182,7 @@ def transform_user_to_resume_data(
             ResumeExperience(
                 title=exp.job_title,
                 company=exp.company_name,
-                location="",
+                location=exp.location or "",
                 start_date=_format_date(exp.start_date),
                 end_date=_format_date(exp.end_date) if exp.end_date else "Present",
                 points=[],

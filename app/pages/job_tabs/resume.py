@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import date, datetime
 from pathlib import Path
 from typing import cast
@@ -8,12 +9,17 @@ import streamlit as st
 from streamlit_pdf_viewer import pdf_viewer
 
 from app.components.info_banner import top_info_banner
+from app.constants import MIN_DATE
+from app.dialog.resume_add_certificate_dialog import show_resume_add_certificate_dialog
+from app.dialog.resume_add_education_dialog import show_resume_add_education_dialog
+from app.dialog.resume_add_experience_dialog import show_resume_add_experience_dialog
 from app.services.experience_service import ExperienceService
 from app.services.job_service import JobService
 from app.services.resume_service import ResumeService
 from app.services.user_service import UserService
 from app.shared.filenames import build_resume_download_filename
 from src.config import settings
+from src.database import Job as DbJob
 from src.features.resume.data_adapter import (
     fetch_experience_data,
     fetch_user_data,
@@ -28,10 +34,8 @@ from src.features.resume.types import (
 from src.features.resume.utils import list_available_templates
 from src.logging_config import logger
 
-from .utils import SupportsJob
 
-
-def _build_download_filename(job: SupportsJob, full_name: str) -> str:
+def _build_download_filename(job: DbJob, full_name: str) -> str:
     """Builds: "Resume - {company} - {title} - {name} - {yyyy_mm_dd}.pdf"""
     return build_resume_download_filename(job.company_name, job.job_title, full_name)
 
@@ -177,7 +181,7 @@ def _render_profile_section(draft: ResumeData, *, read_only: bool) -> ResumeData
             "Professional Summary :material/smart_toy:",
             value=draft.professional_summary,
             key="resume_summary",
-            height=140,
+            height=250,
             disabled=read_only,
         )
 
@@ -208,57 +212,48 @@ def _render_experience_section(draft: ResumeData, *, read_only: bool) -> ResumeD
                         ":material/delete:", key=f"exp_delete_{idx}", help="Delete experience", disabled=read_only
                     )
 
-                row2 = st.columns([2, 2, 2])
+                # Row for Location (placed above dates)
+                location = st.text_input(
+                    "Location",
+                    value=exp.location,
+                    key=f"exp_location_{idx}",
+                    disabled=read_only,
+                )
+
+                row2 = st.columns([2, 2])
                 with row2[0]:
                     start_val = _parse_date(exp.start_date) or date.today()
                     start_dt = st.date_input(
                         "Start Date",
                         value=start_val,
+                        min_value=MIN_DATE,
                         key=f"exp_start_{idx}",
                         disabled=read_only,
                     )
                 with row2[1]:
-                    present_key = f"exp_present_{idx}"
-                    is_present_default = (exp.end_date or "").strip().lower() == "present"
-                    is_present = st.checkbox("Present", value=is_present_default, key=present_key, disabled=read_only)
-                with row2[2]:
-                    end_val = (
-                        date.today()
-                        if (exp.end_date or "").strip().lower() == "present"
-                        else (_parse_date(exp.end_date) or date.today())
-                    )
-                    end_dt = st.date_input(
-                        "End Date",
-                        value=end_val,
+                    # End date is optional; blank implies Present
+                    end_text_default = "" if (exp.end_date or "").strip().lower() == "present" else (exp.end_date or "")
+                    end_text = st.text_input(
+                        "End Date (optional)",
+                        value=end_text_default,
                         key=f"exp_end_{idx}",
-                        disabled=(read_only or is_present),
+                        disabled=read_only,
+                        placeholder="YYYY-MM-DD or leave blank for Present",
                     )
+                    end_dt = _parse_date(end_text)
 
-                # Points header
-                st.caption("Points :material/smart_toy:")
-                new_points: list[str] = []
-                for pidx, point in enumerate(exp.points):
-                    prow = st.columns([5, 0.5])
-                    with prow[0]:
-                        ptext = st.text_area(
-                            f"Point {pidx + 1}",
-                            value=point,
-                            key=f"exp_{idx}_point_{pidx}",
-                            height=80,
-                            disabled=read_only,
-                        )
-                    with prow[1]:
-                        del_point = st.button(
-                            ":material/delete:", key=f"exp_{idx}_point_delete_{pidx}", disabled=read_only
-                        )
-                    if not del_point:
-                        new_points.append(ptext)
+                # (Location already captured above)
 
-                add_point = False
-                if not read_only and len(new_points) < 25:
-                    add_point = st.button("Add Point", key=f"exp_{idx}_add_point")
-                if add_point and len(new_points) < 25:
-                    new_points.append("")
+                # Points editor (bulk via textarea; one point per line)
+                points_text = st.text_area(
+                    ":material/smart_toy: Points (one per line)",
+                    value="\n".join(exp.points or []),
+                    key=f"exp_{idx}_points_text",
+                    height=180,
+                    disabled=read_only,
+                    help="Each non-empty line becomes a separate point.",
+                )
+                new_points: list[str] = [ln.strip() for ln in (points_text or "").splitlines() if ln.strip()]
 
                 # After potential deletion, decide to keep or drop experience
                 if not del_exp:
@@ -266,18 +261,16 @@ def _render_experience_section(draft: ResumeData, *, read_only: bool) -> ResumeD
                         ResumeExperience(
                             title=etitle,
                             company=company,
-                            location=exp.location,
+                            location=location,
                             start_date=_format_date(start_dt),
-                            end_date=("Present" if is_present else _format_date(end_dt)),
+                            end_date=("" if (end_dt is None) else _format_date(end_dt)),
                             points=[p for p in new_points if p.strip()],
                         )
                     )
 
         if not read_only:
             if st.button("Add Experience", key="add_experience"):
-                new_experiences.append(
-                    ResumeExperience(title="", company="", location="", start_date="", end_date="", points=[])
-                )
+                show_resume_add_experience_dialog()
 
     return draft.model_copy(update={"experience": new_experiences})
 
@@ -305,6 +298,7 @@ def _render_education_section(draft: ResumeData, *, read_only: bool) -> ResumeDa
                 grad_dt = st.date_input(
                     "Graduation Date",
                     value=grad_val,
+                    min_value=MIN_DATE,
                     key=f"edu_grad_{idx}",
                     disabled=read_only,
                 )
@@ -320,7 +314,7 @@ def _render_education_section(draft: ResumeData, *, read_only: bool) -> ResumeDa
                     )
 
         if not read_only and st.button("Add Education", key="add_education"):
-            new_education.append(ResumeEducation(degree="", major="", institution="", grad_date=""))
+            show_resume_add_education_dialog()
 
     return draft.model_copy(update={"education": new_education})
 
@@ -338,6 +332,7 @@ def _render_certifications_section(draft: ResumeData, *, read_only: bool) -> Res
                     date_dt = st.date_input(
                         "Date",
                         value=date_val,
+                        min_value=MIN_DATE,
                         key=f"cert_date_{idx}",
                         disabled=read_only,
                     )
@@ -350,7 +345,7 @@ def _render_certifications_section(draft: ResumeData, *, read_only: bool) -> Res
                     new_certs.append(ResumeCertification(title=title, date=_format_date(date_dt)))
 
         if not read_only and st.button("Add Certification", key="add_cert"):
-            new_certs.append(ResumeCertification(title="", date=""))
+            show_resume_add_certificate_dialog()
 
     return draft.model_copy(update={"certifications": new_certs})
 
@@ -358,12 +353,24 @@ def _render_certifications_section(draft: ResumeData, *, read_only: bool) -> Res
 def _render_skills_section(draft: ResumeData, *, read_only: bool) -> ResumeData:
     with st.expander("Skills :material/smart_toy:", expanded=False):
         skills_text = st.text_area(
-            "Skills (comma separated)",
-            value=", ".join(draft.skills),
+            "Skills (accepts commas and/or newlines; formatted one per line)",
+            value="\n".join(draft.skills),
             key="resume_skills_textarea",
             disabled=read_only,
+            height=400,
         )
-        skills_list = [s.strip() for s in skills_text.split(",") if s.strip()]
+        # Accept commas, newlines, or a mix; normalize whitespace
+        # Split on commas or newlines, collapse consecutive separators
+        raw_parts = re.split(r"[\n,]+", skills_text or "")
+        skills_list = [part.strip() for part in raw_parts if part and part.strip()]
+
+        # Re-format textarea to one-per-line so the UI normalizes on rerun
+        if not read_only:
+            try:
+                st.session_state["resume_skills_textarea"] = "\n".join(skills_list)
+            except Exception:
+                pass
+
     return draft.model_copy(update={"skills": (draft.skills if read_only else skills_list)})
 
 
@@ -382,10 +389,15 @@ def _embed_pdf(path: Path, *, height: int = 900) -> None:
         st.warning("Unable to embed PDF preview.")
 
 
-def render_resume(job: SupportsJob) -> None:
+def render_resume(job: DbJob) -> None:
     """Render the Resume tab skeleton with state and dirty tracking."""
     draft, template_name = _load_or_seed_draft(job.id, job.job_title)
-    is_read_only = bool(getattr(job, "applied_at", None))
+    # Make job id available to add-object dialogs for preview rendering
+    try:
+        st.session_state["current_job_id"] = job.id
+    except Exception:
+        pass
+    is_read_only = bool(job.applied_at)
 
     # Experience requirement: user must have at least one profile experience
     current_user = UserService.get_current_user()
@@ -401,8 +413,8 @@ def render_resume(job: SupportsJob) -> None:
     if not profile_has_experience:
         top_info_banner(
             "You must add at least one experience to your profile before generating a resume.",
-            button_label="Go to Profile to add experience",
-            target_page="pages/user.py",
+            button_label="Go to Profile",
+            target_page="pages/profile.py",
             key="resume_add_experience_nav",
         )
 
@@ -418,7 +430,7 @@ def render_resume(job: SupportsJob) -> None:
         )
 
         # Control buttons row + right-aligned Template dropdown
-        cols = st.columns([1, 1, 1, 2])
+        cols = st.columns([1, 2, 2])
         if not is_read_only:
             try:
                 templates = list_available_templates(_templates_dir())
@@ -426,12 +438,13 @@ def render_resume(job: SupportsJob) -> None:
                 logger.exception(exc)
                 templates = ["resume_000.html"]
 
-            with cols[3]:
+            with cols[1]:
                 selected_template = st.selectbox(
                     "Template",
                     options=templates,
                     index=(templates.index(template_name) if template_name in templates else 0),
                     key="resume_template_select",
+                    label_visibility="collapsed",
                 )
         else:
             # Keep previous template when read-only; do not render control
@@ -475,20 +488,21 @@ def render_resume(job: SupportsJob) -> None:
                     ),
                     key="resume_generate_btn",
                 )
-            with cols[1]:
-                save_clicked = st.button(
-                    "Save",
-                    disabled=(not is_dirty) or bool(missing),
-                    key="resume_save_btn",
-                )
             with cols[2]:
-                if st.button("Discard", disabled=not is_dirty, key="resume_discard_btn"):
-                    saved = cast(ResumeData, st.session_state.get("resume_last_saved", draft))
-                    saved_template = cast(str, st.session_state.get("resume_template_saved", template_name))
-                    st.session_state["resume_draft"] = saved
-                    st.session_state["resume_template"] = saved_template
-                    st.session_state["resume_dirty"] = False
-                    st.rerun()
+                with st.container(horizontal=True, horizontal_alignment="right"):
+                    save_clicked = st.button(
+                        "Save",
+                        disabled=(not is_dirty) or bool(missing),
+                        key="resume_save_btn",
+                        type="primary",
+                    )
+                    if st.button("Discard", disabled=not is_dirty, key="resume_discard_btn"):
+                        saved = cast(ResumeData, st.session_state.get("resume_last_saved", draft))
+                        saved_template = cast(str, st.session_state.get("resume_template_saved", template_name))
+                        st.session_state["resume_draft"] = saved
+                        st.session_state["resume_template"] = saved_template
+                        st.session_state["resume_dirty"] = False
+                        st.rerun()
 
         if missing:
             st.warning(
@@ -525,6 +539,10 @@ def render_resume(job: SupportsJob) -> None:
                         "resume_instructions",
                     ):
                         st.session_state.pop(key, None)
+                    # Clear experience points textareas so UI reflects AI-updated points
+                    for key in list(st.session_state.keys()):
+                        if isinstance(key, str) and key.startswith("exp_") and key.endswith("_points_text"):
+                            st.session_state.pop(key, None)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(exc)
                 st.toast("Draft updated via AI. Preview refreshed.")
@@ -571,45 +589,50 @@ def render_resume(job: SupportsJob) -> None:
         with header_cols[0]:
             st.subheader("Preview")
         with header_cols[1]:
-            if pdf_filename:
-                canonical = (settings.data_dir / "resumes" / pdf_filename).resolve()
-                if canonical.exists():
-                    try:
-                        with canonical.open("rb") as fh:
-                            st.download_button(
-                                label="Download",
-                                data=fh.read(),
-                                file_name=_build_download_filename(job, current_draft.name),
-                                mime="application/pdf",
-                                disabled=(not is_read_only) and is_dirty,
-                                help=("Save changes to enable download" if ((not is_read_only) and is_dirty) else None),
-                                key="resume_download_btn_header",
+            with st.container(horizontal=True, horizontal_alignment="right", gap=None):
+                if pdf_filename:
+                    canonical = (settings.data_dir / "resumes" / pdf_filename).resolve()
+                    if canonical.exists():
+                        try:
+                            with canonical.open("rb") as fh:
+                                st.download_button(
+                                    label="Download",
+                                    data=fh.read(),
+                                    file_name=_build_download_filename(job, current_draft.name),
+                                    mime="application/pdf",
+                                    disabled=(not is_read_only) and is_dirty,
+                                    help=(
+                                        "Save changes to enable download" if ((not is_read_only) and is_dirty) else None
+                                    ),
+                                    key="resume_download_btn_header",
+                                )
+                        except Exception as exc:  # noqa: BLE001
+                            logger.exception(exc)
+                            st.button(
+                                "Download",
+                                disabled=True,
+                                help="Unable to read PDF from disk.",
+                                key="resume_download_btn_header_disabled",
                             )
-                    except Exception as exc:  # noqa: BLE001
-                        logger.exception(exc)
+                    else:
                         st.button(
                             "Download",
                             disabled=True,
-                            help="Unable to read PDF from disk.",
-                            key="resume_download_btn_header_disabled",
+                            help="PDF missing on disk. Re-save resume.",
+                            key="resume_download_btn_header_missing",
                         )
                 else:
+                    # No persisted PDF yet
                     st.button(
                         "Download",
                         disabled=True,
-                        help="PDF missing on disk. Re-save resume.",
-                        key="resume_download_btn_header_missing",
+                        help=(
+                            "No saved resume PDF yet."
+                            if not is_read_only
+                            else "No saved resume PDF found for this job."
+                        ),
+                        key="resume_download_btn_header_none",
                     )
-            else:
-                # No persisted PDF yet
-                st.button(
-                    "Download Resume PDF",
-                    disabled=True,
-                    help=(
-                        "No saved resume PDF yet." if not is_read_only else "No saved resume PDF found for this job."
-                    ),
-                    key="resume_download_btn_header_none",
-                )
 
         if is_read_only:
             if pdf_filename:

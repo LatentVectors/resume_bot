@@ -17,7 +17,7 @@ try:
             top_info_banner(
                 "You don't have any work experience on your profile. Add experience to unlock resume generation.",
                 button_label="Go to Profile",
-                target_page="pages/user.py",
+                target_page="pages/profile.py",
                 key="home_add_experience_nav",
             )
 except Exception as e:  # noqa: BLE001

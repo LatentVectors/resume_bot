@@ -11,7 +11,14 @@ class EducationService:
 
     @staticmethod
     def create_education(user_id: int, **data) -> int:
-        """Create a new education entry with created_at/updated_at timestamps."""
+        """Create a new education entry with created_at/updated_at timestamps.
+
+        Expects fields aligned with the Education schema:
+        - institution: str
+        - degree: str
+        - major: str
+        - grad_date: date | ISO date str (YYYY-MM-DD)
+        """
         try:
             # Validate user exists
             if not isinstance(user_id, int) or user_id <= 0:
@@ -22,26 +29,17 @@ class EducationService:
             if not user:
                 raise ValueError(f"User with ID {user_id} not found")
 
-            # Validate required fields
-            required_fields = ["school", "degree", "start_date", "end_date"]
+            # Validate required fields (new schema)
+            required_fields = ["institution", "degree", "major", "grad_date"]
             for field in required_fields:
                 if not data.get(field):
                     raise ValueError(f"{field.replace('_', ' ').title()} is required")
 
-            # Validate date format and logic
-            start_date = data["start_date"]
-            end_date = data["end_date"]
-
-            if isinstance(start_date, str):
-                start_date = date.fromisoformat(start_date)
-                data["start_date"] = start_date
-
-            if isinstance(end_date, str):
-                end_date = date.fromisoformat(end_date)
-                data["end_date"] = end_date
-
-            if start_date and end_date and start_date > end_date:
-                raise ValueError("Start date must be before end date")
+            # Parse grad_date if provided as string
+            grad_date = data["grad_date"]
+            if isinstance(grad_date, str):
+                grad_date = date.fromisoformat(grad_date)
+                data["grad_date"] = grad_date
 
             education = Education(user_id=user_id, **data)
             return db_manager.add_education(education)
@@ -78,21 +76,11 @@ class EducationService:
             if not isinstance(education_id, int) or education_id <= 0:
                 raise ValueError("Invalid education ID")
 
-            # Validate date logic if dates are being updated
-            if "start_date" in updates or "end_date" in updates:
-                start_date = updates.get("start_date")
-                end_date = updates.get("end_date")
-
-                if start_date and isinstance(start_date, str):
-                    start_date = date.fromisoformat(start_date)
-                    updates["start_date"] = start_date
-
-                if end_date and isinstance(end_date, str):
-                    end_date = date.fromisoformat(end_date)
-                    updates["end_date"] = end_date
-
-                if start_date and end_date and start_date > end_date:
-                    raise ValueError("Start date must be before end date")
+            # Parse grad_date if provided as string
+            if "grad_date" in updates:
+                grad_date = updates.get("grad_date")
+                if grad_date and isinstance(grad_date, str):
+                    updates["grad_date"] = date.fromisoformat(grad_date)
 
             return db_manager.update_education(education_id, **updates)
         except Exception as e:

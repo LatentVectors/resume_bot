@@ -12,7 +12,7 @@ from .notes import render_notes
 from .overview import render_overview
 from .responses import render_responses
 from .resume import render_resume
-from .utils import SupportsJob, badge, fmt_datetime
+from .utils import badge, fmt_datetime
 
 __all__ = [
     "render_overview",
@@ -21,8 +21,6 @@ __all__ = [
     "render_responses",
     "render_messages",
     "render_notes",
-    "SupportsJob",
     "badge",
-    "resume_exists",
     "fmt_datetime",
 ]

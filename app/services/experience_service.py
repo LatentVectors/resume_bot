@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from src.database import Experience, User, db_manager
+from src.database import Experience, db_manager
 from src.logging_config import logger
 
 
@@ -11,7 +11,10 @@ class ExperienceService:
 
     @staticmethod
     def create_experience(user_id: int, **data) -> int:
-        """Create a new experience entry with created_at/updated_at timestamps."""
+        """Create a new experience entry with created_at/updated_at timestamps.
+
+        Accepts optional `location` and persists it if provided (empty strings coerced to None).
+        """
         try:
             # Validate user exists
             if not isinstance(user_id, int) or user_id <= 0:
@@ -28,21 +31,19 @@ class ExperienceService:
                 if not data.get(field):
                     raise ValueError(f"{field.replace('_', ' ').title()} is required")
 
+            # Normalize optional location
+            if "location" in data:
+                data["location"] = _normalize_optional_str(data.get("location"))
+
             # Validate date format and logic
-            start_date = data["start_date"]
-            end_date = data.get("end_date")
+            start_date = _coerce_iso_date(data["start_date"])  # type: ignore[index]
+            end_date = _coerce_iso_date(data.get("end_date"))
+            data["start_date"] = start_date
+            if end_date is not None:
+                data["end_date"] = end_date
 
-            if isinstance(start_date, str):
-                start_date = date.fromisoformat(start_date)
-                data["start_date"] = start_date
-
-            if end_date:
-                if isinstance(end_date, str):
-                    end_date = date.fromisoformat(end_date)
-                    data["end_date"] = end_date
-
-                if start_date and end_date and start_date > end_date:
-                    raise ValueError("Start date must be before end date")
+            if start_date and end_date and start_date > end_date:
+                raise ValueError("Start date must be before end date")
 
             experience = Experience(user_id=user_id, **data)
             return db_manager.add_experience(experience)
@@ -81,19 +82,20 @@ class ExperienceService:
 
             # Validate date logic if dates are being updated
             if "start_date" in updates or "end_date" in updates:
-                start_date = updates.get("start_date")
-                end_date = updates.get("end_date")
+                start_date = _coerce_iso_date(updates.get("start_date"))
+                end_date = _coerce_iso_date(updates.get("end_date"))
 
-                if start_date and isinstance(start_date, str):
-                    start_date = date.fromisoformat(start_date)
+                if start_date is not None:
                     updates["start_date"] = start_date
-
-                if end_date and isinstance(end_date, str):
-                    end_date = date.fromisoformat(end_date)
+                if end_date is not None:
                     updates["end_date"] = end_date
 
                 if start_date and end_date and start_date > end_date:
                     raise ValueError("Start date must be before end date")
+
+            # Normalize optional location if provided
+            if "location" in updates:
+                updates["location"] = _normalize_optional_str(updates.get("location"))
 
             return db_manager.update_experience(experience_id, **updates)
         except Exception as e:
@@ -110,3 +112,24 @@ class ExperienceService:
         except Exception as e:
             logger.error(f"Error deleting experience {experience_id}: {e}")
             return False
+
+
+def _coerce_iso_date(value):
+    """Coerce a value into a date if it's an ISO date string; pass dates/None through."""
+    if value is None:
+        return None
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        return date.fromisoformat(value)
+    return value
+
+
+def _normalize_optional_str(value):
+    """Normalize optional string fields: strip whitespace and convert empty strings to None."""
+    if value is None:
+        return None
+    if isinstance(value, str):
+        stripped = value.strip()
+        return stripped if stripped else None
+    return value
