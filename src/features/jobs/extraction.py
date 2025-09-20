@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import Optional
-
 from langchain_core.prompts.chat import ChatPromptTemplate
+from langchain_core.runnables import RunnableConfig
 from openai import APIConnectionError
 from pydantic import BaseModel
 
+from app.constants import LLMTag
 from src.core.models import OpenAIModels, get_model
 from src.logging_config import logger
 
@@ -13,12 +13,12 @@ from src.logging_config import logger
 class TitleCompany(BaseModel):
     """Structured output for job title and company extraction."""
 
-    title: Optional[str] = None
-    company: Optional[str] = None
+    title: str | None
+    company: str | None
 
 
 _SYSTEM_PROMPT = """
-You extract the job title and company from arbitrary job-related text. 
+You extract the job title and company from arbitrary job-related text.
 Return concise values without extra punctuation or qualifiers.
 If either field cannot be determined, return it as null.
 """
@@ -49,7 +49,11 @@ def extract_title_company(text: str) -> TitleCompany:
     Returns TitleCompany with fields possibly None on failure or uncertainty.
     """
     try:
-        result = _chain.invoke({"text": text})
+        config = RunnableConfig(
+            tags=[LLMTag.JOB_EXTRACTION.value],
+            metadata={"text": text},
+        )
+        result = _chain.invoke({"text": text}, config=config)
         # Safety: model may return dict; validate to our schema
         if isinstance(result, dict):
             validated = TitleCompany.model_validate(result)

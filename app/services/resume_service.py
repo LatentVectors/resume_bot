@@ -3,8 +3,10 @@
 from pathlib import Path
 from uuid import uuid4
 
+from langchain_core.runnables import RunnableConfig
 from sqlmodel import select
 
+from app.constants import LLMTag
 from src.config import settings
 from src.database import Resume as DbResume
 from src.database import db_manager
@@ -104,7 +106,11 @@ class ResumeService:
                 or None,
             )
 
-            result = main_agent.invoke(initial_state)
+            config = RunnableConfig(
+                tags=[LLMTag.RESUME_GENERATION.value],
+                metadata={"job_id": job_id, "user_id": user_id},
+            )
+            result = main_agent.invoke(initial_state, config=config)
             out = OutputState.model_validate(result)
 
             # Apply AI-editable fields to draft (read from out.resume_data)
