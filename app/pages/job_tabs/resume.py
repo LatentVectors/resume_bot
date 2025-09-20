@@ -140,7 +140,8 @@ def _parse_date(value: str) -> date | None:
         return None
     if value.strip().lower() == "present":
         return None
-    for fmt in ("%Y-%m-%d", "%Y-%m", "%m/%Y", "%Y"):
+    # Accept common formats produced by adapters and user input
+    for fmt in ("%Y-%m-%d", "%Y-%m", "%m/%Y", "%Y", "%b %Y", "%B %Y"):
         try:
             return datetime.strptime(value, fmt).date()
         except Exception:  # noqa: BLE001 - try next

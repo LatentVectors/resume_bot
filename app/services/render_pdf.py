@@ -1,11 +1,10 @@
-from __future__ import annotations
-
 """PDF rendering service for resumes (persisted and previews)."""
 
-from pathlib import Path
-from typing import Any, Dict
+from __future__ import annotations
 
-from src.config import settings
+from pathlib import Path
+from typing import Any
+
 from src.features.resume.utils import render_template_to_pdf
 from src.logging_config import logger
 
@@ -17,7 +16,8 @@ def _resume_templates_dir() -> Path:
     return (project_root / "src" / "features" / "resume" / "templates").resolve()
 
 
-def render_resume_pdf(resume_data: Dict[str, Any], template_name: str, dest_path: str | Path) -> Path:
+# TODO: resume_data should be a ResumeData instance.
+def render_resume_pdf(resume_data: dict[str, Any], template_name: str, dest_path: str | Path) -> Path:
     """Render the canonical resume PDF to the destination path.
 
     Args:
@@ -51,7 +51,8 @@ def render_resume_pdf(resume_data: Dict[str, Any], template_name: str, dest_path
         raise
 
 
-def render_preview_pdf(resume_data: Dict[str, Any], template_name: str, preview_path: str | Path) -> Path:
+# TODO: resume_data should be a ResumeData instance.
+def render_preview_pdf(resume_data: dict[str, Any], template_name: str, preview_path: str | Path) -> Path:
     """Render a preview PDF for display only; does not update any DB state.
 
     Args:

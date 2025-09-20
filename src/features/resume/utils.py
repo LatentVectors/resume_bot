@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any
 
 import jinja2
 from loguru import logger
@@ -32,7 +32,7 @@ def get_template_environment(templates_dir: str | Path) -> jinja2.Environment:
     )
 
 
-def render_template_to_html(template_name: str, context: Dict[str, Any], templates_dir: str | Path) -> str:
+def render_template_to_html(template_name: str, context: dict[str, Any], templates_dir: str | Path) -> str:
     """
     Render a Jinja2 template to HTML string.
 
@@ -61,7 +61,7 @@ def render_template_to_html(template_name: str, context: Dict[str, Any], templat
         raise
 
 
-def convert_html_to_pdf(html_content: str, output_path: str | Path, css_string: Optional[str] = None) -> Path:
+def convert_html_to_pdf(html_content: str, output_path: str | Path, css_string: str | None = None) -> Path:
     """
     Convert HTML content to PDF file.
 
@@ -101,10 +101,10 @@ def convert_html_to_pdf(html_content: str, output_path: str | Path, css_string: 
 
 def render_template_to_pdf(
     template_name: str,
-    context: Dict[str, Any],
+    context: dict[str, Any],
     output_path: str | Path,
     templates_dir: str | Path,
-    css_string: Optional[str] = None,
+    css_string: str | None = None,
 ) -> Path:
     """
     Render a Jinja2 template to PDF file.
@@ -149,7 +149,7 @@ class PDFMetrics(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     total_pages: int
-    page_metrics: List[PageMetric]
+    page_metrics: list[PageMetric]
 
 
 def compute_pdf_metrics(pdf_path: str | Path) -> PDFMetrics:
@@ -273,7 +273,7 @@ def _analyze_pdf_page_extents(pdf_path: Path) -> list[dict[str, float]]:
     return extents
 
 
-def _iter_layout_elements(layout_obj: object) -> Iterable[object]:
+def _iter_layout_elements(layout_obj: object) -> list[object]:
     """Depth-first iteration over pdfminer layout elements that have bbox."""
     # Many layout objects in pdfminer are iterable containers
     stack = [layout_obj]
@@ -393,7 +393,7 @@ def get_pdf_file_size(pdf_path: str | Path) -> int:
         raise
 
 
-def get_pdf_info(pdf_path: str | Path) -> Dict[str, Any]:
+def get_pdf_info(pdf_path: str | Path) -> dict[str, Any]:
     """
     Get comprehensive information about a PDF file.
 

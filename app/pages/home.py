@@ -7,8 +7,6 @@ from app.services.experience_service import ExperienceService
 from app.services.user_service import UserService
 from src.logging_config import logger
 
-st.title("Home")
-
 # Experience-required banner at top if user lacks experiences
 try:
     user = UserService.get_current_user()
@@ -23,8 +21,6 @@ try:
 except Exception as e:  # noqa: BLE001
     logger.error(f"Failed to check user experiences: {e}")
 
-st.markdown("---")
-
 # Main content area
 st.subheader("Save Job")
 
@@ -33,7 +29,7 @@ with st.form("resume_form"):
     user_input = st.text_area(
         "Job Description",
         placeholder="Enter your job description, skills, or any other requirements...",
-        height=100,
+        height=400,
     )
 
     # Action

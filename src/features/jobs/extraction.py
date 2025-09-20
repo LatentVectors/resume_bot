@@ -51,7 +51,6 @@ def extract_title_company(text: str) -> TitleCompany:
     try:
         config = RunnableConfig(
             tags=[LLMTag.JOB_EXTRACTION.value],
-            metadata={"text": text},
         )
         result = _chain.invoke({"text": text}, config=config)
         # Safety: model may return dict; validate to our schema

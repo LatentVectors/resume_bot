@@ -124,9 +124,56 @@ class ResumeService:
                 if rd.skills:
                     updated.skills = rd.skills
 
-            # Experience points updates are produced by generate_experience node via state.experiences,
-            # but OutputState currently doesn't expose them. Until section 7 updates, keep prior points.
-            # UI can pass back updated draft on subsequent calls.
+                # Merge experience bullet points from rd into existing draft experiences.
+                # Preserve user-entered fields like location and dates from the current draft.
+                try:
+                    if rd.experience:
+                        # Build a lookup of points by (title, company) normalized
+                        def _key(title: str, company: str) -> tuple[str, str]:
+                            return (title.strip().lower(), company.strip().lower())
+
+                        rd_map = {
+                            _key(exp.title or "", exp.company or ""): list(exp.points or []) for exp in rd.experience
+                        }
+
+                        merged_experiences = []
+                        for idx, exp in enumerate(updated.experience or []):
+                            pts: list[str] | None = None
+                            k = _key(exp.title or "", exp.company or "")
+                            if k in rd_map and rd_map[k]:
+                                pts = rd_map[k]
+                            elif idx < len(rd.experience) and (rd.experience[idx].points or []):
+                                pts = list(rd.experience[idx].points or [])
+
+                            merged_experiences.append(
+                                type(exp)(
+                                    title=exp.title,
+                                    company=exp.company,
+                                    location=getattr(exp, "location", ""),
+                                    start_date=exp.start_date,
+                                    end_date=exp.end_date,
+                                    points=list(pts or exp.points or []),
+                                )
+                            )
+
+                        # If rd has more experiences than current draft, append them
+                        if len(rd.experience) > len(merged_experiences):
+                            for extra in rd.experience[len(merged_experiences) :]:
+                                merged_experiences.append(
+                                    type(exp)(
+                                        title=extra.title,
+                                        company=extra.company,
+                                        location=getattr(extra, "location", ""),
+                                        start_date=extra.start_date,
+                                        end_date=extra.end_date,
+                                        points=list(extra.points or []),
+                                    )
+                                )
+
+                        updated.experience = merged_experiences
+                except Exception as e:  # noqa: BLE001
+                    # Log and proceed with whatever we currently have; do not fail generation
+                    logger.exception(e)
 
             return updated
         except Exception as e:  # noqa: BLE001
