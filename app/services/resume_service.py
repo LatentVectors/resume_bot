@@ -207,8 +207,7 @@ class ResumeService:
                     "template_name": template_name,
                 },
             )
-            payload = resume_data.model_dump()
-            payload_json = ResumeData.model_validate(payload).model_dump_json()
+            payload_json = resume_data.model_dump_json()
 
             with db_manager.get_session() as session:
                 # Find existing resume
@@ -237,7 +236,7 @@ class ResumeService:
                 output_path = output_dir / pdf_filename
 
                 try:
-                    render_resume_pdf(payload, template_name, output_path)
+                    render_resume_pdf(resume_data, template_name, output_path)
                     existing.pdf_filename = pdf_filename
                 except Exception as e:  # noqa: BLE001
                     # Log and keep JSON changes; clear pdf filename so denorm reflects missing PDF
@@ -270,8 +269,7 @@ class ResumeService:
             preview_dir = (settings.data_dir / "resumes" / "previews").resolve()
             preview_dir.mkdir(parents=True, exist_ok=True)
             preview_path = preview_dir / f"{job_id}.pdf"
-            payload = resume_data.model_dump()
-            return render_preview_pdf(payload, template_name, preview_path)
+            return render_preview_pdf(resume_data, template_name, preview_path)
         except Exception as e:  # noqa: BLE001
             logger.exception(e)
             raise

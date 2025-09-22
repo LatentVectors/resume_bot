@@ -7,31 +7,10 @@ persistence are handled outside the agent graph by services.
 
 from __future__ import annotations
 
-from datetime import date as _date
-
 from src.features.resume.types import ResumeData, ResumeEducation, ResumeExperience
 from src.logging_config import logger
 
 from ..state import Experience, InternalState, PartialInternalState
-
-
-def _format_date_for_resume(date_obj: object) -> str:
-    """Format a date object into the resume-friendly string.
-
-    Args:
-        date_obj: A datetime.date or None-like object
-
-    Returns:
-        Formatted string such as "Jan 2023" or "Present" when missing.
-    """
-    try:
-        if not date_obj:
-            return "Present"
-        if isinstance(date_obj, _date):
-            return date_obj.strftime("%b %Y")
-        return str(date_obj)
-    except Exception:
-        return ""
 
 
 def assemble_resume_data(state: InternalState) -> PartialInternalState:
@@ -62,8 +41,8 @@ def assemble_resume_data(state: InternalState) -> PartialInternalState:
                 title=exp.title,
                 company=exp.company,
                 location="",
-                start_date=_format_date_for_resume(exp.start_date),
-                end_date=_format_date_for_resume(exp.end_date) if exp.end_date else "Present",
+                start_date=exp.start_date,
+                end_date=exp.end_date,
                 points=list(exp.points or []),
             )
         )
@@ -77,7 +56,7 @@ def assemble_resume_data(state: InternalState) -> PartialInternalState:
                     degree=str(edu.get("degree", "")),
                     major="",
                     institution=str(edu.get("school", "")),
-                    grad_date=_format_date_for_resume(edu.get("end_date")),
+                    grad_date=edu.get("end_date", None),
                 )
             )
 

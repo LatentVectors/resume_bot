@@ -1,3 +1,5 @@
+from datetime import date
+
 from .types import ResumeCertification, ResumeData, ResumeEducation, ResumeExperience
 
 DUMMY_RESUME_DATA: dict[str, ResumeData] = {
@@ -13,8 +15,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Founder / Lead Developer (Entrepreneurial Venture)",
                 company="North Peak Digital",
                 location="Remote",
-                start_date="June 2021",
-                end_date="July 2024",
+                start_date=date(2021, 6, 1),
+                end_date=date(2024, 7, 1),
                 points=[
                     "Independently designed, built, and launched two successful Shopify applications, acquiring over 1,500 active paying users.",
                     "Engineered the full stack using Python (Flask), JavaScript, and the Shopify API to create robust, customer-facing tools.",
@@ -26,8 +28,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Data Engineer",
                 company="Global Consumer Goods Corp.",
                 location="Cincinnati, OH",
-                start_date="January 2018",
-                end_date="May 2021",
+                start_date=date(2018, 1, 1),
+                end_date=date(2021, 5, 1),
                 points=[
                     "Led the technical design and implementation of the marketing department's first centralized data warehouse in Amazon Redshift.",
                     "Built and automated ETL pipelines using Python and SQL to ingest data from disparate sources including Nielsen, Salesforce, and internal transaction systems.",
@@ -41,7 +43,7 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 degree="Bachelor of Science",
                 major="Information Systems",
                 institution="The Ohio State University",
-                grad_date="December 2017",
+                grad_date=date(2017, 12, 1),
             )
         ],
         skills=[
@@ -69,7 +71,7 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
         certifications=[
             ResumeCertification(
                 title="DeepLearning.AI - LangChain for LLM Application Development",
-                date="May 2024",
+                date=date(2024, 5, 1),
             )
         ],
     ),
@@ -85,8 +87,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Senior Data Scientist",
                 company="Innovatech Solutions Inc.",
                 location="San Francisco, CA",
-                start_date="January 2020",
-                end_date="Present",
+                start_date=date(2020, 1, 1),
+                end_date=None,
                 points=[
                     "Developed and deployed a customer churn prediction model using XGBoost, reducing monthly churn by 15% and saving an estimated $1.2M annually.",
                     "Led a team of 3 junior analysts to build a real-time anomaly detection system for financial transactions, decreasing fraudulent activity by 25%.",
@@ -98,8 +100,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Data Scientist",
                 company="DataDriven Co.",
                 location="Boston, MA",
-                start_date="June 2017",
-                end_date="December 2019",
+                start_date=date(2017, 6, 1),
+                end_date=date(2019, 12, 1),
                 points=[
                     "Built a recommendation engine using collaborative filtering techniques, which increased user engagement by 20% and cross-sell revenue by 12%.",
                     "Performed A/B testing and statistical analysis to optimize marketing campaign performance, resulting in a 30% improvement in conversion rates.",
@@ -112,13 +114,13 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 degree="Master of Science",
                 major="Data Science",
                 institution="Stanford University",
-                grad_date="May 2017",
+                grad_date=date(2017, 5, 1),
             ),
             ResumeEducation(
                 degree="Bachelor of Science",
                 major="Computer Science",
                 institution="University of California, Berkeley",
-                grad_date="May 2015",
+                grad_date=date(2015, 5, 1),
             ),
         ],
         skills=[
@@ -145,10 +147,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
             "A/B Testing",
         ],
         certifications=[
-            ResumeCertification(
-                title="AWS Certified Machine Learning - Specialty", date="June 2022"
-            ),
-            ResumeCertification(title="Google Professional Data Engineer", date="August 2021"),
+            ResumeCertification(title="AWS Certified Machine Learning - Specialty", date=date(2022, 6, 1)),
+            ResumeCertification(title="Google Professional Data Engineer", date=date(2021, 8, 1)),
         ],
     ),
     "software_developer": ResumeData(
@@ -163,8 +163,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Software Engineer",
                 company="NextGen Innovations",
                 location="Austin, TX",
-                start_date="July 2021",
-                end_date="Present",
+                start_date=date(2021, 7, 1),
+                end_date=None,
                 points=[
                     "Architected and developed a new client-facing dashboard using React and Redux, improving user session length by 30%.",
                     "Built and maintained RESTful APIs with Node.js and Express, serving over 1 million requests per day with 99.9% uptime.",
@@ -176,8 +176,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Junior Web Developer",
                 company="Digital Craft Agency",
                 location="Austin, TX",
-                start_date="May 2019",
-                end_date="June 2021",
+                start_date=date(2019, 5, 1),
+                end_date=date(2021, 6, 1),
                 points=[
                     "Developed responsive and interactive user interfaces for client websites using HTML5, CSS3, and vanilla JavaScript.",
                     "Assisted senior developers in building e-commerce solutions with React, contributing to a 20% increase in online sales for a key client.",
@@ -190,7 +190,7 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 degree="Bachelor of Science",
                 major="Computer Science",
                 institution="Texas A&M University",
-                grad_date="May 2019",
+                grad_date=date(2019, 5, 1),
             )
         ],
         skills=[
@@ -215,9 +215,7 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
             "Webpack",
             "Next.js",
         ],
-        certifications=[
-            ResumeCertification(title="AWS Certified Developer - Associate", date="November 2023")
-        ],
+        certifications=[ResumeCertification(title="AWS Certified Developer - Associate", date=date(2023, 11, 1))],
     ),
     "digital_marketing_manager": ResumeData(
         name="Sophia Chen",
@@ -231,8 +229,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Digital Marketing Manager",
                 company="Bright-Peak Financial",
                 location="Chicago, IL",
-                start_date="August 2020",
-                end_date="Present",
+                start_date=date(2020, 8, 1),
+                end_date=None,
                 points=[
                     "Directed a multi-channel digital strategy that increased organic search traffic by 150% and generated a 40% uplift in qualified marketing leads in two years.",
                     "Managed an annual digital advertising budget of $500k across Google Ads and LinkedIn, optimizing campaigns to decrease CPA by 22% while increasing conversion rates by 18%.",
@@ -244,8 +242,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Marketing Specialist",
                 company="Vantage Apparel",
                 location="Chicago, IL",
-                start_date="June 2017",
-                end_date="July 2020",
+                start_date=date(2017, 6, 1),
+                end_date=date(2020, 7, 1),
                 points=[
                     "Executed daily social media operations across Instagram, Facebook, and Twitter, growing the total audience by over 200,000 followers.",
                     "Coordinated email marketing campaigns using Mailchimp, achieving an average open rate of 25% and a 4% click-through rate.",
@@ -258,7 +256,7 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 degree="Bachelor of Business Administration",
                 major="Marketing",
                 institution="University of Illinois Urbana-Champaign",
-                grad_date="May 2017",
+                grad_date=date(2017, 5, 1),
             )
         ],
         skills=[
@@ -280,8 +278,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
             "Data Analysis & Reporting",
         ],
         certifications=[
-            ResumeCertification(title="Google Ads Search Certification", date="October 2023"),
-            ResumeCertification(title="HubSpot Inbound Marketing Certified", date="January 2023"),
+            ResumeCertification(title="Google Ads Search Certification", date=date(2023, 10, 1)),
+            ResumeCertification(title="HubSpot Inbound Marketing Certified", date=date(2023, 1, 1)),
         ],
     ),
     "data_analyst": ResumeData(
@@ -296,8 +294,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Senior Data Analyst",
                 company="QuantumLeap Analytics",
                 location="New York, NY",
-                start_date="May 2021",
-                end_date="Present",
+                start_date=date(2021, 5, 1),
+                end_date=None,
                 points=[
                     "Leads the development of interactive Tableau dashboards to track key performance indicators (KPIs) for the sales department, providing insights that led to a 15% increase in cross-sell opportunities.",
                     "Performs complex cohort and funnel analyses using SQL and Python (Pandas) to understand user behavior, presenting findings that informed a major redesign of the customer onboarding process.",
@@ -309,8 +307,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Data Analyst",
                 company="MarketPulse Inc.",
                 location="New York, NY",
-                start_date="June 2018",
-                end_date="April 2021",
+                start_date=date(2018, 6, 1),
+                end_date=date(2021, 4, 1),
                 points=[
                     "Extracted and cleaned data from various sources using SQL to support ad-hoc reporting requests from the marketing team.",
                     "Designed and maintained weekly performance reports in Excel and Power BI, saving 10+ hours of manual reporting effort per week.",
@@ -324,7 +322,7 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 degree="Bachelor of Science",
                 major="Statistics",
                 institution="New York University (NYU)",
-                grad_date="May 2018",
+                grad_date=date(2018, 5, 1),
             )
         ],
         skills=[
@@ -342,10 +340,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
             "Requirements Gathering",
         ],
         certifications=[
-            ResumeCertification(title="Tableau Desktop Certified Associate", date="March 2022"),
-            ResumeCertification(
-                title="Microsoft Certified: Power BI Data Analyst Associate", date="July 2021"
-            ),
+            ResumeCertification(title="Tableau Desktop Certified Associate", date=date(2022, 3, 1)),
+            ResumeCertification(title="Microsoft Certified: Power BI Data Analyst Associate", date=date(2021, 7, 1)),
         ],
     ),
     "ai_engineer_transition": ResumeData(
@@ -360,8 +356,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Data Engineer",
                 company="Cognitive Cloud Solutions",
                 location="Seattle, WA",
-                start_date="April 2020",
-                end_date="Present",
+                start_date=date(2020, 4, 1),
+                end_date=None,
                 points=[
                     "Designed and built the infrastructure for a production recommendation engine, including feature stores and model deployment APIs using FastAPI and Docker.",
                     "Developed an MLOps pipeline using MLflow and Kubernetes to automate the training, versioning, and deployment of machine learning models.",
@@ -373,8 +369,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 title="Software Engineer (Data)",
                 company="Streamline Data Corp.",
                 location="Seattle, WA",
-                start_date="July 2018",
-                end_date="March 2020",
+                start_date=date(2018, 7, 1),
+                end_date=date(2020, 3, 1),
                 points=[
                     "Developed and maintained data processing jobs using Python and SQL in a large-scale data environment.",
                     "Managed real-time data ingestion pipelines using Apache Kafka.",
@@ -387,7 +383,7 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
                 degree="Bachelor of Science",
                 major="Computer Engineering",
                 institution="University of Washington",
-                grad_date="June 2018",
+                grad_date=date(2018, 6, 1),
             )
         ],
         skills=[
@@ -409,10 +405,8 @@ DUMMY_RESUME_DATA: dict[str, ResumeData] = {
             "FastAPI",
         ],
         certifications=[
-            ResumeCertification(
-                title="AWS Certified Machine Learning - Specialty", date="February 2024"
-            ),
-            ResumeCertification(title="Google Professional Data Engineer", date="May 2022"),
+            ResumeCertification(title="AWS Certified Machine Learning - Specialty", date=date(2024, 2, 1)),
+            ResumeCertification(title="Google Professional Data Engineer", date=date(2022, 5, 1)),
         ],
     ),
 }

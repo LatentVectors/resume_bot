@@ -167,7 +167,7 @@
                 {% if job.location %} — <span class="company-location">{{ job.location }}</span>{% endif %}
             </span>
             <span class="job-line">
-                <em class="dates">{{ job.start_date }} – {{ job.end_date }}</em>
+                <em class="dates">{{ job.start_date.strftime('%b %Y') }} – {{ job.end_date.strftime('%b %Y') if job.end_date else 'Present' }}</em>
             </span>
             <ul>
                 {% for point in job.points %}<li>{{ point }}</li>{% endfor %}
@@ -187,7 +187,7 @@
                 <strong class="company-location">{{ edu.institution }}</strong>
             </span>
             <span class="edu-line">
-                <em class="dates">{{ edu.grad_date }}</em>
+                <em class="dates">{{ edu.grad_date.strftime('%b %Y') }}</em>
             </span>
         </div>
         {% endfor %}
@@ -210,7 +210,7 @@
         <h2>Certifications and Licenses</h2>
         {% for cert in certifications %}
         <div class="certification-entry">
-            <p><strong>{{ cert.title }}</strong>{% if cert.date %}, Issued {{ cert.date }}{% endif %}</p>
+            <p><strong>{{ cert.title }}</strong>{% if cert.date %}, Issued {{ cert.date.strftime('%b %Y') }}{% endif %}</p>
         </div>
         {% endfor %}
     </section>

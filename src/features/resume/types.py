@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import datetime as dt
+
 from pydantic import BaseModel, Field
 
 
@@ -12,16 +14,10 @@ class ResumeData(BaseModel):
     phone: str = Field(..., description="Phone number")
     linkedin_url: str = Field(..., description="LinkedIn profile URL")
     professional_summary: str = Field(..., description="Professional summary/objective")
-    experience: list[ResumeExperience] = Field(
-        default_factory=list, description="List of work experiences"
-    )
-    education: list[ResumeEducation] = Field(
-        default_factory=list, description="List of educational background"
-    )
+    experience: list[ResumeExperience] = Field(default_factory=list, description="List of work experiences")
+    education: list[ResumeEducation] = Field(default_factory=list, description="List of educational background")
     skills: list[str] = Field(default_factory=list, description="List of skills and technologies")
-    certifications: list[ResumeCertification] = Field(
-        default_factory=list, description="List of certifications"
-    )
+    certifications: list[ResumeCertification] = Field(default_factory=list, description="List of certifications")
 
     def __str__(self) -> str:
         """Return a readable, formatted string representation suitable for output.
@@ -55,9 +51,7 @@ class ResumeData(BaseModel):
         if self.education:
             lines.append("Education")
             for edu in self.education:
-                lines.append(
-                    f"- {edu.degree} in {edu.major} — {edu.institution} ({edu.grad_date})"
-                )
+                lines.append(f"- {edu.degree} in {edu.major} — {edu.institution} ({edu.grad_date})")
             lines.append("")
 
         if self.certifications:
@@ -87,8 +81,8 @@ class ResumeExperience(BaseModel):
     title: str = Field(..., description="Job title")
     company: str = Field(..., description="Company name")
     location: str = Field(..., description="Job location")
-    start_date: str = Field(..., description="Start date of employment")
-    end_date: str = Field(..., description="End date of employment (or 'Present')")
+    start_date: dt.date = Field(..., description="Start date of employment")
+    end_date: dt.date | None = Field(default=None, description="End date of employment (None if ongoing)")
     points: list[str] = Field(default_factory=list, description="List of experience points")
 
 
@@ -98,11 +92,11 @@ class ResumeEducation(BaseModel):
     degree: str = Field(..., description="The degree obtained")
     major: str = Field(..., description="The field of study")
     institution: str = Field(..., description="The educational institution")
-    grad_date: str = Field(..., description="Graduation date")
+    grad_date: dt.date = Field(..., description="Graduation date")
 
 
 class ResumeCertification(BaseModel):
     """Certification information for a resume."""
 
     title: str = Field(..., description="The certification title")
-    date: str = Field(..., description="The date the certification was obtained")
+    date: dt.date = Field(..., description="The date the certification was obtained")

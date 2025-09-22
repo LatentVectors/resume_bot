@@ -44,12 +44,14 @@ Before you generate any code, internalize these principles that govern your beha
 ### **The Data Contract: Expected Placeholders**
 
 You must create a template that works with the following Python dictionary structure.
+All date fields are Python `datetime.date` objects (not strings). Use `strftime` in templates to format them, and treat `end_date` as optional to allow ongoing roles.
 
 ```python
 # THIS IS THE EXPECTED DATA STRUCTURE
+# All date fields are datetime.date objects. "end_date" may be None for ongoing roles.
 context = {
     'name': 'STRING',
-    'title': 'STRING', # The candidates current title.
+    'title': 'STRING', # The candidate's current title.
     'email': 'STRING',
     'phone': 'STRING',
     'linkedin_url': 'STRING',
@@ -59,8 +61,8 @@ context = {
             'title': 'STRING',
             'company': 'STRING',
             'location': 'STRING',
-            'start_date': 'STRING',
-            'end_date': 'STRING',
+            'start_date': DATE,    # datetime.date
+            'end_date': DATE,      # datetime.date or None
             'points': ['LIST OF STRINGS']
         }
     ],
@@ -69,14 +71,14 @@ context = {
             'degree': 'STRING',
             'major': 'STRING',
             'institution': 'STRING',
-            'grad_date': 'STRING'
+            'grad_date': DATE      # datetime.date
         }
     ],
     'skills': ['LIST OF STRINGS'],
     'certifications': [
         {
             'title': 'STRING',
-            'date': 'STRING'
+            'date': DATE           # datetime.date
         }
     ]
 }
@@ -130,7 +132,7 @@ Use this example as your guide. Note the specific implementation of the skills s
         <div class="job">
             <h3>{{ job.title }}</h3>
             <div class="job-subheader">
-                <p><strong>{{ job.company }}</strong> | {{ job.location }} | <em>{{ job.start_date }} – {{ job.end_date }}</em></p>
+                <p><strong>{{ job.company }}</strong> | {{ job.location }} | <em>{{ job.start_date.strftime('%b %Y') }} – {{ job.end_date.strftime('%b %Y') if job.end_date else 'Present' }}</em></p>
             </div>
             <ul>
                 {% for point in job.points %}<li>{{ point }}</li>{% endfor %}
@@ -150,13 +152,13 @@ Use this example as your guide. Note the specific implementation of the skills s
         </ul>
     </section>
     {% endif %}
-    
+
     {% if certifications %}
     <section>
         <h2>Certifications</h2>
         {% for cert in certifications %}
         <div class="certification-entry">
-             <p><strong>{{ cert.title }}</strong>, {{ cert.date }}</p>
+             <p><strong>{{ cert.title }}</strong>{% if cert.date %}, {{ cert.date.strftime('%b %Y') }}{% endif %}</p>
         </div>
         {% endfor %}
     </section>
@@ -168,7 +170,7 @@ Use this example as your guide. Note the specific implementation of the skills s
         {% for edu in education %}
         <div class="education-entry">
             <h3>{{ edu.degree }}, {{ edu.major }}</h3>
-            <p><strong>{{ edu.institution }}</strong> | {{ edu.grad_date }}</p>
+            <p><strong>{{ edu.institution }}</strong> | {{ edu.grad_date.strftime('%b %Y') }}</p>
         </div>
         {% endfor %}
     </section>

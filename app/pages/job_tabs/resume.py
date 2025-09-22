@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime
 from pathlib import Path
 from typing import cast
 
@@ -134,32 +133,6 @@ def _missing_required_identity(draft: ResumeData) -> list[str]:
     return missing
 
 
-def _parse_date(value: str) -> date | None:
-    """Parse an ISO-like date string into a date, tolerant of variations."""
-    if not (value or "").strip():
-        return None
-    if value.strip().lower() == "present":
-        return None
-    # Accept common formats produced by adapters and user input
-    for fmt in ("%Y-%m-%d", "%Y-%m", "%m/%Y", "%Y", "%b %Y", "%B %Y"):
-        try:
-            return datetime.strptime(value, fmt).date()
-        except Exception:  # noqa: BLE001 - try next
-            pass
-    try:
-        # Last resort
-        return datetime.fromisoformat(value).date()
-    except Exception:  # noqa: BLE001
-        return None
-
-
-def _format_date(value: date | None) -> str:
-    """Format a date as ISO string for storage in Resume JSON."""
-    if not value:
-        return ""
-    return value.strftime("%Y-%m-%d")
-
-
 def _render_profile_section(draft: ResumeData, *, read_only: bool) -> ResumeData:
     with st.expander("Profile", expanded=False):
         c1, c2 = st.columns(2)
@@ -223,25 +196,21 @@ def _render_experience_section(draft: ResumeData, *, read_only: bool) -> ResumeD
 
                 row2 = st.columns([2, 2])
                 with row2[0]:
-                    start_val = _parse_date(exp.start_date) or date.today()
                     start_dt = st.date_input(
                         "Start Date",
-                        value=start_val,
+                        value=exp.start_date,
                         min_value=MIN_DATE,
                         key=f"exp_start_{idx}",
                         disabled=read_only,
                     )
                 with row2[1]:
-                    # End date is optional; blank implies Present
-                    end_text_default = "" if (exp.end_date or "").strip().lower() == "present" else (exp.end_date or "")
-                    end_text = st.text_input(
+                    end_dt = st.date_input(
                         "End Date (optional)",
-                        value=end_text_default,
+                        value=exp.end_date,
+                        min_value=MIN_DATE,
                         key=f"exp_end_{idx}",
                         disabled=read_only,
-                        placeholder="YYYY-MM-DD or leave blank for Present",
                     )
-                    end_dt = _parse_date(end_text)
 
                 # (Location already captured above)
 
@@ -250,7 +219,7 @@ def _render_experience_section(draft: ResumeData, *, read_only: bool) -> ResumeD
                     ":material/smart_toy: Points (one per line)",
                     value="\n".join(exp.points or []),
                     key=f"exp_{idx}_points_text",
-                    height=180,
+                    height=350,
                     disabled=read_only,
                     help="Each non-empty line becomes a separate point.",
                 )
@@ -263,8 +232,8 @@ def _render_experience_section(draft: ResumeData, *, read_only: bool) -> ResumeD
                             title=etitle,
                             company=company,
                             location=location,
-                            start_date=_format_date(start_dt),
-                            end_date=("" if (end_dt is None) else _format_date(end_dt)),
+                            start_date=start_dt,
+                            end_date=end_dt,
                             points=[p for p in new_points if p.strip()],
                         )
                     )
@@ -295,10 +264,9 @@ def _render_education_section(draft: ResumeData, *, read_only: bool) -> ResumeDa
 
                 major = st.text_input("Major", value=edu.major, key=f"edu_maj_{idx}", disabled=read_only)
 
-                grad_val = _parse_date(edu.grad_date)
                 grad_dt = st.date_input(
                     "Graduation Date",
-                    value=grad_val,
+                    value=edu.grad_date,
                     min_value=MIN_DATE,
                     key=f"edu_grad_{idx}",
                     disabled=read_only,
@@ -310,7 +278,7 @@ def _render_education_section(draft: ResumeData, *, read_only: bool) -> ResumeDa
                             degree=deg,
                             major=major,
                             institution=inst,
-                            grad_date=_format_date(grad_dt),
+                            grad_date=grad_dt,
                         )
                     )
 
@@ -329,10 +297,9 @@ def _render_certifications_section(draft: ResumeData, *, read_only: bool) -> Res
                 with row[0]:
                     title = st.text_input("Title", value=cert.title, key=f"cert_title_{idx}", disabled=read_only)
                 with row[1]:
-                    date_val = _parse_date(cert.date)
                     date_dt = st.date_input(
                         "Date",
-                        value=date_val,
+                        value=cert.date,
                         min_value=MIN_DATE,
                         key=f"cert_date_{idx}",
                         disabled=read_only,
@@ -343,7 +310,7 @@ def _render_certifications_section(draft: ResumeData, *, read_only: bool) -> Res
                     )
 
                 if not del_cert:
-                    new_certs.append(ResumeCertification(title=title, date=_format_date(date_dt)))
+                    new_certs.append(ResumeCertification(title=title, date=date_dt))
 
         if not read_only and st.button("Add Certification", key="add_cert"):
             show_resume_add_certificate_dialog()

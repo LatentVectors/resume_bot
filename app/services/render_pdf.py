@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
 
+from src.features.resume.types import ResumeData
 from src.features.resume.utils import render_template_to_pdf
 from src.logging_config import logger
 
@@ -16,12 +16,11 @@ def _resume_templates_dir() -> Path:
     return (project_root / "src" / "features" / "resume" / "templates").resolve()
 
 
-# TODO: resume_data should be a ResumeData instance.
-def render_resume_pdf(resume_data: dict[str, Any], template_name: str, dest_path: str | Path) -> Path:
+def render_resume_pdf(resume_data: ResumeData, template_name: str, dest_path: Path) -> Path:
     """Render the canonical resume PDF to the destination path.
 
     Args:
-        resume_data: Context dict matching `ResumeData` schema (already serialized for templates)
+        resume_data: `ResumeData` object to render
         template_name: HTML template filename (e.g., 'resume_000.html')
         dest_path: Target PDF path (will be created/overwritten)
 
@@ -41,7 +40,7 @@ def render_resume_pdf(resume_data: dict[str, Any], template_name: str, dest_path
         )
         result = render_template_to_pdf(
             template_name=template_name,
-            context=resume_data,
+            context=resume_data.model_dump(),
             output_path=pdf_path,
             templates_dir=templates_dir,
         )
@@ -51,12 +50,11 @@ def render_resume_pdf(resume_data: dict[str, Any], template_name: str, dest_path
         raise
 
 
-# TODO: resume_data should be a ResumeData instance.
-def render_preview_pdf(resume_data: dict[str, Any], template_name: str, preview_path: str | Path) -> Path:
+def render_preview_pdf(resume_data: ResumeData, template_name: str, preview_path: Path) -> Path:
     """Render a preview PDF for display only; does not update any DB state.
 
     Args:
-        resume_data: Context dict matching `ResumeData` schema
+        resume_data: `ResumeData` object
         template_name: HTML template filename
         preview_path: Desired preview PDF path
 
@@ -77,7 +75,7 @@ def render_preview_pdf(resume_data: dict[str, Any], template_name: str, preview_
         )
         result = render_template_to_pdf(
             template_name=template_name,
-            context=resume_data,
+            context=resume_data.model_dump(),
             output_path=preview_pdf,
             templates_dir=templates_dir,
         )

@@ -71,7 +71,7 @@ def show_resume_add_education_dialog() -> None:
                         institution=institution.strip(),
                         degree=degree.strip(),
                         major=major.strip(),
-                        grad_date=grad_dt.strftime("%Y-%m-%d"),
+                        grad_date=grad_dt,
                     )
                 )
 

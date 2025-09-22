@@ -77,35 +77,6 @@ def fetch_experience_data(user_id: int, db_manager_instance: DatabaseManager | N
 # Note: Candidate responses are not part of the current schema.
 
 
-def _format_date(date_obj: date | None) -> str:
-    """Format a date object to string representation.
-
-    Args:
-        date_obj: Date object to format
-
-    Returns:
-        Formatted date string (MMM YYYY format)
-    """
-    if not date_obj:
-        return "Present"
-
-    month_names = [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-    ]
-    return f"{month_names[date_obj.month - 1]} {date_obj.year}"
-
-
 def _format_phone(phone: str | None) -> str:
     """Format phone number to standard format.
 
@@ -168,7 +139,7 @@ def transform_user_to_resume_data(
                 degree=edu.degree,
                 major=edu.major,
                 institution=edu.institution,
-                grad_date=_format_date(edu.grad_date),
+                grad_date=edu.grad_date,
             )
         )
 
@@ -183,8 +154,8 @@ def transform_user_to_resume_data(
                 title=exp.job_title,
                 company=exp.company_name,
                 location=exp.location or "",
-                start_date=_format_date(exp.start_date),
-                end_date=_format_date(exp.end_date) if exp.end_date else "Present",
+                start_date=exp.start_date,
+                end_date=exp.end_date,
                 points=[],
             )
         )

@@ -54,7 +54,7 @@ def show_resume_add_certificate_dialog() -> None:
             if not title.strip():
                 st.error("Title is required.")
             else:
-                _append_and_refresh(ResumeCertification(title=title.strip(), date=date_dt.strftime("%Y-%m-%d")))
+                _append_and_refresh(ResumeCertification(title=title.strip(), date=date_dt))
 
         if cancel:
             st.rerun()

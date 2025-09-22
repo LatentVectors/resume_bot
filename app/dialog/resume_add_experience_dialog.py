@@ -87,8 +87,8 @@ def show_resume_add_experience_dialog() -> None:
                             title=title.strip(),
                             company=company.strip(),
                             location=location.strip() if location.strip() else "",
-                            start_date=start_dt.strftime("%Y-%m-%d"),
-                            end_date=("Present" if not end_dt else end_dt.strftime("%Y-%m-%d")),
+                            start_date=start_dt,
+                            end_date=end_dt,
                             points=points,
                         )
                     )
