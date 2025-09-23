@@ -44,6 +44,7 @@ def generate_summary(state: InternalState) -> PartialInternalState:
             "experiences": formatted_experiences,
             "responses": state.responses or "",
             "special_instructions": state.special_instructions or "",
+            "resume_draft": str(state.resume_draft) if state.resume_draft is not None else "",
         }
     )
 
@@ -62,7 +63,8 @@ system_prompt = """
     1.  `<Job Description>`: The target job description the candidate is applying for.
     2.  `<Work Experience>`: The candidate's detailed work history, including roles, responsibilities, and achievements.
     3.  `<Candidate Responses>`: Free-form answers from the candidate detailing their interests, motivations, values, or specific reasons for applying for this role.
-    4.  `<Special Instructions>` (optional): Additional guidance or constraints from the user (tone, emphasis, exclusions). Apply when not conflicting with factual grounding or legality.
+    4.  `<Resume Draft>`: This is the current content of the existing resume. Use it to maintain narrative consistency and avoid conflicting or duplicative statements.
+    5.  `<Special Instructions>` (optional): Additional guidance or constraints from the user (tone, emphasis, exclusions). Apply when not conflicting with factual grounding or legality.
 
     **Objective**:
     Create a professional `Title` and `Summary` that are strictly aligned with the `<Job Description>` and grounded in the evidence provided. The summary must be a powerful, scannable distillation of the candidate's unique value, structured for maximum impact.
@@ -218,6 +220,10 @@ user_prompt = """
 {experiences}
 </Work Experience>
 
+<Resume Draft>
+{resume_draft}
+</Resume Draft>
+
 <Additional Information>
 {responses}
 </Additional Information>
@@ -235,8 +241,7 @@ class SummaryOutput(BaseModel):
     professional_summary: str = Field(description="3-4 sentence professional summary tailored to the role")
 
 
-# Model and chain setup
-llm = get_model(OpenAIModels.gpt_4o)
+llm = get_model(OpenAIModels.gpt_5)
 llm_structured = llm.with_structured_output(SummaryOutput).with_retry(retry_if_exception_type=(APIConnectionError,))
 chain = (
     ChatPromptTemplate.from_messages(

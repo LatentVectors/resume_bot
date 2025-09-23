@@ -38,7 +38,13 @@ class ResumeData(BaseModel):
         if self.experience:
             lines.append("Experience")
             for exp in self.experience:
-                lines.append(f"- {exp.title} at {exp.company} ({exp.start_date} - {exp.end_date})")
+                start = exp.start_date.strftime("%b %Y") if isinstance(exp.start_date, dt.date) else str(exp.start_date)
+                end = (
+                    (exp.end_date.strftime("%b %Y") if isinstance(exp.end_date, dt.date) else str(exp.end_date))
+                    if exp.end_date
+                    else "Present"
+                )
+                lines.append(f"- {exp.title} at {exp.company} ({start} - {end})")
                 for point in exp.points:
                     lines.append(f"  • {point}")
             lines.append("")
@@ -51,13 +57,15 @@ class ResumeData(BaseModel):
         if self.education:
             lines.append("Education")
             for edu in self.education:
-                lines.append(f"- {edu.degree} in {edu.major} — {edu.institution} ({edu.grad_date})")
+                grad = edu.grad_date.strftime("%b %Y") if isinstance(edu.grad_date, dt.date) else str(edu.grad_date)
+                lines.append(f"- {edu.degree} in {edu.major} — {edu.institution} ({grad})")
             lines.append("")
 
         if self.certifications:
             lines.append("Certifications")
             for cert in self.certifications:
-                lines.append(f"- {cert.title} ({cert.date})")
+                cert_date = cert.date.strftime("%b %Y") if isinstance(cert.date, dt.date) else str(cert.date)
+                lines.append(f"- {cert.title} ({cert_date})")
 
         return "\n".join(lines).strip()
 

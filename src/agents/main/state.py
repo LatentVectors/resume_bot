@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+from enum import StrEnum
 from typing import TypedDict
 
 from pydantic import BaseModel, Field
@@ -42,25 +43,31 @@ class InputState(BaseModel):
     experiences: list[Experience]
     responses: str
     special_instructions: str | None = None
-    # User information fields
-    user_name: str
-    user_email: str
-    user_phone: str | None = None
-    user_linkedin_url: str | None = None
-    user_education: list[dict] | None = None
+    # Current resume draft object for grounding (stringified in prompts)
+    resume_draft: ResumeData | None = None
 
 
 class OutputState(BaseModel):
-    """Output state for resume generation agent."""
+    """Output state for resume generation agent (public output)."""
 
-    title: str | None = None
-    professional_summary: str | None = None
-    skills: list[str] | None = None
     resume_data: ResumeData | None = None
 
 
 class InternalState(InputState, OutputState, BaseModel):
-    """Internal state for resume generation agent."""
+    """Internal state for resume generation agent.
+
+    Contains intermediate generated fields used to assemble the final
+    resume_data, which is the only public output.
+    """
+
+    # Generated intermediate fields
+    title: str | None = None
+    professional_summary: str | None = None
+    skills: list[str] | None = None
+
+    # Router selections (which generator nodes to run next). If None or empty,
+    # graph should default to running all generate nodes.
+    router_targets: list[GenerateNode] | None = None
 
 
 class PartialInternalState(TypedDict, total=False):
@@ -71,14 +78,23 @@ class PartialInternalState(TypedDict, total=False):
     experiences: list[Experience]
     responses: str
     special_instructions: str | None
-    user_name: str
-    user_email: str
-    user_phone: str | None
-    user_linkedin_url: str | None
-    user_education: list[dict] | None
+    resume_draft: ResumeData | None
 
-    # OutputState fields
+    # InternalState fields
     title: str | None
     professional_summary: str | None
     skills: list[str] | None
+
+    # Router fields
+    router_targets: list[GenerateNode] | None
+
+    # OutputState fields
     resume_data: ResumeData | None
+
+
+class GenerateNode(StrEnum):
+    """Enum of generator nodes that the router can select."""
+
+    skills = "skills"
+    experience = "experience"
+    professional_summary = "professional_summary"

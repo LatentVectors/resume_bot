@@ -397,7 +397,7 @@ def render_resume(job: DbJob) -> None:
             value=st.session_state.get("resume_instructions", ""),
             placeholder="What special instructions should the AI follow?",
             label_visibility="collapsed",
-            height=100,
+            height=300,
         )
 
         # Control buttons row + right-aligned Template dropdown

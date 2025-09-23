@@ -52,6 +52,7 @@ def generate_skills(state: InternalState) -> PartialInternalState:
             "experiences": formatted_experiences,
             "responses": state.responses or "",
             "special_instructions": state.special_instructions or "",
+            "resume_draft": str(state.resume_draft) if state.resume_draft is not None else "",
         }
     )
 
@@ -73,7 +74,8 @@ system_prompt = """
 
 1.  **<Job Description>:** The full text of the job description the candidate is targeting.
 2.  **<Work Experience>:** A collection of paragraphs, notes, or a mix of both, detailing the candidate's professional history and accomplishments.
-3.  **<Special Instructions> (optional):** Additional guidance from the user (tone, emphasis, exclusions). Apply when not conflicting with factual grounding.
+3.  **<Resume Draft>:** This is the current content of the existing resume. Use it to ensure consistency and avoid duplicative or off-target skills.
+4.  **<Special Instructions> (optional):** Additional guidance from the user (tone, emphasis, exclusions). Apply when not conflicting with factual grounding.
 
 ---
 
@@ -128,6 +130,10 @@ user_prompt = """
 <Work Experience>
 {experiences}
 </Work Experience>
+
+<Resume Draft>
+{resume_draft}
+</Resume Draft>
 
 <Additional Information>
 {responses}

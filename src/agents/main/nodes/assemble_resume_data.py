@@ -17,7 +17,8 @@ def assemble_resume_data(state: InternalState) -> PartialInternalState:
     """Assemble a ResumeData object from the current InternalState.
 
     Reads the generated fields (title, professional_summary, skills, experiences)
-    and user identity/education from the state and constructs a ResumeData model.
+    and identity/education from the provided `resume_draft` to construct a
+    ResumeData model.
 
     This node intentionally does not persist or render anything. The assembled
     object will be returned by the graph in a subsequent section when the graph
@@ -47,31 +48,22 @@ def assemble_resume_data(state: InternalState) -> PartialInternalState:
             )
         )
 
-    # Transform education
-    resume_education: list[ResumeEducation] = []
-    if state.user_education:
-        for edu in state.user_education:
-            resume_education.append(
-                ResumeEducation(
-                    degree=str(edu.get("degree", "")),
-                    major="",
-                    institution=str(edu.get("school", "")),
-                    grad_date=edu.get("end_date", None),
-                )
-            )
+    # Pull education from the resume_draft when available
+    draft = state.resume_draft
+    resume_education: list[ResumeEducation] = list(draft.education or []) if draft and draft.education else []
 
     # Assemble the ResumeData object
     _resume_data = ResumeData(
-        name=state.user_name or "",
-        title=state.title or "",
-        email=state.user_email or "",
-        phone=state.user_phone or "",
-        linkedin_url=state.user_linkedin_url or "",
-        professional_summary=state.professional_summary or "",
+        name=(draft.name if draft else ""),
+        title=(state.title or (draft.title if draft else "")),
+        email=(draft.email if draft else ""),
+        phone=(draft.phone if draft else ""),
+        linkedin_url=(draft.linkedin_url if draft else ""),
+        professional_summary=(state.professional_summary or (draft.professional_summary if draft else "")),
         experience=resume_experiences,
         education=resume_education,
-        skills=list(state.skills or []),
-        certifications=[],
+        skills=list(state.skills or (draft.skills if draft else []) or []),
+        certifications=list(draft.certifications or []) if draft and draft.certifications else [],
     )
 
     return PartialInternalState(resume_data=_resume_data)

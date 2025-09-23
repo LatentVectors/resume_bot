@@ -53,6 +53,7 @@ def generate_experience(state: InternalState) -> PartialInternalState:
             "experiences": formatted_experiences,
             "responses": state.responses or "",
             "special_instructions": state.special_instructions or "",
+            "resume_draft": str(state.resume_draft) if state.resume_draft is not None else "",
         }
     )
 
@@ -172,7 +173,8 @@ This is the standard of quality you must aim for. Note how each example starts w
 You will receive a user message containing:
 1.  `<Job Description>`: The full text of the job description the candidate is targeting.
 2.  `<Work Experience>`: A list or description of the candidate's previous roles, each with a unique `experience_id` and notes about their responsibilities and accomplishments.
-3.  `<Special Instructions>` (optional): Additional guidance from the user (tone, emphasis, exclusions). Apply when not conflicting with factual grounding.
+3.  `<Resume Draft>`: This is the current content of the existing resume. Use it to maintain consistency, avoid duplication, and align improvements with the existing structure. Do not copy irrelevant content.
+4.  `<Special Instructions>` (optional): Additional guidance from the user (tone, emphasis, exclusions). Apply when not conflicting with factual grounding.
 """
 
 user_prompt = """
@@ -183,6 +185,10 @@ user_prompt = """
 <Work Experience>
 {experiences}
 </Work Experience>
+
+<Resume Draft>
+{resume_draft}
+</Resume Draft>
 
 <Additional Information>
 {responses}
@@ -211,7 +217,7 @@ class ExperienceOutput(BaseModel):
 
 
 # Model and chain setup
-llm = get_model(OpenAIModels.gpt_4o)
+llm = get_model(OpenAIModels.gpt_5)
 llm_structured = llm.with_structured_output(ExperienceOutput).with_retry(retry_if_exception_type=(APIConnectionError,))
 chain = (
     ChatPromptTemplate.from_messages(

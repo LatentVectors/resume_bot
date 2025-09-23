@@ -96,15 +96,7 @@ class ResumeService:
                 experiences=agent_experiences,
                 responses="",
                 special_instructions=prompt or None,
-                user_name=draft.name,
-                user_email=draft.email,
-                user_phone=draft.phone or None,
-                user_linkedin_url=draft.linkedin_url or None,
-                user_education=[
-                    {"school": edu.institution, "degree": edu.degree, "start_date": None, "end_date": edu.grad_date}
-                    for edu in draft.education
-                ]
-                or None,
+                resume_draft=draft,
             )
 
             config = RunnableConfig(
