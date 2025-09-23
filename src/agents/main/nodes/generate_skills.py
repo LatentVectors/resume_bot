@@ -51,6 +51,7 @@ def generate_skills(state: InternalState) -> PartialInternalState:
             "job_description": state.job_description,
             "experiences": formatted_experiences,
             "responses": state.responses or "",
+            "special_instructions": state.special_instructions or "",
         }
     )
 
@@ -72,6 +73,7 @@ system_prompt = """
 
 1.  **<Job Description>:** The full text of the job description the candidate is targeting.
 2.  **<Work Experience>:** A collection of paragraphs, notes, or a mix of both, detailing the candidate's professional history and accomplishments.
+3.  **<Special Instructions> (optional):** Additional guidance from the user (tone, emphasis, exclusions). Apply when not conflicting with factual grounding.
 
 ---
 
@@ -130,6 +132,10 @@ user_prompt = """
 <Additional Information>
 {responses}
 </Additional Information>
+
+<Special Instructions>
+{special_instructions}
+</Special Instructions>
 """
 
 

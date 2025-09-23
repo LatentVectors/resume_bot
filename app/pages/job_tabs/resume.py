@@ -390,11 +390,13 @@ def render_resume(job: DbJob) -> None:
     # Layout
     left, right = st.columns([4, 3])
     with left:
+        st.subheader("Resume Content")
         st.text_area(
             "What should the AI change?",
             key="resume_instructions",
             value=st.session_state.get("resume_instructions", ""),
-            placeholder="e.g., Emphasize leadership experience and tailor summary to data engineering",
+            placeholder="What special instructions should the AI follow?",
+            label_visibility="collapsed",
             height=100,
         )
 

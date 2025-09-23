@@ -94,7 +94,8 @@ class ResumeService:
             initial_state = InputState(
                 job_description=job.job_description,
                 experiences=agent_experiences,
-                responses=prompt or "",
+                responses="",
+                special_instructions=prompt or None,
                 user_name=draft.name,
                 user_email=draft.email,
                 user_phone=draft.phone or None,

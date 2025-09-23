@@ -43,6 +43,7 @@ def generate_summary(state: InternalState) -> PartialInternalState:
             "job_description": state.job_description,
             "experiences": formatted_experiences,
             "responses": state.responses or "",
+            "special_instructions": state.special_instructions or "",
         }
     )
 
@@ -61,6 +62,7 @@ system_prompt = """
     1.  `<Job Description>`: The target job description the candidate is applying for.
     2.  `<Work Experience>`: The candidate's detailed work history, including roles, responsibilities, and achievements.
     3.  `<Candidate Responses>`: Free-form answers from the candidate detailing their interests, motivations, values, or specific reasons for applying for this role.
+    4.  `<Special Instructions>` (optional): Additional guidance or constraints from the user (tone, emphasis, exclusions). Apply when not conflicting with factual grounding or legality.
 
     **Objective**:
     Create a professional `Title` and `Summary` that are strictly aligned with the `<Job Description>` and grounded in the evidence provided. The summary must be a powerful, scannable distillation of the candidate's unique value, structured for maximum impact.
@@ -100,6 +102,11 @@ system_prompt = """
         *   Eliminate all generic buzzwords: `results-driven`, `team player`, `hard-working`, `detail-oriented`, etc.
 
     ---
+
+    ### **If Special Instructions Are Provided**
+    -   Treat `<Special Instructions>` as user guidance for tone, emphasis, exclusions, or constraints.
+    -   Apply them faithfully when they do not contradict factual grounding or the job description.
+    -   Examples: emphasize leadership, avoid acronyms, use UK English, highlight healthcare projects, cap summary at 3 sentences, etc.
 
     ### **High-Quality Professional Summary Examples with Analysis**
 
@@ -203,18 +210,21 @@ system_prompt = """
     """
 
 user_prompt = """
-Job Description:
+<Job Description>
 {job_description}
+</Job Description>
 
-Candidate's Work Experience:
+<Work Experience>
 {experiences}
+</Work Experience>
 
-Additional Information:
+<Additional Information>
 {responses}
+</Additional Information>
 
-Produce a JSON object with fields:
-  - title: string (concise, role-aligned professional title)
-  - professional_summary: string (3-4 sentences tailored to the role)
+<Special Instructions>
+{special_instructions}
+</Special Instructions>
 """
 
 

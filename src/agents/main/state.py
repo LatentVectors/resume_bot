@@ -41,6 +41,7 @@ class InputState(BaseModel):
     job_description: str
     experiences: list[Experience]
     responses: str
+    special_instructions: str | None = None
     # User information fields
     user_name: str
     user_email: str
@@ -69,6 +70,7 @@ class PartialInternalState(TypedDict, total=False):
     job_description: str
     experiences: list[Experience]
     responses: str
+    special_instructions: str | None
     user_name: str
     user_email: str
     user_phone: str | None

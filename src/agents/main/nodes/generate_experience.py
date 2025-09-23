@@ -52,6 +52,7 @@ def generate_experience(state: InternalState) -> PartialInternalState:
             "job_description": state.job_description,
             "experiences": formatted_experiences,
             "responses": state.responses or "",
+            "special_instructions": state.special_instructions or "",
         }
     )
 
@@ -171,6 +172,7 @@ This is the standard of quality you must aim for. Note how each example starts w
 You will receive a user message containing:
 1.  `<Job Description>`: The full text of the job description the candidate is targeting.
 2.  `<Work Experience>`: A list or description of the candidate's previous roles, each with a unique `experience_id` and notes about their responsibilities and accomplishments.
+3.  `<Special Instructions>` (optional): Additional guidance from the user (tone, emphasis, exclusions). Apply when not conflicting with factual grounding.
 """
 
 user_prompt = """
@@ -185,6 +187,10 @@ user_prompt = """
 <Additional Information>
 {responses}
 </Additional Information>
+
+<Special Instructions>
+{special_instructions}
+</Special Instructions>
 """
 
 
@@ -193,7 +199,7 @@ class BulletPoint(BaseModel):
     """Individual bullet point with experience ID mapping."""
 
     experience_id: str = Field(description="ID of the experience this bullet point belongs to")
-    bullet_point: str = Field(description="The bullet point text (1-2 lines, achievement-focused)")
+    bullet_point: str = Field(description="The bullet point text")
 
 
 class ExperienceOutput(BaseModel):
