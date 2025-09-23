@@ -12,6 +12,7 @@ from app.constants import MIN_DATE
 from app.dialog.resume_add_certificate_dialog import show_resume_add_certificate_dialog
 from app.dialog.resume_add_education_dialog import show_resume_add_education_dialog
 from app.dialog.resume_add_experience_dialog import show_resume_add_experience_dialog
+from app.dialog.resume_reset_dialog import show_resume_reset_dialog
 from app.services.experience_service import ExperienceService
 from app.services.job_service import JobService
 from app.services.resume_service import ResumeService
@@ -552,12 +553,19 @@ def render_resume(job: DbJob) -> None:
         pdf_filename = (getattr(resume_row, "pdf_filename", None) or "").strip()
         preview_path_str = cast(str | None, st.session_state.get("resume_preview_path"))
 
-        # Header row: Preview title + right-aligned Download button
+        # Header row: Preview title + right-aligned Reset + Download buttons
         header_cols = st.columns([1, 1])
         with header_cols[0]:
             st.subheader("Preview")
         with header_cols[1]:
-            with st.container(horizontal=True, horizontal_alignment="right", gap=None):
+            with st.container(horizontal=True, horizontal_alignment="right"):
+                if not is_read_only:
+                    if st.button(
+                        "Reset",
+                        help=("Hard reset: delete resume and PDFs, and reset the editor to its initial state."),
+                        key="resume_reset_btn_header",
+                    ):
+                        show_resume_reset_dialog(int(job.id))
                 if pdf_filename:
                     canonical = (settings.data_dir / "resumes" / pdf_filename).resolve()
                     if canonical.exists():
@@ -569,6 +577,7 @@ def render_resume(job: DbJob) -> None:
                                     file_name=_build_download_filename(job, current_draft.name),
                                     mime="application/pdf",
                                     disabled=(not is_read_only) and is_dirty,
+                                    type="primary",
                                     help=(
                                         "Save changes to enable download" if ((not is_read_only) and is_dirty) else None
                                     ),
