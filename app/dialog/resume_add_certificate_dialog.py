@@ -28,8 +28,9 @@ def _append_and_refresh(new_cert: ResumeCertification) -> None:
         template = cast(str, st.session_state.get("resume_template", "resume_000.html"))
         if job_id:
             try:
-                preview_path = ResumeService.render_preview(job_id, updated, template)
-                st.session_state["resume_preview_path"] = str(preview_path)
+                pdf_bytes = ResumeService.render_preview(job_id, updated, template)
+                st.session_state["resume_preview_bytes"] = pdf_bytes
+                st.session_state.pop("resume_preview_path", None)
             except Exception as exc:  # noqa: BLE001
                 logger.exception(exc)
         st.toast("Certificate added. Preview refreshed.")

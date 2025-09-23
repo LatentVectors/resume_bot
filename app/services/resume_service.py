@@ -1,15 +1,19 @@
-"""Service for resume draft generation, saving, and preview rendering."""
+"""Service for resume draft generation, versioning, and preview rendering."""
 
-from pathlib import Path
-from uuid import uuid4
+from __future__ import annotations
 
+import hashlib
+from collections import OrderedDict
+
+import streamlit as st
 from langchain_core.runnables import RunnableConfig
 from sqlmodel import select
 
 from app.constants import LLMTag
-from src.config import settings
+from app.services.render_pdf import _resume_templates_dir
 from src.database import Resume as DbResume
-from src.database import db_manager
+from src.database import ResumeVersion as DbResumeVersion
+from src.database import ResumeVersionEvent, db_manager
 from src.features.resume.data_adapter import (
     detect_missing_required_data,
     fetch_experience_data,
@@ -17,16 +21,148 @@ from src.features.resume.data_adapter import (
     transform_user_to_resume_data,
 )
 from src.features.resume.types import ResumeData
+from src.features.resume.utils import render_template_to_html
 from src.logging_config import logger
 
 from .job_service import JobService
-from .render_pdf import render_preview_pdf, render_resume_pdf
+from .render_pdf import render_preview_pdf_bytes, render_resume_pdf_bytes
 
 
 class ResumeService:
     """Service class for resume-related operations."""
 
     # ---- New APIs per spec ----
+    @staticmethod
+    def create_version(
+        job_id: int,
+        resume_data: ResumeData,
+        template_name: str,
+        event_type: ResumeVersionEvent,
+        parent_version_id: int | None = None,
+    ) -> DbResumeVersion:
+        """Create and persist a new ResumeVersion row.
+
+        - Computes the next monotonic version_index for the job
+        - Stores JSON and template snapshot
+        - Sets created_by_user_id from the owning Job
+        - Links to parent_version_id if provided; if None, uses current head if it exists
+        """
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+        if not template_name or not template_name.strip():
+            raise ValueError("template_name is required")
+
+        job = JobService.get_job(job_id)
+        if not job:
+            raise ValueError(f"Job {job_id} not found")
+
+        with db_manager.get_session() as session:
+            # Determine next version index and current head id
+            head_row: DbResumeVersion | None = session.exec(
+                select(DbResumeVersion)
+                .where(DbResumeVersion.job_id == job_id)
+                .order_by(DbResumeVersion.version_index.desc())
+            ).first()
+
+            next_index = 1 if head_row is None else int(head_row.version_index) + 1
+            effective_parent_id = (
+                parent_version_id if parent_version_id is not None else (head_row.id if head_row is not None else None)
+            )
+
+            row = DbResumeVersion(
+                job_id=job_id,
+                version_index=next_index,
+                parent_version_id=effective_parent_id,
+                event_type=event_type,
+                template_name=template_name,
+                resume_json=resume_data.model_dump_json(),
+                created_by_user_id=int(job.user_id),
+            )
+
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            logger.info(
+                "Created ResumeVersion",
+                extra={
+                    "job_id": job_id,
+                    "version_index": next_index,
+                    "event_type": str(event_type),
+                },
+            )
+            return row
+
+    @staticmethod
+    def list_versions(job_id: int) -> list[DbResumeVersion]:
+        """List all versions for a job ordered by version_index ascending."""
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+        with db_manager.get_session() as session:
+            rows = session.exec(
+                select(DbResumeVersion)
+                .where(DbResumeVersion.job_id == job_id)
+                .order_by(DbResumeVersion.version_index.asc())
+            ).all()
+            return list(rows)
+
+    @staticmethod
+    def get_version(version_id: int) -> DbResumeVersion | None:
+        """Get a specific version by id."""
+        if not isinstance(version_id, int) or version_id <= 0:
+            raise ValueError("Invalid version_id")
+        with db_manager.get_session() as session:
+            return session.get(DbResumeVersion, version_id)
+
+    @staticmethod
+    def pin_canonical(job_id: int, version_id: int) -> DbResume:
+        """Set the canonical Resume row for a job from a version snapshot.
+
+        Writes template_name and resume_json to the single canonical Resume row.
+        Does not render or persist any PDFs.
+        """
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+        if not isinstance(version_id, int) or version_id <= 0:
+            raise ValueError("Invalid version_id")
+
+        with db_manager.get_session() as session:
+            version = session.get(DbResumeVersion, version_id)
+            if version is None or version.job_id != job_id:
+                raise ValueError("Version not found for job")
+
+            existing = session.exec(select(DbResume).where(DbResume.job_id == job_id)).first()
+            if existing:
+                existing.template_name = version.template_name
+                existing.resume_json = version.resume_json
+                session.add(existing)
+            else:
+                existing = DbResume(
+                    job_id=job_id,
+                    template_name=version.template_name,
+                    resume_json=version.resume_json,
+                    locked=False,
+                )
+                session.add(existing)
+
+            session.commit()
+            session.refresh(existing)
+
+        # Update job flags (Section 4 will refine has_resume computation)
+        try:
+            JobService.refresh_denorm_flags(job_id)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(exc)
+
+        return existing
+
+    @staticmethod
+    def get_canonical(job_id: int) -> DbResume | None:
+        """Return canonical Resume row for a job if present."""
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+        with db_manager.get_session() as session:
+            return session.exec(select(DbResume).where(DbResume.job_id == job_id)).first()
+
     @staticmethod
     def generate_resume_for_job(
         user_id: int, job_id: int, prompt: str, existing_draft: ResumeData | None
@@ -168,18 +304,32 @@ class ResumeService:
                     # Log and proceed with whatever we currently have; do not fail generation
                     logger.exception(e)
 
+            # Create a new version (event_type=generate). Parent links to current head.
+            try:
+                canonical = ResumeService.get_canonical(job_id)
+                template_for_version = canonical.template_name if canonical else "resume_000.html"
+                ResumeService.create_version(
+                    job_id=job_id,
+                    resume_data=updated,
+                    template_name=template_for_version,
+                    event_type=ResumeVersionEvent.generate,
+                )
+            except Exception as e:  # noqa: BLE001
+                # Log but do not fail the generate flow; version history is best-effort here
+                logger.exception(e)
+
             return updated
         except Exception as e:  # noqa: BLE001
             logger.exception(e)
             raise
 
     @staticmethod
-    def save_resume(job_id: int, resume_data: ResumeData, template_name: str) -> DbResume:
-        """Persist Resume JSON and render/overwrite PDF for the job.
+    def save_resume(job_id: int, resume_data: ResumeData, template_name: str) -> DbResumeVersion:
+        """Create a new version with event_type='save'.
 
-        - Creates or updates the single Resume row per job.
-        - If a pdf_filename exists, overwrite the same file; else create a new UUID.
-        - Recomputes job denorm flags.
+        - Does not modify the canonical Resume row
+        - Does not render or write any PDFs
+        - Returns the newly created ResumeVersion
         """
         if not isinstance(job_id, int) or job_id <= 0:
             raise ValueError("Invalid job_id")
@@ -194,64 +344,27 @@ class ResumeService:
 
         try:
             logger.info(
-                "Saving resume",
-                extra={
-                    "job_id": job_id,
-                    "template_name": template_name,
-                },
+                "Creating resume version (save)",
+                extra={"job_id": job_id, "template_name": template_name},
             )
-            payload_json = resume_data.model_dump_json()
-
-            with db_manager.get_session() as session:
-                # Find existing resume
-                existing = session.exec(
-                    select(DbResume).where(DbResume.job_id == job_id)  # type: ignore[name-defined]
-                ).first()
-
-                if existing:
-                    existing.template_name = template_name
-                    existing.resume_json = payload_json
-                    pdf_filename = existing.pdf_filename or f"{uuid4()}.pdf"
-                else:
-                    existing = DbResume(
-                        job_id=job_id,
-                        template_name=template_name,
-                        resume_json=payload_json,
-                        pdf_filename=None,
-                        locked=False,
-                    )
-                    session.add(existing)
-                    pdf_filename = f"{uuid4()}.pdf"
-
-                # Render PDF to canonical location
-                output_dir = (settings.data_dir / "resumes").resolve()
-                output_dir.mkdir(parents=True, exist_ok=True)
-                output_path = output_dir / pdf_filename
-
-                try:
-                    render_resume_pdf(resume_data, template_name, output_path)
-                    existing.pdf_filename = pdf_filename
-                except Exception as e:  # noqa: BLE001
-                    # Log and keep JSON changes; clear pdf filename so denorm reflects missing PDF
-                    logger.exception(e)
-                    existing.pdf_filename = None
-
-                session.add(existing)
-                session.commit()
-                session.refresh(existing)
-
-            # Refresh denorm flags on parent job
-            JobService.refresh_denorm_flags(job_id)
-            return existing
+            return ResumeService.create_version(
+                job_id=job_id,
+                resume_data=resume_data,
+                template_name=template_name,
+                event_type=ResumeVersionEvent.save,
+            )
         except Exception as e:  # noqa: BLE001
             logger.exception(e)
             raise
 
     @staticmethod
-    def render_preview(job_id: int, resume_data: ResumeData, template_name: str) -> Path:
-        """Render a temporary preview PDF for this job; does not persist or update DB.
+    def render_preview(job_id: int, resume_data: ResumeData, template_name: str) -> bytes:
+        """Render a temporary preview PDF and return bytes (no disk I/O).
 
-        Returns the preview file path.
+        Uses an in-session LRU cache of up to 25 rendered PDFs per job. The
+        cache key is a SHA-256 hash of the fully-populated HTML (template +
+        content), so different content or template selections produce distinct
+        entries. Cache is cleared on job change in the job page.
         """
         if not isinstance(job_id, int) or job_id <= 0:
             raise ValueError("Invalid job_id")
@@ -259,10 +372,67 @@ class ResumeService:
             raise ValueError("template_name is required")
 
         try:
-            preview_dir = (settings.data_dir / "resumes" / "previews").resolve()
-            preview_dir.mkdir(parents=True, exist_ok=True)
-            preview_path = preview_dir / f"{job_id}.pdf"
-            return render_preview_pdf(resume_data, template_name, preview_path)
+            # Initialize cache container in session_state as dict[job_id -> OrderedDict[key -> bytes]]
+            cache_root = st.session_state.get("resume_pdf_cache")
+            if not isinstance(cache_root, dict):
+                cache_root = {}
+                st.session_state["resume_pdf_cache"] = cache_root
+
+            job_cache = cache_root.get(job_id)
+            if not isinstance(job_cache, OrderedDict):
+                job_cache = OrderedDict()
+                cache_root[job_id] = job_cache
+
+            # Build HTML and compute stable hash key
+            templates_dir = _resume_templates_dir()
+            html = render_template_to_html(
+                template_name=template_name,
+                context=resume_data.model_dump(),
+                templates_dir=templates_dir,
+            )
+            key = hashlib.sha256(html.encode("utf-8")).hexdigest()
+
+            # Cache hit: move to end (most-recent) and return
+            if key in job_cache:
+                try:
+                    job_cache.move_to_end(key)
+                except Exception:
+                    pass
+                return job_cache[key]
+
+            # Miss: render and insert with LRU eviction
+            pdf_bytes = render_preview_pdf_bytes(resume_data, template_name)
+            job_cache[key] = pdf_bytes
+            # Enforce capacity 25 per job
+            while len(job_cache) > 25:
+                try:
+                    job_cache.popitem(last=False)
+                except Exception:
+                    break
+
+            return pdf_bytes
+        except Exception as e:  # noqa: BLE001
+            logger.exception(e)
+            raise
+
+    @staticmethod
+    def render_canonical_pdf_bytes(job_id: int) -> bytes:
+        """Render the canonical resume for a job and return PDF bytes.
+
+        Reads the canonical `Resume` row (template + JSON) and renders to bytes
+        without any disk I/O. Raises if no canonical resume exists.
+        """
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+
+        resume = ResumeService.get_canonical(job_id)
+        if not resume or not (resume.resume_json or "").strip():
+            raise ValueError("No canonical resume found for this job")
+
+        try:
+            data = ResumeData.model_validate_json(resume.resume_json)  # type: ignore[arg-type]
+            template = (resume.template_name or "resume_000.html").strip() or "resume_000.html"
+            return render_resume_pdf_bytes(data, template)
         except Exception as e:  # noqa: BLE001
             logger.exception(e)
             raise

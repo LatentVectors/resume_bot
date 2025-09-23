@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from src.features.resume.types import ResumeData
-from src.features.resume.utils import render_template_to_pdf
+from src.features.resume.utils import render_template_to_pdf, render_template_to_pdf_bytes
 from src.logging_config import logger
 
 
@@ -80,6 +80,50 @@ def render_preview_pdf(resume_data: ResumeData, template_name: str, preview_path
             templates_dir=templates_dir,
         )
         return result
+    except Exception as e:  # noqa: BLE001
+        logger.exception(e)
+        raise
+
+
+def render_resume_pdf_bytes(resume_data: ResumeData, template_name: str) -> bytes:
+    """Render the canonical resume PDF and return bytes (no disk I/O).
+
+    Args:
+        resume_data: `ResumeData` object to render
+        template_name: HTML template filename (e.g., 'resume_000.html')
+
+    Returns:
+        PDF document as raw bytes
+    """
+    try:
+        templates_dir = _resume_templates_dir()
+        logger.info(
+            "Rendering resume PDF (bytes)",
+            extra={"template": template_name},
+        )
+        return render_template_to_pdf_bytes(
+            template_name=template_name,
+            context=resume_data.model_dump(),
+            templates_dir=templates_dir,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception(e)
+        raise
+
+
+def render_preview_pdf_bytes(resume_data: ResumeData, template_name: str) -> bytes:
+    """Render a preview PDF and return bytes (no disk I/O)."""
+    try:
+        templates_dir = _resume_templates_dir()
+        logger.info(
+            "Rendering preview PDF (bytes)",
+            extra={"template": template_name},
+        )
+        return render_template_to_pdf_bytes(
+            template_name=template_name,
+            context=resume_data.model_dump(),
+            templates_dir=templates_dir,
+        )
     except Exception as e:  # noqa: BLE001
         logger.exception(e)
         raise

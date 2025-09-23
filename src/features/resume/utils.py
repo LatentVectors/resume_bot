@@ -126,6 +126,47 @@ def render_template_to_pdf(
     return convert_html_to_pdf(html_content, output_path, css_string)
 
 
+def render_template_to_pdf_bytes(
+    template_name: str,
+    context: dict[str, Any],
+    templates_dir: str | Path,
+    css_string: str | None = None,
+) -> bytes:
+    """
+    Render a Jinja2 template to a PDF and return the PDF as bytes.
+
+    Args:
+        template_name: Name of the template file (e.g., 'resume_000.html')
+        context: Data context for template rendering
+        templates_dir: Path to the templates directory
+        css_string: Optional CSS string for additional styling
+
+    Returns:
+        PDF document as raw bytes
+
+    Raises:
+        Exception: If PDF generation fails
+    """
+    try:
+        html_content = render_template_to_html(template_name, context, templates_dir)
+        html_doc = HTML(string=html_content)
+
+        css_docs = []
+        if css_string:
+            css_docs.append(CSS(string=css_string))
+
+        pdf_bytes: bytes = html_doc.write_pdf(stylesheets=css_docs)
+        logger.debug(f"PDF bytes generated successfully: template={template_name}")
+        return pdf_bytes
+
+    except Exception:
+        logger.error(
+            f"Failed to generate PDF bytes for template: {template_name}",
+            exception=True,
+        )
+        raise
+
+
 class PageMetric(BaseModel):
     """Immutable per-page metrics for a PDF page.
 

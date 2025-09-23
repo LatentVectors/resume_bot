@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Iterable, Literal
+from typing import Literal
 
 from sqlmodel import select
 
@@ -202,7 +203,7 @@ class JobService:
                         for row in rows:
                             # Message.locked is derived; for others, set explicitly
                             if hasattr(row, "locked"):
-                                setattr(row, "locked", True)
+                                row.locked = True
                             session.add(row)
 
                 # Touch updated_at and persist
@@ -238,20 +239,20 @@ class JobService:
             return None
 
     @staticmethod
-    def create_resume(job_id: int, pdf_filename: str) -> DbResume:
-        """Create a Resume row and refresh denormalized flags.
+    def create_resume(job_id: int) -> DbResume:
+        """Create a canonical `Resume` row and refresh denormalized flags.
+
+        Canonical `has_resume` depends only on the existence of this row, not on
+        any persisted PDF filename (deprecated per specs/008-resume_history).
 
         Args:
             job_id: Parent job identifier.
-            pdf_filename: Resume PDF filename stored under data/resumes/.
 
         Returns:
             Persisted DbResume instance.
         """
         if not isinstance(job_id, int) or job_id <= 0:
             raise ValueError("Invalid job_id")
-        if not pdf_filename or not pdf_filename.strip():
-            raise ValueError("pdf_filename is required")
 
         try:
             with db_manager.get_session() as session:
@@ -259,7 +260,13 @@ class JobService:
                 if not job:
                     raise ValueError(f"Job {job_id} not found")
 
-                resume = DbResume(job_id=job_id, pdf_filename=pdf_filename.strip(), locked=False)
+                # Create Resume (pdf_filename deprecated and unused)
+                resume = DbResume(
+                    job_id=job_id,
+                    template_name="default",  # placeholder; should be set by ResumeService
+                    resume_json="{}",  # placeholder; should be set by ResumeService
+                    locked=False,
+                )
                 session.add(resume)
                 session.commit()
                 session.refresh(resume)
@@ -407,8 +414,10 @@ class JobService:
     def refresh_denorm_flags(job_id: int) -> DbJob | None:
         """Recompute `has_resume` and `has_cover_letter` for a job.
 
-        - has_resume is True if a Resume row exists for the job AND it has a non-empty pdf_filename.
-        - has_cover_letter is True if a CoverLetter row exists for the job.
+        - has_resume is True iff a canonical `Resume` row exists for the job.
+        - has_cover_letter is True if a `CoverLetter` row exists for the job.
+
+        Note: No reliance on `pdf_filename` (deprecated per specs/008-resume_history).
         """
         if not isinstance(job_id, int) or job_id <= 0:
             raise ValueError("Invalid job_id")
@@ -419,13 +428,11 @@ class JobService:
                 if not job:
                     return None
 
-                resume_row = session.exec(select(DbResume).where(DbResume.job_id == job_id)).first()
-                has_cover_letter_row = (
-                    session.exec(select(DbCoverLetter).where(DbCoverLetter.job_id == job_id)).first() is not None
+                # Presence-only check for canonical resume (do not inspect pdf_filename)
+                has_resume = session.exec(select(DbResume.id).where(DbResume.job_id == job_id)).first() is not None
+                has_cover_letter = (
+                    session.exec(select(DbCoverLetter.id).where(DbCoverLetter.job_id == job_id)).first() is not None
                 )
-
-                has_resume = bool(resume_row and (resume_row.pdf_filename or "").strip())
-                has_cover_letter = has_cover_letter_row
 
                 changed = False
                 if job.has_resume != has_resume:

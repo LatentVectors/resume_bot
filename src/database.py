@@ -4,10 +4,10 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from datetime import date, datetime
-from enum import Enum
+from enum import Enum, StrEnum
 from pathlib import Path
 
-from sqlalchemy import UniqueConstraint
+from sqlalchemy import Index, UniqueConstraint, text
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 from src.logging_config import logger
@@ -33,6 +33,18 @@ class MessageChannel(str, Enum):
 class ResponseSource(str, Enum):
     manual = "manual"
     application = "application"
+
+
+# specs/008-resume_history
+class ResumeVersionEvent(StrEnum):
+    """Event types that create a resume version.
+
+    Values are aligned with specs/008-resume_history.
+    """
+
+    generate = "generate"
+    save = "save"
+    reset = "reset"
 
 
 class User(SQLModel, table=True):
@@ -123,10 +135,39 @@ class Resume(SQLModel, table=True):
     job_id: int = Field(foreign_key="job.id")
     template_name: str
     resume_json: str
+    # Deprecated as of specs/008-resume_history; unused by runtime logic. Kept for backward compatibility.
     pdf_filename: str | None = Field(default=None)
     locked: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class ResumeVersion(SQLModel, table=True):
+    """Immutable history of resume versions per job.
+
+    - Monotonic `version_index` starting at 1 per `job_id`
+    - Uniqueness on `(job_id, version_index)`
+    - Secondary index on `(job_id, created_at desc)`
+    """
+
+    __table_args__ = (
+        UniqueConstraint("job_id", "version_index", name="uq_resume_version_job_id_version_index"),
+        Index(
+            "ix_resume_version_job_id_created_at_desc",
+            "job_id",
+            text("created_at DESC"),
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="job.id")
+    version_index: int
+    parent_version_id: int | None = Field(default=None, foreign_key=None)
+    event_type: ResumeVersionEvent
+    template_name: str
+    resume_json: str
+    created_by_user_id: int
+    created_at: datetime = Field(default_factory=datetime.now)
 
 
 class CoverLetter(SQLModel, table=True):

@@ -11,8 +11,8 @@ from src.logging_config import logger
 def show_resume_reset_dialog(job_id: int) -> None:
     """Confirmation dialog to hard-reset the resume for a job.
 
-    Deletes the Resume row (if any), removes saved and preview PDFs, and clears
-    in-memory UI state so the editor returns to its initial seeded state.
+    Deletes the Resume row (if any) and clears in-memory UI state so the editor
+    returns to its initial seeded state. No PDF files are read or written.
     """
     st.warning("This will delete the saved resume and PDFs and reset the editor. This cannot be undone.")
 
@@ -22,24 +22,10 @@ def show_resume_reset_dialog(job_id: int) -> None:
 
         if st.button("Reset", type="primary", key="resume_reset_confirm"):
             try:
-                # Delete preview PDF for this job if present
-                try:
-                    preview_path = (settings.data_dir / "resumes" / "previews" / f"{job_id}.pdf").resolve()
-                    if preview_path.exists():
-                        preview_path.unlink(missing_ok=True)
-                except Exception as exc:  # noqa: BLE001
-                    logger.exception(exc)
-
-                # Delete persisted PDF and DB row if a resume exists
+                # Delete Resume row if it exists (no PDF files involved)
                 try:
                     resume_row = JobService.get_resume_for_job(job_id)
                     if resume_row is not None:
-                        pdf_filename = (getattr(resume_row, "pdf_filename", None) or "").strip()
-                        if pdf_filename:
-                            saved_path = (settings.data_dir / "resumes" / pdf_filename).resolve()
-                            if saved_path.exists():
-                                saved_path.unlink(missing_ok=True)
-                        # Delete Resume row last
                         JobService.delete_resume(int(resume_row.id))  # type: ignore[arg-type]
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(exc)
@@ -51,8 +37,7 @@ def show_resume_reset_dialog(job_id: int) -> None:
                     "resume_last_saved",
                     "resume_template_saved",
                     "resume_dirty",
-                    "resume_preview_path",
-                    "resume_persisted_filename",
+                    # legacy session keys removed in bytes-based rendering
                 ):
                     try:
                         st.session_state.pop(key, None)

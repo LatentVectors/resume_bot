@@ -6,6 +6,7 @@ import streamlit as st
 
 from app.components.status_badge import render_status_badge
 from app.services.job_service import JobService
+from app.services.resume_service import ResumeService
 from app.services.user_service import UserService
 from app.shared.filenames import build_resume_download_filename
 from src.config import settings
@@ -168,40 +169,40 @@ def render_overview(job: DbJob) -> None:
                 JobService.update_job_fields(job.id, is_favorite=fav_value)
                 st.rerun()
 
-            resume = JobService.get_resume_for_job(job.id)
-            pdf_filename = (getattr(resume, "pdf_filename", None) or "").strip()
-            if pdf_filename:
-                pdf_path = (settings.data_dir / "resumes" / pdf_filename).resolve()
-                if pdf_path.exists():
-                    with pdf_path.open("rb") as fh:
+            try:
+                resume = JobService.get_resume_for_job(job.id)
+                if resume and (resume.resume_json or "").strip():
+                    # Build display name
+                    full_name = ""
+                    try:
+                        rd = ResumeData.model_validate_json(resume.resume_json)  # type: ignore[arg-type]
+                        full_name = (rd.name or "").strip()
+                    except Exception:
                         full_name = ""
-                        try:
-                            if getattr(resume, "resume_json", None):
-                                rd = ResumeData.model_validate_json(resume.resume_json)  # type: ignore[arg-type]
-                                full_name = (rd.name or "").strip()
-                        except Exception:
-                            full_name = ""
-                        if not full_name:
-                            user = UserService.get_current_user()
-                            full_name = (
-                                f"{(user.first_name if user else '') or ''} {(user.last_name if user else '') or ''}"
-                            ).strip()
-                        st.download_button(
-                            label="Download Resume",
-                            data=fh.read(),
-                            file_name=_build_download_filename(job, full_name),
-                            mime="application/pdf",
-                            type="primary",
-                            help="Download the saved resume",
-                        )
-                else:
-                    st.button(
-                        "Download Resume",
-                        disabled=True,
-                        help="Resume PDF not found on disk. Try re-saving from the Resume tab.",
+                    if not full_name:
+                        user = UserService.get_current_user()
+                        full_name = (
+                            f"{(user.first_name if user else '') or ''} {(user.last_name if user else '') or ''}"
+                        ).strip()
+
+                    # Fetch canonical bytes and enable download
+                    pdf_bytes = ResumeService.render_canonical_pdf_bytes(job.id)
+                    st.download_button(
+                        label="Download Resume",
+                        data=pdf_bytes,
+                        file_name=_build_download_filename(job, full_name),
+                        mime="application/pdf",
+                        type="primary",
+                        help="Download the saved resume",
                     )
-            else:
-                st.button("Download Resume", disabled=True, help="No resume file found")
+                else:
+                    st.button("Download Resume", disabled=True, help="No resume found")
+            except Exception:
+                st.button(
+                    "Download Resume",
+                    disabled=True,
+                    help="Unable to render resume. Pin a canonical version or try again.",
+                )
 
             st.button("Download Cover Letter", disabled=True)
             st.button("Copy Cover Letter", disabled=True)

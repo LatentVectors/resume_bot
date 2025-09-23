@@ -18,7 +18,6 @@ from app.services.job_service import JobService
 from app.services.resume_service import ResumeService
 from app.services.user_service import UserService
 from app.shared.filenames import build_resume_download_filename
-from src.config import settings
 from src.database import Job as DbJob
 from src.features.resume.data_adapter import (
     fetch_experience_data,
@@ -174,6 +173,7 @@ def _render_profile_section(draft: ResumeData, *, read_only: bool) -> ResumeData
 
 def _render_experience_section(draft: ResumeData, *, read_only: bool) -> ResumeData:
     new_experiences: list[ResumeExperience] = []
+    deletion_happened = False
     with st.expander("Experience", expanded=False):
         for idx, exp in enumerate(draft.experience):
             with st.container(border=True):
@@ -238,16 +238,30 @@ def _render_experience_section(draft: ResumeData, *, read_only: bool) -> ResumeD
                             points=[p for p in new_points if p.strip()],
                         )
                     )
+                else:
+                    deletion_happened = True
 
         if not read_only:
             if st.button("Add Experience", key="add_experience"):
                 show_resume_add_experience_dialog()
+
+    if deletion_happened:
+        try:
+            st.session_state["resume_draft"] = draft.model_copy(update={"experience": new_experiences})
+            # Clear experience-related widget state to avoid index/key collisions after deletion
+            for key in list(st.session_state.keys()):
+                if isinstance(key, str) and key.startswith("exp_"):
+                    st.session_state.pop(key, None)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(exc)
+        st.rerun()
 
     return draft.model_copy(update={"experience": new_experiences})
 
 
 def _render_education_section(draft: ResumeData, *, read_only: bool) -> ResumeData:
     new_education: list[ResumeEducation] = []
+    deletion_happened = False
     with st.expander("Education", expanded=False):
         for idx, edu in enumerate(draft.education):
             with st.container(border=True):
@@ -282,15 +296,29 @@ def _render_education_section(draft: ResumeData, *, read_only: bool) -> ResumeDa
                             grad_date=grad_dt,
                         )
                     )
+                else:
+                    deletion_happened = True
 
         if not read_only and st.button("Add Education", key="add_education"):
             show_resume_add_education_dialog()
+
+    if deletion_happened:
+        try:
+            st.session_state["resume_draft"] = draft.model_copy(update={"education": new_education})
+            # Clear education-related widget state to avoid index/key collisions after deletion
+            for key in list(st.session_state.keys()):
+                if isinstance(key, str) and key.startswith("edu_"):
+                    st.session_state.pop(key, None)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(exc)
+        st.rerun()
 
     return draft.model_copy(update={"education": new_education})
 
 
 def _render_certifications_section(draft: ResumeData, *, read_only: bool) -> ResumeData:
     new_certs: list[ResumeCertification] = []
+    deletion_happened = False
     with st.expander("Certificates", expanded=False):
         for idx, cert in enumerate(draft.certifications):
             with st.container(border=True):
@@ -312,9 +340,22 @@ def _render_certifications_section(draft: ResumeData, *, read_only: bool) -> Res
 
                 if not del_cert:
                     new_certs.append(ResumeCertification(title=title, date=date_dt))
+                else:
+                    deletion_happened = True
 
         if not read_only and st.button("Add Certification", key="add_cert"):
             show_resume_add_certificate_dialog()
+
+    if deletion_happened:
+        try:
+            st.session_state["resume_draft"] = draft.model_copy(update={"certifications": new_certs})
+            # Clear certification-related widget state to avoid index/key collisions after deletion
+            for key in list(st.session_state.keys()):
+                if isinstance(key, str) and key.startswith("cert_"):
+                    st.session_state.pop(key, None)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(exc)
+        st.rerun()
 
     return draft.model_copy(update={"certifications": new_certs})
 
@@ -343,15 +384,12 @@ def _render_skills_section(draft: ResumeData, *, read_only: bool) -> ResumeData:
     return draft.model_copy(update={"skills": (draft.skills if read_only else skills_list)})
 
 
-def _embed_pdf(path: Path, *, height: int = 900) -> None:
-    """Embed a PDF using the custom PDF viewer component."""
+def _embed_pdf_bytes(pdf_bytes: bytes, *, height: int = 900) -> None:
+    """Embed a PDF using the custom PDF viewer component from raw bytes."""
     try:
-        if not path.exists():
-            st.info("Preview file not found.")
+        if not pdf_bytes:
+            st.info("No preview available.")
             return
-        # Pass bytes to avoid frontend/browser caching when the same filename is reused
-        with path.open("rb") as fh:
-            pdf_bytes = fh.read()
         pdf_viewer(pdf_bytes, width="100%", height=height, zoom_level="auto")
     except Exception as exc:  # noqa: BLE001
         logger.exception(exc)
@@ -359,14 +397,97 @@ def _embed_pdf(path: Path, *, height: int = 900) -> None:
 
 
 def render_resume(job: DbJob) -> None:
-    """Render the Resume tab skeleton with state and dirty tracking."""
-    draft, template_name = _load_or_seed_draft(job.id, job.job_title)
+    """Render the Resume tab with version navigation, pinning, and bytes-based preview/download."""
     # Make job id available to add-object dialogs for preview rendering
     try:
         st.session_state["current_job_id"] = job.id
     except Exception:
         pass
+
     is_read_only = bool(job.applied_at)
+
+    # Fetch version history and canonical
+    try:
+        versions = ResumeService.list_versions(job.id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(exc)
+        versions = []
+
+    try:
+        canonical_row = ResumeService.get_canonical(job.id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(exc)
+        canonical_row = None
+
+    id_to_version = {v.id: v for v in versions if v.id is not None}
+    head_version = versions[-1] if versions else None
+
+    # Determine which version (if any) matches canonical
+    canonical_version_id: int | None = None
+    if canonical_row is not None and versions:
+        for v in reversed(versions):
+            try:
+                if v.template_name == canonical_row.template_name and v.resume_json == canonical_row.resume_json:
+                    canonical_version_id = cast(int, v.id)
+                    break
+            except Exception:
+                continue
+
+    # Selected version logic: canonical if present, else head, else None
+    selected_version_id = cast(int | None, st.session_state.get("resume_selected_version_id"))
+    if selected_version_id is None or selected_version_id not in id_to_version:
+        selected_version_id = (
+            canonical_version_id
+            if canonical_version_id is not None
+            else (cast(int, head_version.id) if head_version and head_version.id is not None else None)
+        )
+        st.session_state["resume_selected_version_id"] = selected_version_id
+
+    # Seed editor state: prefer in-progress draft if dirty; otherwise load from selected version
+    existing_draft = cast(ResumeData | None, st.session_state.get("resume_draft"))
+    existing_template = cast(str | None, st.session_state.get("resume_template"))
+    loaded_from_version_id = cast(int | None, st.session_state.get("resume_loaded_from_version_id"))
+
+    if selected_version_id is not None:
+        # Reload from selected version only if version changed OR there's no working draft
+        should_load_from_selected = loaded_from_version_id != selected_version_id or existing_draft is None
+        if should_load_from_selected:
+            sel = id_to_version[selected_version_id]
+            try:
+                draft = ResumeData.model_validate_json(sel.resume_json)  # type: ignore[arg-type]
+            except Exception as exc:  # noqa: BLE001
+                logger.exception(exc)
+                draft = ResumeData(
+                    name="",
+                    title=(job.job_title or "")[:120],
+                    email="",
+                    phone="",
+                    linkedin_url="",
+                    professional_summary="",
+                    experience=[],
+                    education=[],
+                    skills=[],
+                    certifications=[],
+                )
+            template_name = (sel.template_name or "resume_000.html").strip() or "resume_000.html"
+            # Baseline equals the selected version content
+            st.session_state["resume_draft"] = draft
+            st.session_state["resume_template"] = template_name
+            st.session_state["resume_last_saved"] = draft
+            st.session_state["resume_template_saved"] = template_name
+            st.session_state["resume_dirty"] = False
+            st.session_state["resume_loaded_from_version_id"] = selected_version_id
+        else:
+            # Keep working draft/template when there are unsaved edits for the same selected version
+            draft = cast(ResumeData, existing_draft)
+            template_name = cast(str, existing_template or "resume_000.html")
+    else:
+        # No selected version: use existing working draft if any; otherwise seed from DB/profile
+        if isinstance(existing_draft, ResumeData) and isinstance(existing_template, str):
+            draft = existing_draft
+            template_name = existing_template
+        else:
+            draft, template_name = _load_or_seed_draft(job.id, job.job_title)
 
     # Experience requirement: user must have at least one profile experience
     current_user = UserService.get_current_user()
@@ -389,8 +510,127 @@ def render_resume(job: DbJob) -> None:
 
     # Layout
     left, right = st.columns([4, 3])
+
     with left:
         st.subheader("Resume Content")
+        # Header controls: version navigation and pin (hidden when Applied)
+        if not is_read_only and versions:
+            with st.container(horizontal=True, horizontal_alignment="right"):
+                sel = id_to_version.get(selected_version_id) if selected_version_id is not None else None
+                current_index = int(sel.version_index) if sel is not None else 1
+                min_index = 1
+                max_index = int(versions[-1].version_index)
+
+                # Left arrow
+                go_left = st.button(
+                    ":material/chevron_left:",
+                    key="resume_ver_left",
+                    disabled=current_index <= min_index,
+                    help="Older version",
+                )
+
+                # Dropdown of versions in descending order (vN..v1)
+                try:
+                    versions_desc = sorted(versions, key=lambda v: int(v.version_index), reverse=True)
+                except Exception:
+                    versions_desc = list(reversed(versions))
+                labels = [f"v{v.version_index}" for v in versions_desc]
+                indices = [int(v.version_index) for v in versions_desc]
+                try:
+                    dd_idx = indices.index(current_index)
+                except ValueError:
+                    dd_idx = 0  # default to newest (first)
+                chosen_label = st.selectbox(
+                    "Version",
+                    options=labels,
+                    index=dd_idx,
+                    label_visibility="collapsed",
+                    key="resume_version_select",
+                )
+
+                # Right arrow
+                go_right = st.button(
+                    ":material/chevron_right:",
+                    key="resume_ver_right",
+                    disabled=current_index >= max_index,
+                    help="Newer version",
+                )
+
+                # Pin icon
+                selected_is_canonical = (
+                    selected_version_id is not None
+                    and canonical_version_id is not None
+                    and selected_version_id == canonical_version_id
+                )
+                pin_label = ":material/keep:" if selected_is_canonical else ":material/keep_off:"
+                pin_help = "Pinned (canonical)" if selected_is_canonical else "Set selected version as canonical"
+                pin_type = "primary" if selected_is_canonical else "secondary"
+                pin_clicked = st.button(pin_label, help=pin_help, key="resume_pin_btn", type=pin_type)
+                # Handle nav/pin events
+                new_selected_id: int | None = None
+                if go_left:
+                    target_index = current_index - 1
+                    for v in versions:
+                        if int(v.version_index) == target_index:
+                            new_selected_id = cast(int, v.id)
+                            break
+                elif go_right:
+                    target_index = current_index + 1
+                    for v in versions:
+                        if int(v.version_index) == target_index:
+                            new_selected_id = cast(int, v.id)
+                            break
+                else:
+                    # Dropdown change
+                    try:
+                        chosen_index = int(chosen_label.removeprefix("v"))
+                        if chosen_index != current_index:
+                            for v in versions:
+                                if int(v.version_index) == chosen_index:
+                                    new_selected_id = cast(int, v.id)
+                                    break
+                    except Exception:
+                        pass
+
+                if pin_clicked and selected_version_id is not None:
+                    try:
+                        ResumeService.pin_canonical(job.id, selected_version_id)
+                        st.toast("Pinned canonical resume.")
+                    except Exception as exc:  # noqa: BLE001
+                        logger.exception(exc)
+                        st.error("Failed to set canonical resume.")
+                    # Recompute canonical mapping
+                    try:
+                        canonical_row = ResumeService.get_canonical(job.id)
+                    except Exception:
+                        canonical_row = None
+                    canonical_version_id = None
+                    if canonical_row is not None:
+                        for v in reversed(versions):
+                            if (
+                                v.template_name == canonical_row.template_name
+                                and v.resume_json == canonical_row.resume_json
+                            ):
+                                canonical_version_id = cast(int, v.id)
+                                break
+                    st.rerun()
+
+                if new_selected_id is not None and new_selected_id in id_to_version:
+                    st.session_state["resume_selected_version_id"] = new_selected_id
+                    # Reset dirty and baseline to selected version
+                    new_v = id_to_version[new_selected_id]
+                    try:
+                        new_draft = ResumeData.model_validate_json(new_v.resume_json)  # type: ignore[arg-type]
+                    except Exception as exc:  # noqa: BLE001
+                        logger.exception(exc)
+                        new_draft = draft
+                    st.session_state["resume_draft"] = new_draft
+                    st.session_state["resume_template"] = new_v.template_name
+                    st.session_state["resume_last_saved"] = new_draft
+                    st.session_state["resume_template_saved"] = new_v.template_name
+                    st.session_state["resume_dirty"] = False
+                    st.rerun()
+
         st.text_area(
             "What should the AI change?",
             key="resume_instructions",
@@ -428,7 +668,7 @@ def render_resume(job: DbJob) -> None:
         updated = _render_certifications_section(updated, read_only=is_read_only)
         updated = _render_skills_section(updated, read_only=is_read_only)
 
-        # Compute dirty state versus last persisted save, not prior render
+        # Compute dirty state versus baseline (selected version or last saved)
         saved_draft = cast(ResumeData, st.session_state.get("resume_last_saved", draft))
         saved_template = cast(str, st.session_state.get("resume_template_saved", template_name))
         is_dirty = updated.model_dump_json() != saved_draft.model_dump_json() or selected_template != saved_template
@@ -495,29 +735,28 @@ def render_resume(job: DbJob) -> None:
                 )
                 st.session_state["resume_draft"] = new_draft
                 st.session_state["resume_dirty"] = True
-                # Render preview to temp path
-                preview_path = ResumeService.render_preview(
-                    job.id, new_draft, cast(str, st.session_state.get("resume_template", selected_template))
-                )
-                st.session_state["resume_preview_path"] = str(preview_path)
-                # Sync AI-updated fields into widget states so UI reflects changes on next run
                 # Clear widget keys so that the widgets re-initialize from the new draft values
                 try:
                     for key in (
                         "resume_title",
                         "resume_summary",
                         "resume_skills_textarea",
-                        "resume_instructions",
                     ):
                         st.session_state.pop(key, None)
-                    # Clear experience points textareas so UI reflects AI-updated points
+                    st.session_state["resume_instructions"] = ""
                     for key in list(st.session_state.keys()):
                         if isinstance(key, str) and key.startswith("exp_") and key.endswith("_points_text"):
                             st.session_state.pop(key, None)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(exc)
+                # After generate, select the new head if available
+                try:
+                    versions = ResumeService.list_versions(job.id)
+                    if versions:
+                        st.session_state["resume_selected_version_id"] = cast(int, versions[-1].id)
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(exc)
                 st.toast("Draft updated via AI. Preview refreshed.")
-                # Rerun to refresh left-panel widgets with updated state
                 st.rerun()
         except Exception as exc:  # noqa: BLE001
             logger.exception(exc)
@@ -525,35 +764,32 @@ def render_resume(job: DbJob) -> None:
 
     if save_clicked:
         try:
-            current_draft = cast(ResumeData, st.session_state.get("resume_draft", updated))
-            saved_row = ResumeService.save_resume(
-                job.id, current_draft, cast(str, st.session_state.get("resume_template", selected_template))
+            current_draft = cast(ResumeData, st.session_state.get("resume_draft", draft))
+            saved_version = ResumeService.save_resume(
+                job.id, current_draft, cast(str, st.session_state.get("resume_template", template_name))
             )
-            # Clear dirty and update saved state
+            # Clear dirty and update saved state and selection
             st.session_state["resume_last_saved"] = current_draft
             st.session_state["resume_template_saved"] = cast(
-                str, st.session_state.get("resume_template", selected_template)
+                str, st.session_state.get("resume_template", template_name)
             )
             st.session_state["resume_dirty"] = False
-            st.session_state.pop("resume_preview_path", None)
-            # Ensure preview shows persisted PDF if render succeeded
-            if (getattr(saved_row, "pdf_filename", None) or "").strip():
-                st.session_state["resume_persisted_filename"] = saved_row.pdf_filename
-                st.toast("Resume saved. PDF rendered.")
-                st.rerun()
-            else:
-                st.warning("Resume saved, but PDF failed to render. Check template and logs.")
+            try:
+                st.session_state["resume_selected_version_id"] = cast(int, saved_version.id)
+            except Exception:
+                pass
+            st.toast("Resume saved as new version.")
+            st.rerun()
         except Exception as exc:  # noqa: BLE001
             logger.exception(exc)
             st.error("Failed to save resume.")
 
+    # Right column: preview and download (bytes only)
     with right:
         current_draft = cast(ResumeData, st.session_state.get("resume_draft", draft))
+        current_template = cast(str, st.session_state.get("resume_template", template_name))
         missing = _missing_required_identity(current_draft)
         is_dirty = bool(st.session_state.get("resume_dirty", False))
-        resume_row = JobService.get_resume_for_job(job.id)
-        pdf_filename = (getattr(resume_row, "pdf_filename", None) or "").strip()
-        preview_path_str = cast(str | None, st.session_state.get("resume_preview_path"))
 
         # Header row: Preview title + right-aligned Reset + Download buttons
         header_cols = st.columns([1, 1])
@@ -564,79 +800,74 @@ def render_resume(job: DbJob) -> None:
                 if not is_read_only:
                     if st.button(
                         "Reset",
-                        help=("Hard reset: delete resume and PDFs, and reset the editor to its initial state."),
+                        help=("Hard reset: clear resume and history; seed from profile."),
                         key="resume_reset_btn_header",
                     ):
                         show_resume_reset_dialog(int(job.id))
-                if pdf_filename:
-                    canonical = (settings.data_dir / "resumes" / pdf_filename).resolve()
-                    if canonical.exists():
-                        try:
-                            with canonical.open("rb") as fh:
-                                st.download_button(
-                                    label="Download",
-                                    data=fh.read(),
-                                    file_name=_build_download_filename(job, current_draft.name),
-                                    mime="application/pdf",
-                                    disabled=(not is_read_only) and is_dirty,
-                                    type="primary",
-                                    help=(
-                                        "Save changes to enable download" if ((not is_read_only) and is_dirty) else None
-                                    ),
-                                    key="resume_download_btn_header",
-                                )
-                        except Exception as exc:  # noqa: BLE001
-                            logger.exception(exc)
-                            st.button(
-                                "Download",
-                                disabled=True,
-                                help="Unable to read PDF from disk.",
-                                key="resume_download_btn_header_disabled",
-                            )
-                    else:
-                        st.button(
-                            "Download",
-                            disabled=True,
-                            help="PDF missing on disk. Re-save resume.",
-                            key="resume_download_btn_header_missing",
-                        )
-                else:
-                    # No persisted PDF yet
-                    st.button(
-                        "Download",
-                        disabled=True,
-                        help=(
-                            "No saved resume PDF yet."
-                            if not is_read_only
-                            else "No saved resume PDF found for this job."
-                        ),
-                        key="resume_download_btn_header_none",
-                    )
 
+                # Render bytes only when allowed to show a preview
+                pdf_bytes: bytes | None = None
+                try:
+                    if is_read_only:
+                        # Applied: show canonical only
+                        if canonical_row is not None:
+                            can_draft = ResumeData.model_validate_json(canonical_row.resume_json)  # type: ignore[arg-type]
+                            pdf_bytes = ResumeService.render_preview(job.id, can_draft, canonical_row.template_name)
+                    else:
+                        if not missing:
+                            pdf_bytes = ResumeService.render_preview(job.id, current_draft, current_template)
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(exc)
+                    pdf_bytes = None
+
+                # Download button rules
+                selected_is_canonical = (
+                    selected_version_id is not None
+                    and canonical_version_id is not None
+                    and selected_version_id == canonical_version_id
+                )
+                allow_download = (is_read_only and canonical_row is not None) or (
+                    (not is_read_only) and selected_is_canonical and (not is_dirty)
+                )
+                help_text = None
+                if not allow_download:
+                    if is_read_only:
+                        help_text = "No canonical resume to download."
+                    elif not selected_is_canonical:
+                        help_text = "Download only available for pinned (canonical) version."
+                    elif is_dirty:
+                        help_text = "Save changes to enable download."
+
+                st.download_button(
+                    label="Download",
+                    data=(pdf_bytes or b""),
+                    file_name=_build_download_filename(job, current_draft.name),
+                    mime="application/pdf",
+                    disabled=not (allow_download and pdf_bytes),
+                    type="primary",
+                    help=help_text,
+                    key="resume_download_btn_header",
+                )
+
+        # Body preview
         if is_read_only:
-            if pdf_filename:
-                canonical = (settings.data_dir / "resumes" / pdf_filename).resolve()
-                if canonical.exists():
-                    _embed_pdf(canonical)
-                else:
-                    st.info("No saved resume PDF found for this job.")
+            if canonical_row is None:
+                st.info("This job has no canonical resume and is locked (Applied).")
             else:
-                st.info("This job has no resume and is locked (Applied).")
+                try:
+                    can_draft = ResumeData.model_validate_json(canonical_row.resume_json)  # type: ignore[arg-type]
+                    can_bytes = ResumeService.render_preview(job.id, can_draft, canonical_row.template_name)
+                    _embed_pdf_bytes(can_bytes)
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(exc)
+                    st.info("Unable to render canonical preview.")
         else:
             if missing:
                 st.warning("Preview disabled until required identity fields are filled")
             else:
-                shown = False
-                # Always prefer showing a freshly rendered preview if it exists
-                if preview_path_str:
-                    preview_path = Path(preview_path_str)
-                    if preview_path.exists():
-                        _embed_pdf(preview_path)
-                        shown = True
-                if not shown and pdf_filename:
-                    canonical = (settings.data_dir / "resumes" / pdf_filename).resolve()
-                    if canonical.exists():
-                        _embed_pdf(canonical)
-                        shown = True
-                if not shown:
-                    st.info("No preview yet.")
+                try:
+                    preview_bytes = ResumeService.render_preview(job.id, current_draft, current_template)
+                    _embed_pdf_bytes(preview_bytes)
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(exc)
+                    st.info("No preview available.")
