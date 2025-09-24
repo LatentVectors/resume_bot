@@ -792,62 +792,76 @@ def render_resume(job: DbJob) -> None:
         is_dirty = bool(st.session_state.get("resume_dirty", False))
 
         # Header row: Preview title + right-aligned Reset + Download buttons
-        header_cols = st.columns([1, 1])
-        with header_cols[0]:
-            st.subheader("Preview")
-        with header_cols[1]:
-            with st.container(horizontal=True, horizontal_alignment="right"):
-                if not is_read_only:
-                    if st.button(
-                        "Reset",
-                        help=("Hard reset: clear resume and history; seed from profile."),
-                        key="resume_reset_btn_header",
-                    ):
-                        show_resume_reset_dialog(int(job.id))
+        st.subheader("Preview")
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if not is_read_only:
+                if st.button(
+                    "Reset",
+                    help=("Hard reset: clear resume and history; seed from profile."),
+                    key="resume_reset_btn_header",
+                ):
+                    show_resume_reset_dialog(int(job.id))
 
-                # Render bytes only when allowed to show a preview
-                pdf_bytes: bytes | None = None
+            # Render bytes only when allowed to show a preview
+            pdf_bytes: bytes | None = None
+            try:
+                if is_read_only:
+                    # Applied: show canonical only
+                    if canonical_row is not None:
+                        can_draft = ResumeData.model_validate_json(canonical_row.resume_json)  # type: ignore[arg-type]
+                        pdf_bytes = ResumeService.render_preview(job.id, can_draft, canonical_row.template_name)
+                else:
+                    if not missing:
+                        pdf_bytes = ResumeService.render_preview(job.id, current_draft, current_template)
+            except Exception as exc:  # noqa: BLE001
+                logger.exception(exc)
+                pdf_bytes = None
+
+            # Download button rules
+            selected_is_canonical = (
+                selected_version_id is not None
+                and canonical_version_id is not None
+                and selected_version_id == canonical_version_id
+            )
+            allow_download = (is_read_only and canonical_row is not None) or (
+                (not is_read_only) and selected_is_canonical and (not is_dirty)
+            )
+            help_text = None
+            if not allow_download:
+                if is_read_only:
+                    help_text = "No canonical resume to download."
+                elif not selected_is_canonical:
+                    help_text = "Download only available for pinned (canonical) version."
+                elif is_dirty:
+                    help_text = "Save changes to enable download."
+
+            # Copy button (between Reset and Download)
+            copy_clicked = st.button(
+                ":material/content_copy:",
+                help="Copy resume text to clipboard",
+                key="resume_copy_btn_header",
+            )
+            if copy_clicked:
                 try:
-                    if is_read_only:
-                        # Applied: show canonical only
-                        if canonical_row is not None:
-                            can_draft = ResumeData.model_validate_json(canonical_row.resume_json)  # type: ignore[arg-type]
-                            pdf_bytes = ResumeService.render_preview(job.id, can_draft, canonical_row.template_name)
-                    else:
-                        if not missing:
-                            pdf_bytes = ResumeService.render_preview(job.id, current_draft, current_template)
+                    import importlib
+
+                    pyperclip = importlib.import_module("pyperclip")
+                    pyperclip.copy(str(current_draft))
+                    st.toast("Coppied!")
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(exc)
-                    pdf_bytes = None
+                    st.error("Failed to copy to clipboard.")
 
-                # Download button rules
-                selected_is_canonical = (
-                    selected_version_id is not None
-                    and canonical_version_id is not None
-                    and selected_version_id == canonical_version_id
-                )
-                allow_download = (is_read_only and canonical_row is not None) or (
-                    (not is_read_only) and selected_is_canonical and (not is_dirty)
-                )
-                help_text = None
-                if not allow_download:
-                    if is_read_only:
-                        help_text = "No canonical resume to download."
-                    elif not selected_is_canonical:
-                        help_text = "Download only available for pinned (canonical) version."
-                    elif is_dirty:
-                        help_text = "Save changes to enable download."
-
-                st.download_button(
-                    label="Download",
-                    data=(pdf_bytes or b""),
-                    file_name=_build_download_filename(job, current_draft.name),
-                    mime="application/pdf",
-                    disabled=not (allow_download and pdf_bytes),
-                    type="primary",
-                    help=help_text,
-                    key="resume_download_btn_header",
-                )
+            st.download_button(
+                label="Download",
+                data=(pdf_bytes or b""),
+                file_name=_build_download_filename(job, current_draft.name),
+                mime="application/pdf",
+                disabled=not (allow_download and pdf_bytes),
+                type="primary",
+                help=help_text,
+                key="resume_download_btn_header",
+            )
 
         # Body preview
         if is_read_only:
