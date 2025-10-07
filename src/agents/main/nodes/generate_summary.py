@@ -241,7 +241,7 @@ class SummaryOutput(BaseModel):
     professional_summary: str = Field(description="3-4 sentence professional summary tailored to the role")
 
 
-llm = get_model(OpenAIModels.gpt_5)
+llm = get_model(OpenAIModels.gpt_4o)
 llm_structured = llm.with_structured_output(SummaryOutput).with_retry(retry_if_exception_type=(APIConnectionError,))
 chain = (
     ChatPromptTemplate.from_messages(

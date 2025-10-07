@@ -217,7 +217,7 @@ class ExperienceOutput(BaseModel):
 
 
 # Model and chain setup
-llm = get_model(OpenAIModels.gpt_5)
+llm = get_model(OpenAIModels.gpt_4o)
 llm_structured = llm.with_structured_output(ExperienceOutput).with_retry(retry_if_exception_type=(APIConnectionError,))
 chain = (
     ChatPromptTemplate.from_messages(
