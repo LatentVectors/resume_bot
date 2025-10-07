@@ -85,7 +85,6 @@ def main() -> None:
         options=list(option_labels.keys()),
         format_func=lambda tab: option_labels[tab],
         selection_mode="single",
-        default=st.session_state["job_tab_segmented"],
         key="job_tab_segmented",
         label_visibility="collapsed",
         width="stretch",
