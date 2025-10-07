@@ -155,7 +155,22 @@ def render_overview(job: DbJob) -> None:
         # Main content area (view mode)
         left, right = st.columns([4, 1])
         with left:
-            st.subheader("Description")
+            # Description header with copy button
+            desc_header = st.columns([4, 1])
+            with desc_header[0]:
+                st.subheader("Description")
+            with desc_header[1]:
+                if job.job_description:
+                    with st.container(horizontal_alignment="right"):
+                        if st.button(
+                            "",
+                            key=f"copy_description_{job.id}",
+                            icon=":material/content_copy:",
+                            help="Copy job description",
+                            type="tertiary",
+                        ):
+                            st.toast("Job description copied!", icon=":material/check_circle:")
+
             if job.job_description:
                 st.write(job.job_description)
             else:

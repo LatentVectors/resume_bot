@@ -244,72 +244,129 @@ def display_edit_form(user):
                     logger.error(f"Error updating user profile: {e}")
 
 
+def format_all_experiences(experiences: list) -> str:
+    """Format all experiences into a single string with clear separation."""
+    if not experiences:
+        return "No work experience available."
+
+    formatted_sections = []
+    for exp in experiences:
+        # Format dates
+        start_str = exp.start_date.strftime("%b %Y")
+        end_str = exp.end_date.strftime("%b %Y") if getattr(exp, "end_date", None) else "Present"
+
+        # Build the section with explicit labels
+        section = f"# {exp.company_name}\n"
+        section += f"Title: {exp.job_title}\n"
+
+        location_val = getattr(exp, "location", None)
+        if location_val:
+            section += f"Location: {location_val}\n"
+
+        section += f"Duration: {start_str} - {end_str}\n"
+
+        content = getattr(exp, "content", "")
+        if content:
+            section += f"\n{content}\n"
+
+        formatted_sections.append(section)
+
+    div = "\n" + ("=" * 80) + "\n\n"
+    return div.join(formatted_sections)
+
+
 def display_experience_section(user_id):
     """Display and manage work experience section."""
-    st.subheader("Work Experience")
-
-    # Add new experience button
-    if st.button("Add Experience", type="primary"):
-        show_add_experience_dialog(user_id)
-
-    # Display existing experiences
+    # Fetch experiences first to determine if copy button should be shown
     try:
         experiences = ExperienceService.list_user_experiences(user_id)
-
-        if experiences:
-            for exp in experiences:
-                with st.container(border=True):
-                    col1, col2 = st.columns([1, 1])
-                    with col1:
-                        st.write(f"**{exp.job_title}**")
-                    with col2:
-                        with st.container(horizontal=True, horizontal_alignment="right"):
-                            if st.button("", key=f"edit_exp_{exp.id}", icon=":material/edit:", help="Edit"):
-                                show_edit_experience_dialog(exp, user_id)
-                            if st.button("", key=f"delete_exp_{exp.id}", icon=":material/delete:", help="Delete"):
-                                st.session_state[f"confirm_delete_exp_{exp.id}"] = True
-                                st.rerun()
-
-                    # Subheader: Company | Location | Mon YYYY - Mon YYYY
-                    start_str = exp.start_date.strftime("%b %Y")
-                    end_str = exp.end_date.strftime("%b %Y") if getattr(exp, "end_date", None) else "Present"
-                    parts = [exp.company_name]
-                    location_val = getattr(exp, "location", None)
-                    if location_val:
-                        parts.append(location_val)
-                    parts.append(f"{start_str} - {end_str}")
-                    st.caption(" | ".join(parts))
-
-                    with st.expander("Details", expanded=False):
-                        st.write(getattr(exp, "content", ""))
-
-                    # Delete confirmation
-                    if st.session_state.get(f"confirm_delete_exp_{exp.id}", False):
-
-                        def _on_confirm(exp_id: int = exp.id):
-                            try:
-                                success = ExperienceService.delete_experience(exp_id)
-                                if success:
-                                    st.session_state[f"confirm_delete_exp_{exp_id}"] = False
-                                    st.success("Experience deleted successfully!")
-                                    st.rerun()
-                                else:
-                                    st.error("Failed to delete experience.")
-                            except Exception as e:
-                                st.error(f"Error deleting experience: {e}")
-                                logger.error(f"Error deleting experience {exp_id}: {e}")
-
-                        def _on_cancel(exp_id: int = exp.id):
-                            st.session_state[f"confirm_delete_exp_{exp_id}"] = False
-                            st.rerun()
-
-                        confirm_delete("experience", _on_confirm, _on_cancel)
-        else:
-            st.info("No work experience added yet. Click 'Add Experience' to add your first experience.")
-
     except Exception as e:
         st.error(f"Error loading experiences: {str(e)}")
         logger.error(f"Error loading experiences: {e}")
+        return
+
+    # Header
+    st.subheader("Work Experience")
+
+    # Buttons row - left and right aligned
+    col1, col2 = st.columns([1, 1])
+    with col1:
+        if st.button("Add Experience", type="primary"):
+            show_add_experience_dialog(user_id)
+    with col2:
+        # Copy button - only show if there are experiences
+        if experiences:
+            with st.container(horizontal=True, horizontal_alignment="right"):
+                if st.button(
+                    "",
+                    key="copy_all_experiences",
+                    icon=":material/content_copy:",
+                    help="Copy all experience content",
+                    type="tertiary",
+                ):
+                    try:
+                        import importlib
+
+                        pyperclip = importlib.import_module("pyperclip")
+                        # Format the experiences for copying
+                        formatted_text = format_all_experiences(experiences)
+                        pyperclip.copy(formatted_text)
+                        st.toast("All experience content copied!", icon=":material/check_circle:")
+                    except Exception as exc:  # noqa: BLE001
+                        logger.exception(exc)
+                        st.error("Failed to copy to clipboard.")
+
+    # Display existing experiences
+    if experiences:
+        for exp in experiences:
+            with st.container(border=True):
+                col1, col2 = st.columns([1, 1])
+                with col1:
+                    st.write(f"**{exp.job_title}**")
+                with col2:
+                    with st.container(horizontal=True, horizontal_alignment="right"):
+                        if st.button("", key=f"edit_exp_{exp.id}", icon=":material/edit:", help="Edit"):
+                            show_edit_experience_dialog(exp, user_id)
+                        if st.button("", key=f"delete_exp_{exp.id}", icon=":material/delete:", help="Delete"):
+                            st.session_state[f"confirm_delete_exp_{exp.id}"] = True
+                            st.rerun()
+
+                # Subheader: Company | Location | Mon YYYY - Mon YYYY
+                start_str = exp.start_date.strftime("%b %Y")
+                end_str = exp.end_date.strftime("%b %Y") if getattr(exp, "end_date", None) else "Present"
+                parts = [exp.company_name]
+                location_val = getattr(exp, "location", None)
+                if location_val:
+                    parts.append(location_val)
+                parts.append(f"{start_str} - {end_str}")
+                st.caption(" | ".join(parts))
+
+                with st.expander("Details", expanded=False):
+                    st.write(getattr(exp, "content", ""))
+
+                # Delete confirmation
+                if st.session_state.get(f"confirm_delete_exp_{exp.id}", False):
+
+                    def _on_confirm(exp_id: int = exp.id):
+                        try:
+                            success = ExperienceService.delete_experience(exp_id)
+                            if success:
+                                st.session_state[f"confirm_delete_exp_{exp_id}"] = False
+                                st.success("Experience deleted successfully!")
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete experience.")
+                        except Exception as e:
+                            st.error(f"Error deleting experience: {e}")
+                            logger.error(f"Error deleting experience {exp_id}: {e}")
+
+                    def _on_cancel(exp_id: int = exp.id):
+                        st.session_state[f"confirm_delete_exp_{exp_id}"] = False
+                        st.rerun()
+
+                    confirm_delete("experience", _on_confirm, _on_cancel)
+    else:
+        st.info("No work experience added yet. Click 'Add Experience' to add your first experience.")
 
 
 def display_education_section(user_id):
