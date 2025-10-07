@@ -53,3 +53,28 @@ def build_resume_download_filename(
     title = sanitize_for_filename(job_title or "Unknown Title")
     name = sanitize_for_filename(full_name or "Unknown Name")
     return f"Resume - {company} - {title} - {name} - {date_str}.pdf"
+
+
+def build_cover_letter_download_filename(
+    company_name: str,
+    job_title: str,
+    full_name: str,
+) -> str:
+    """Build a standardized cover letter download filename.
+
+    Format: "CoverLetter - {company} - {title} - {name} - {yyyy_mm_dd}.pdf"
+
+    Args:
+        company_name: Company name
+        job_title: Job title
+        full_name: User's full name
+
+    Returns:
+        A filename string ending in .pdf
+    """
+    dt = datetime.now()
+    date_str = dt.strftime("%Y_%m_%d")
+    company = sanitize_for_filename(company_name or "Unknown Company")
+    title = sanitize_for_filename(job_title or "Unknown Title")
+    name = sanitize_for_filename(full_name or "Unknown Name")
+    return f"CoverLetter - {company} - {title} - {name} - {date_str}.pdf"

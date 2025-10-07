@@ -33,15 +33,18 @@ def main() -> None:
         st.page_link("pages/jobs.py", label="Back to Jobs", icon=":material/work:")
         return
 
-    # Reset resume PDF cache when navigating to a different job
+    # Reset resume and cover letter PDF caches when navigating to a different job
     try:
         last_job_id = st.session_state.get("_last_job_id")
         if last_job_id != job_id:
             # Clear the entire cache root or the previous job's bucket to avoid stale entries
-            cache_root = st.session_state.get("resume_pdf_cache")
-            if isinstance(cache_root, dict):
+            resume_cache_root = st.session_state.get("resume_pdf_cache")
+            if isinstance(resume_cache_root, dict):
                 # Remove all cached buckets to ensure a clean slate, per requirement
                 st.session_state["resume_pdf_cache"] = {}
+            cover_cache_root = st.session_state.get("cover_letter_pdf_cache")
+            if isinstance(cover_cache_root, dict):
+                st.session_state["cover_letter_pdf_cache"] = {}
             st.session_state["_last_job_id"] = job_id
     except Exception:
         # Non-fatal if session_state not accessible
@@ -74,23 +77,19 @@ def main() -> None:
     }
 
     # Seed persisted tab selection
-    if "selected_job_tab" not in st.session_state:
-        st.session_state["selected_job_tab"] = JobTab.OVERVIEW
+    if "job_tab_segmented" not in st.session_state:
+        st.session_state["job_tab_segmented"] = JobTab.OVERVIEW
 
     selection = st.segmented_control(
         "Job tabs",
         options=list(option_labels.keys()),
         format_func=lambda tab: option_labels[tab],
         selection_mode="single",
-        default=st.session_state.get("selected_job_tab", JobTab.OVERVIEW),
+        default=st.session_state["job_tab_segmented"],
         key="job_tab_segmented",
         label_visibility="collapsed",
         width="stretch",
     )
-
-    # Persist selection
-    if selection != st.session_state.get("selected_job_tab"):
-        st.session_state["selected_job_tab"] = selection
 
     if selection == JobTab.OVERVIEW:
         render_overview(job)  # type: ignore[arg-type]

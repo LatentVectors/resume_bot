@@ -171,14 +171,47 @@ class ResumeVersion(SQLModel, table=True):
 
 
 class CoverLetter(SQLModel, table=True):
-    """Placeholder Cover Letter entity storing simple text content."""
+    """Cover Letter entity storing JSON content and template reference.
+
+    Enforces a single cover letter per job via a uniqueness constraint on job_id.
+    """
+
+    __table_args__ = (UniqueConstraint("job_id", name="uq_cover_letter_job_id"),)
 
     id: int | None = Field(default=None, primary_key=True)
     job_id: int = Field(foreign_key="job.id")
-    content: str
+    cover_letter_json: str
+    template_name: str = Field(default="cover_000.html")
     locked: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class CoverLetterVersion(SQLModel, table=True):
+    """Immutable history of cover letter versions per job.
+
+    - Monotonic `version_index` starting at 1 per `job_id`
+    - Uniqueness on `(job_id, version_index)`
+    - Secondary index on `(job_id, created_at desc)`
+    """
+
+    __table_args__ = (
+        UniqueConstraint("job_id", "version_index", name="uq_cover_letter_version_job_id_version_index"),
+        Index(
+            "ix_cover_letter_version_job_id_created_at_desc",
+            "job_id",
+            text("created_at DESC"),
+        ),
+    )
+
+    id: int | None = Field(default=None, primary_key=True)
+    cover_letter_id: int = Field(foreign_key="coverletter.id")
+    job_id: int = Field(foreign_key="job.id")
+    version_index: int
+    cover_letter_json: str
+    template_name: str
+    created_by_user_id: int
+    created_at: datetime = Field(default_factory=datetime.now)
 
 
 class Message(SQLModel, table=True):

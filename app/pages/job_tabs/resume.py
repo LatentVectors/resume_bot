@@ -384,13 +384,13 @@ def _render_skills_section(draft: ResumeData, *, read_only: bool) -> ResumeData:
     return draft.model_copy(update={"skills": (draft.skills if read_only else skills_list)})
 
 
-def _embed_pdf_bytes(pdf_bytes: bytes, *, height: int = 900) -> None:
+def _embed_pdf_bytes(pdf_bytes: bytes) -> None:
     """Embed a PDF using the custom PDF viewer component from raw bytes."""
     try:
         if not pdf_bytes:
             st.info("No preview available.")
             return
-        pdf_viewer(pdf_bytes, width="100%", height=height, zoom_level="auto")
+        pdf_viewer(pdf_bytes, zoom_level="auto")
     except Exception as exc:  # noqa: BLE001
         logger.exception(exc)
         st.warning("Unable to embed PDF preview.")
@@ -529,12 +529,19 @@ def render_resume(job: DbJob) -> None:
                     help="Older version",
                 )
 
-                # Dropdown of versions in descending order (vN..v1)
+                # Dropdown of versions in descending order (vN..v1) with pin indicator
                 try:
                     versions_desc = sorted(versions, key=lambda v: int(v.version_index), reverse=True)
                 except Exception:
                     versions_desc = list(reversed(versions))
-                labels = [f"v{v.version_index}" for v in versions_desc]
+
+                labels = []
+                for v in versions_desc:
+                    label = f"v{v.version_index}"
+                    if canonical_version_id and cast(int, v.id) == canonical_version_id:
+                        label += " (pinned)"
+                    labels.append(label)
+
                 indices = [int(v.version_index) for v in versions_desc]
                 try:
                     dd_idx = indices.index(current_index)
@@ -583,7 +590,7 @@ def render_resume(job: DbJob) -> None:
                 else:
                     # Dropdown change
                     try:
-                        chosen_index = int(chosen_label.removeprefix("v"))
+                        chosen_index = int(chosen_label.replace(" (pinned)", "").removeprefix("v"))
                         if chosen_index != current_index:
                             for v in versions:
                                 if int(v.version_index) == chosen_index:
