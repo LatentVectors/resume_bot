@@ -5,13 +5,15 @@ from enum import Enum
 import streamlit as st
 
 from app.components.status_badge import render_status_badge
+from app.services.experience_service import ExperienceService
 from app.services.job_service import JobService
 from app.services.resume_service import ResumeService
 from app.services.user_service import UserService
 from app.shared.filenames import build_resume_download_filename
-from src.config import settings
+from app.shared.formatters import format_all_experiences
 from src.database import Job as DbJob
 from src.features.resume.types import ResumeData
+from src.logging_config import logger
 
 from .utils import fmt_date
 
@@ -221,5 +223,38 @@ def render_overview(job: DbJob) -> None:
 
             st.button("Download Cover Letter", disabled=True)
             st.button("Copy Cover Letter", disabled=True)
+
+            # Copy Prompt button
+            if st.button("Copy Prompt", type="secondary", help="Copy work experience and job description prompt"):
+                try:
+                    import importlib
+
+                    pyperclip = importlib.import_module("pyperclip")
+
+                    # Get current user and their experiences
+                    user = UserService.get_current_user()
+                    if user:
+                        experiences = ExperienceService.list_user_experiences(user.id)
+                        work_experience = format_all_experiences(experiences)
+                    else:
+                        work_experience = "No work experience available."
+
+                    # Get job description
+                    job_description = job.job_description or ""
+
+                    # Build the prompt
+                    prompt = f"""<work_experience>
+{work_experience}
+</work_experience>
+
+<job_description>
+{job_description}
+</job_description>"""
+
+                    pyperclip.copy(prompt)
+                    st.toast("Prompt copied to clipboard!", icon=":material/check_circle:")
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(exc)
+                    st.error("Failed to copy to clipboard.")
 
     # In editing mode, do not render the quick action column on the right

@@ -10,6 +10,7 @@ from app.services.certificate_service import CertificateService
 from app.services.education_service import EducationService
 from app.services.experience_service import ExperienceService
 from app.services.user_service import UserService
+from app.shared.formatters import format_all_experiences
 from src.logging_config import logger
 
 
@@ -242,37 +243,6 @@ def display_edit_form(user):
                 except Exception as e:
                     st.error(f"Error updating profile: {str(e)}")
                     logger.error(f"Error updating user profile: {e}")
-
-
-def format_all_experiences(experiences: list) -> str:
-    """Format all experiences into a single string with clear separation."""
-    if not experiences:
-        return "No work experience available."
-
-    formatted_sections = []
-    for exp in experiences:
-        # Format dates
-        start_str = exp.start_date.strftime("%b %Y")
-        end_str = exp.end_date.strftime("%b %Y") if getattr(exp, "end_date", None) else "Present"
-
-        # Build the section with explicit labels
-        section = f"# {exp.company_name}\n"
-        section += f"Title: {exp.job_title}\n"
-
-        location_val = getattr(exp, "location", None)
-        if location_val:
-            section += f"Location: {location_val}\n"
-
-        section += f"Duration: {start_str} - {end_str}\n"
-
-        content = getattr(exp, "content", "")
-        if content:
-            section += f"\n{content}\n"
-
-        formatted_sections.append(section)
-
-    div = "\n" + ("=" * 80) + "\n\n"
-    return div.join(formatted_sections)
 
 
 def display_experience_section(user_id):
