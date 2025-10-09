@@ -13,6 +13,9 @@ from src.database import (
     Job as DbJob,
 )
 from src.database import (
+    JobIntakeSession as DbJobIntakeSession,
+)
+from src.database import (
     Message as DbMessage,
 )
 from src.database import (
@@ -512,3 +515,285 @@ class JobService:
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to count notes for job %s: %s", job_id, exc)
             return 0
+
+    # ---------- Job Intake Session Management ----------
+    @staticmethod
+    def create_intake_session(job_id: int) -> DbJobIntakeSession:
+        """Create a new intake session for a job.
+
+        Args:
+            job_id: Parent job identifier.
+
+        Returns:
+            Persisted DbJobIntakeSession instance starting at step 1.
+
+        Raises:
+            ValueError: If job_id is invalid or job doesn't exist.
+        """
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+
+        try:
+            with db_manager.get_session() as session:
+                job = session.get(DbJob, job_id)
+                if not job:
+                    raise ValueError(f"Job {job_id} not found")
+
+                # Check for existing session (unique constraint on job_id)
+                existing = session.exec(select(DbJobIntakeSession).where(DbJobIntakeSession.job_id == job_id)).first()
+                if existing:
+                    logger.warning("Intake session already exists for job %s, returning existing", job_id)
+                    return existing
+
+                intake_session = DbJobIntakeSession(
+                    job_id=job_id,
+                    current_step=1,
+                    step1_completed=False,
+                    step2_completed=False,
+                    step3_completed=False,
+                )
+                session.add(intake_session)
+                session.commit()
+                session.refresh(intake_session)
+
+                logger.info("Created intake session %s for job %s", intake_session.id, job_id)
+                return intake_session
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to create intake session for job %s: %s", job_id, exc)
+            raise
+
+    @staticmethod
+    def get_intake_session(job_id: int) -> DbJobIntakeSession | None:
+        """Get the intake session for a job.
+
+        Args:
+            job_id: Parent job identifier.
+
+        Returns:
+            DbJobIntakeSession if exists, None otherwise.
+        """
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+
+        try:
+            with db_manager.get_session() as session:
+                return session.exec(select(DbJobIntakeSession).where(DbJobIntakeSession.job_id == job_id)).first()
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to get intake session for job %s: %s", job_id, exc)
+            return None
+
+    @staticmethod
+    def update_session_step(session_id: int, step: int, completed: bool = False) -> DbJobIntakeSession | None:
+        """Update the current step and optionally mark a step as completed.
+
+        Args:
+            session_id: Intake session identifier.
+            step: Step number (1, 2, or 3) to set as current.
+            completed: If True, mark the step as completed.
+
+        Returns:
+            Updated DbJobIntakeSession or None if not found.
+
+        Raises:
+            ValueError: If session_id or step is invalid.
+        """
+        if not isinstance(session_id, int) or session_id <= 0:
+            raise ValueError("Invalid session_id")
+        if step not in (1, 2, 3):
+            raise ValueError("Step must be 1, 2, or 3")
+
+        try:
+            with db_manager.get_session() as session:
+                intake_session = session.get(DbJobIntakeSession, session_id)
+                if not intake_session:
+                    logger.warning("Intake session %s not found", session_id)
+                    return None
+
+                intake_session.current_step = step
+                if completed:
+                    if step == 1:
+                        intake_session.step1_completed = True
+                    elif step == 2:
+                        intake_session.step2_completed = True
+                    elif step == 3:
+                        intake_session.step3_completed = True
+
+                intake_session.updated_at = datetime.now()
+                session.add(intake_session)
+                session.commit()
+                session.refresh(intake_session)
+
+                logger.info(
+                    "Updated intake session %s: step=%s, completed=%s",
+                    session_id,
+                    step,
+                    completed,
+                )
+                return intake_session
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to update intake session %s: %s", session_id, exc)
+            raise
+
+    @staticmethod
+    def save_gap_analysis(session_id: int, gap_analysis_json: str) -> DbJobIntakeSession | None:
+        """Save gap analysis JSON to the intake session.
+
+        Args:
+            session_id: Intake session identifier.
+            gap_analysis_json: Serialized GapAnalysisReport JSON.
+
+        Returns:
+            Updated DbJobIntakeSession or None if not found.
+        """
+        if not isinstance(session_id, int) or session_id <= 0:
+            raise ValueError("Invalid session_id")
+        if not gap_analysis_json or not gap_analysis_json.strip():
+            raise ValueError("gap_analysis_json is required")
+
+        try:
+            with db_manager.get_session() as session:
+                intake_session = session.get(DbJobIntakeSession, session_id)
+                if not intake_session:
+                    logger.warning("Intake session %s not found", session_id)
+                    return None
+
+                intake_session.gap_analysis_json = gap_analysis_json.strip()
+                intake_session.updated_at = datetime.now()
+                session.add(intake_session)
+                session.commit()
+                session.refresh(intake_session)
+
+                logger.info("Saved gap analysis for intake session %s", session_id)
+                return intake_session
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to save gap analysis for session %s: %s", session_id, exc)
+            raise
+
+    @staticmethod
+    def save_conversation_summary(session_id: int, summary: str) -> DbJobIntakeSession | None:
+        """Save conversation summary to the intake session.
+
+        Args:
+            session_id: Intake session identifier.
+            summary: Conversation summary text.
+
+        Returns:
+            Updated DbJobIntakeSession or None if not found.
+        """
+        if not isinstance(session_id, int) or session_id <= 0:
+            raise ValueError("Invalid session_id")
+        if not summary or not summary.strip():
+            raise ValueError("summary is required")
+
+        try:
+            with db_manager.get_session() as session:
+                intake_session = session.get(DbJobIntakeSession, session_id)
+                if not intake_session:
+                    logger.warning("Intake session %s not found", session_id)
+                    return None
+
+                intake_session.conversation_summary = summary.strip()
+                intake_session.updated_at = datetime.now()
+                session.add(intake_session)
+                session.commit()
+                session.refresh(intake_session)
+
+                logger.info("Saved conversation summary for intake session %s", session_id)
+                return intake_session
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to save conversation summary for session %s: %s", session_id, exc)
+            raise
+
+    @staticmethod
+    def complete_session(session_id: int) -> DbJobIntakeSession | None:
+        """Mark an intake session as completed.
+
+        Args:
+            session_id: Intake session identifier.
+
+        Returns:
+            Updated DbJobIntakeSession with completed_at timestamp or None if not found.
+        """
+        if not isinstance(session_id, int) or session_id <= 0:
+            raise ValueError("Invalid session_id")
+
+        try:
+            with db_manager.get_session() as session:
+                intake_session = session.get(DbJobIntakeSession, session_id)
+                if not intake_session:
+                    logger.warning("Intake session %s not found", session_id)
+                    return None
+
+                intake_session.completed_at = datetime.now()
+                intake_session.updated_at = datetime.now()
+                session.add(intake_session)
+                session.commit()
+                session.refresh(intake_session)
+
+                logger.info("Completed intake session %s", session_id)
+                return intake_session
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to complete intake session %s: %s", session_id, exc)
+            raise
+
+    # ---------- Job Deletion ----------
+    @staticmethod
+    def delete_job(job_id: int) -> bool:
+        """Delete a job and all its related artifacts.
+
+        Args:
+            job_id: Job identifier to delete.
+
+        Returns:
+            True if deleted, False if job not found.
+
+        Note:
+            Cascade deletion of related entities (Resume, CoverLetter, Response, Message, Note, etc.)
+            is handled by the database via foreign key constraints.
+        """
+        if not isinstance(job_id, int) or job_id <= 0:
+            raise ValueError("Invalid job_id")
+
+        try:
+            with db_manager.get_session() as session:
+                job = session.get(DbJob, job_id)
+                if not job:
+                    logger.warning("Job %s not found for deletion", job_id)
+                    return False
+
+                session.delete(job)
+                session.commit()
+                logger.info("Deleted job %s", job_id)
+                return True
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to delete job %s: %s", job_id, exc)
+            raise
+
+    @staticmethod
+    def delete_jobs(job_ids: list[int]) -> tuple[int, int]:
+        """Delete multiple jobs and their related artifacts.
+
+        Args:
+            job_ids: List of job identifiers to delete.
+
+        Returns:
+            Tuple of (successful_deletes, failed_deletes).
+        """
+        if not job_ids:
+            return (0, 0)
+
+        successful = 0
+        failed = 0
+
+        for job_id in job_ids:
+            try:
+                if JobService.delete_job(job_id):
+                    successful += 1
+                else:
+                    failed += 1
+            except Exception:  # noqa: BLE001
+                failed += 1
+                logger.exception("Failed to delete job %s during bulk operation", job_id)
+
+        logger.info("Bulk delete completed: %s successful, %s failed", successful, failed)
+        return (successful, failed)

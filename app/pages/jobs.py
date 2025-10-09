@@ -7,6 +7,7 @@ from datetime import datetime
 
 import streamlit as st
 
+from app.components.confirm_delete import confirm_delete
 from app.components.status_badge import render_status_badge
 from app.pages.job_tabs.utils import navigate_to_job
 from app.services.job_service import AllowedStatus, JobService
@@ -113,6 +114,12 @@ def main() -> None:
         st.error("No user found. Please complete onboarding first.")
         return
 
+    # Initialize session state for job selection
+    if "selected_job_ids" not in st.session_state:
+        st.session_state.selected_job_ids = set()
+    if "show_delete_confirmation" not in st.session_state:
+        st.session_state.show_delete_confirmation = False
+
     # Read query params and establish defaults
     qp = st.query_params
     default_statuses: list[AllowedStatus] = ["Saved", "Applied", "Interviewing"]
@@ -168,48 +175,134 @@ def main() -> None:
         return
 
     st.markdown("---")
+
+    # Bulk actions bar
+    if st.session_state.selected_job_ids:
+        col1, col2, col3 = st.columns([1, 2, 9])
+        with col1:
+            if st.button("Clear Selection", use_container_width=True):
+                st.session_state.selected_job_ids = set()
+                st.rerun()
+        with col2:
+            if st.button(
+                f"Delete {len(st.session_state.selected_job_ids)} job(s)",
+                type="primary",
+                use_container_width=True,
+            ):
+                st.session_state.show_delete_confirmation = True
+                st.rerun()
+        with col3:
+            st.markdown(f"**{len(st.session_state.selected_job_ids)} job(s) selected**")
+
+    # Show confirmation modal
+    if st.session_state.show_delete_confirmation:
+
+        @st.dialog("Confirm Deletion", width="small")
+        def confirm_deletion_modal() -> None:
+            job_count = len(st.session_state.selected_job_ids)
+            entity_label = f"{job_count} job(s)" if job_count > 1 else "job"
+
+            def on_confirm() -> None:
+                try:
+                    job_ids_to_delete = list(st.session_state.selected_job_ids)
+                    successful, failed = JobService.delete_jobs(job_ids_to_delete)
+
+                    if failed > 0:
+                        st.error(f"Deleted {successful} job(s), but {failed} failed to delete.")
+                    else:
+                        st.success(f"Successfully deleted {successful} job(s).")
+
+                    st.session_state.selected_job_ids = set()
+                    st.session_state.show_delete_confirmation = False
+                    st.rerun()
+                except Exception as e:  # noqa: BLE001
+                    logger.exception("Error during bulk delete: %s", e)
+                    st.error("Failed to delete jobs. Please try again.")
+
+            def on_cancel() -> None:
+                st.session_state.show_delete_confirmation = False
+                st.rerun()
+
+            confirm_delete(entity_label, on_confirm, on_cancel)
+
+        confirm_deletion_modal()
+
     st.subheader("Job Applications")
 
-    # Header row: Title | Company | Status | Created | Applied | Favorite | Resume | Cover Letter | View
-    header_cols = st.columns([3, 3, 2, 2, 2, 1.5, 1.5, 2, 1.5])
+    # Get all job IDs for select all functionality
+    all_job_ids = {int(job.id) for job in jobs if job.id}
+
+    # Header row with checkbox: Select | Title | Company | Status | Created | Applied | Favorite | Resume | Cover Letter | View
+    header_cols = st.columns([0.5, 3, 3, 2, 2, 2, 1.5, 1.5, 2, 1.5])
     with header_cols[0]:
-        st.markdown("**Title**")
+        all_selected = all_job_ids.issubset(st.session_state.selected_job_ids) if all_job_ids else False
+        select_all = st.checkbox(
+            "Select all",
+            value=all_selected,
+            key="select_all_jobs",
+            label_visibility="collapsed",
+        )
+        if select_all and not all_selected:
+            st.session_state.selected_job_ids.update(all_job_ids)
+            st.rerun()
+        elif not select_all and all_selected:
+            st.session_state.selected_job_ids -= all_job_ids
+            st.rerun()
     with header_cols[1]:
-        st.markdown("**Company**")
+        st.markdown("**Title**")
     with header_cols[2]:
-        st.markdown("**Status**")
+        st.markdown("**Company**")
     with header_cols[3]:
-        st.markdown("**Created**")
+        st.markdown("**Status**")
     with header_cols[4]:
-        st.markdown("**Applied**")
+        st.markdown("**Created**")
     with header_cols[5]:
-        st.markdown("**Favorite**")
+        st.markdown("**Applied**")
     with header_cols[6]:
-        st.markdown("**Resume**")
+        st.markdown("**Favorite**")
     with header_cols[7]:
-        st.markdown("**Cover Letter**")
+        st.markdown("**Resume**")
     with header_cols[8]:
+        st.markdown("**Cover Letter**")
+    with header_cols[9]:
         st.markdown("**View**")
 
     for job in jobs:
-        cols = st.columns([3, 3, 2, 2, 2, 1.5, 1.5, 2, 1.5])
+        job_id = int(job.id) if job.id else 0
+        cols = st.columns([0.5, 3, 3, 2, 2, 2, 1.5, 1.5, 2, 1.5])
+
         with cols[0]:
-            st.write(job.job_title or "—")
+            is_selected = job_id in st.session_state.selected_job_ids
+            selected = st.checkbox(
+                f"Select job {job_id}",
+                value=is_selected,
+                key=f"select_job_{job_id}",
+                label_visibility="collapsed",
+            )
+            if selected and not is_selected:
+                st.session_state.selected_job_ids.add(job_id)
+                st.rerun()
+            elif not selected and is_selected:
+                st.session_state.selected_job_ids.discard(job_id)
+                st.rerun()
+
         with cols[1]:
-            st.write(job.company_name or "—")
+            st.write(job.job_title or "—")
         with cols[2]:
-            _status_badge(job.status)
+            st.write(job.company_name or "—")
         with cols[3]:
-            st.write(_format_dt(job.created_at))
+            _status_badge(job.status)
         with cols[4]:
-            st.write(_format_dt(job.applied_at))
+            st.write(_format_dt(job.created_at))
         with cols[5]:
-            st.write(":material/star:" if job.is_favorite else "—")
+            st.write(_format_dt(job.applied_at))
         with cols[6]:
-            st.write(":material/task_alt:" if job.has_resume else "—")
+            st.write(":material/star:" if job.is_favorite else "—")
         with cols[7]:
-            st.write(":material/task_alt:" if job.has_cover_letter else "—")
+            st.write(":material/task_alt:" if job.has_resume else "—")
         with cols[8]:
+            st.write(":material/task_alt:" if job.has_cover_letter else "—")
+        with cols[9]:
             if st.button("", key=f"view_job_{job.id}", icon=":material/visibility:", help="View job"):
                 navigate_to_job(int(job.id))
 

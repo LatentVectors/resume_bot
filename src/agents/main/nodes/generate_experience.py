@@ -75,6 +75,7 @@ def generate_experience(state: InternalState) -> PartialInternalState:
             id=exp.id,
             company=exp.company,
             title=exp.title,
+            location=exp.location,
             start_date=exp.start_date,
             end_date=exp.end_date,
             content=exp.content,

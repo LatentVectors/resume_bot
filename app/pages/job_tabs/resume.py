@@ -149,7 +149,13 @@ def _render_profile_section(draft: ResumeData, *, read_only: bool) -> ResumeData
         with c4:
             phone = st.text_input("Phone Number", value=draft.phone, key="resume_phone", disabled=read_only)
 
-        linkedin = st.text_input("LinkedIn URL", value=draft.linkedin_url, key="resume_linkedin", disabled=read_only)
+        linkedin = st.text_input(
+            "LinkedIn URL",
+            value=draft.linkedin_url,
+            key="resume_linkedin",
+            disabled=read_only,
+            help="Optional - https:// prefix not required, will be added automatically",
+        )
 
         summary = st.text_area(
             "Professional Summary :material/smart_toy:",

@@ -4,9 +4,127 @@ from datetime import date
 
 import streamlit as st
 
+from app.components.confirm_delete import confirm_delete
 from app.constants import MIN_DATE
 from app.services.experience_service import ExperienceService
 from src.logging_config import logger
+
+
+def display_achievements_management(experience_id: int) -> None:
+    """Display and manage achievements for a specific experience in edit mode."""
+    st.subheader("Achievements")
+
+    # Add achievement button
+    if st.button("Add Achievement", key=f"add_achievement_{experience_id}", type="primary"):
+        show_add_achievement_dialog(experience_id)
+
+    # Fetch achievements for this experience
+    try:
+        _, achievements = ExperienceService.get_experience_with_achievements(experience_id)
+    except Exception as e:
+        st.error(f"Error loading achievements: {str(e)}")
+        logger.exception(f"Error loading achievements for experience {experience_id}: {e}")
+        return
+
+    # Display achievements
+    if achievements:
+        for idx, achievement in enumerate(achievements):
+            with st.container(border=True):
+                col1, col2 = st.columns([4, 1])
+                with col1:
+                    st.markdown(f"**{achievement.title}**")
+                    st.write(achievement.content)
+                with col2:
+                    with st.container(horizontal=True, horizontal_alignment="right"):
+                        # Move up button (disabled for first item)
+                        if st.button(
+                            "",
+                            key=f"move_up_achievement_{achievement.id}",
+                            icon=":material/arrow_upward:",
+                            help="Move up",
+                            type="tertiary",
+                            disabled=idx == 0,
+                        ):
+                            try:
+                                # Swap with previous achievement
+                                achievement_ids = [a.id for a in achievements]
+                                achievement_ids[idx], achievement_ids[idx - 1] = (
+                                    achievement_ids[idx - 1],
+                                    achievement_ids[idx],
+                                )
+                                ExperienceService.reorder_achievements(experience_id, achievement_ids)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error reordering achievements: {str(e)}")
+                                logger.exception(f"Error reordering achievements: {e}")
+
+                        # Move down button (disabled for last item)
+                        if st.button(
+                            "",
+                            key=f"move_down_achievement_{achievement.id}",
+                            icon=":material/arrow_downward:",
+                            help="Move down",
+                            type="tertiary",
+                            disabled=idx == len(achievements) - 1,
+                        ):
+                            try:
+                                # Swap with next achievement
+                                achievement_ids = [a.id for a in achievements]
+                                achievement_ids[idx], achievement_ids[idx + 1] = (
+                                    achievement_ids[idx + 1],
+                                    achievement_ids[idx],
+                                )
+                                ExperienceService.reorder_achievements(experience_id, achievement_ids)
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error reordering achievements: {str(e)}")
+                                logger.exception(f"Error reordering achievements: {e}")
+
+                        # Edit button
+                        if st.button(
+                            "",
+                            key=f"edit_achievement_{achievement.id}",
+                            icon=":material/edit:",
+                            help="Edit",
+                            type="tertiary",
+                        ):
+                            show_edit_achievement_dialog(achievement.id, achievement.title, achievement.content)
+
+                        # Delete button
+                        if st.button(
+                            "",
+                            key=f"delete_achievement_{achievement.id}",
+                            icon=":material/delete:",
+                            help="Delete",
+                            type="tertiary",
+                        ):
+                            st.session_state[f"confirm_delete_achievement_{achievement.id}"] = True
+                            st.rerun()
+
+                # Delete confirmation
+                if st.session_state.get(f"confirm_delete_achievement_{achievement.id}", False):
+
+                    def _on_confirm(ach_id: int = achievement.id) -> None:
+                        try:
+                            success = ExperienceService.delete_achievement(ach_id)
+                            if success:
+                                st.success("Achievement deleted successfully!")
+                            else:
+                                st.error("Failed to delete achievement.")
+                        except Exception as e:
+                            st.error(f"Error deleting achievement: {str(e)}")
+                            logger.exception(f"Error deleting achievement {ach_id}: {e}")
+                        finally:
+                            st.session_state[f"confirm_delete_achievement_{ach_id}"] = False
+                            st.rerun()
+
+                    def _on_cancel(ach_id: int = achievement.id) -> None:
+                        st.session_state[f"confirm_delete_achievement_{ach_id}"] = False
+                        st.rerun()
+
+                    confirm_delete("achievement", _on_confirm, _on_cancel)
+    else:
+        st.info("No achievements added yet. Click 'Add Achievement' to add your first achievement.")
 
 
 @st.dialog("Add Experience", width="large")
@@ -39,14 +157,29 @@ def show_add_experience_dialog(user_id):
                 help="Leave empty for current position",
             )
 
-        # Description with stretch height
-        content = st.text_area("Description *", help="Required - describe your role and achievements", height=300)
+        # Optional fields
+        company_overview = st.text_area(
+            "Company Overview",
+            help="Optional - provide context about the company",
+            height=100,
+        )
+        role_overview = st.text_area(
+            "Role Overview",
+            help="Optional - summarize your role and responsibilities",
+            height=100,
+        )
+
+        # Skills as text input (comma-separated)
+        skills_input = st.text_input(
+            "Skills",
+            help="Optional - enter skills separated by commas (e.g., Python, SQL, Project Management)",
+        )
 
         col1, col2 = st.columns(2)
         with col1:
             if st.form_submit_button("Add", type="primary"):
-                if not company_name.strip() or not job_title.strip() or not content.strip():
-                    st.error("Company name, job title, and description are required.")
+                if not company_name.strip() or not job_title.strip():
+                    st.error("Company name and job title are required.")
                 elif end_date and start_date > end_date:
                     st.error("Start date must be before end date.")
                 else:
@@ -55,12 +188,22 @@ def show_add_experience_dialog(user_id):
                             "company_name": company_name.strip(),
                             "job_title": job_title.strip(),
                             "start_date": start_date.isoformat(),
-                            "content": content.strip(),
                         }
                         if location is not None:
                             experience_data["location"] = location
                         if end_date:
                             experience_data["end_date"] = end_date.isoformat()
+
+                        # Add new optional fields
+                        if company_overview and company_overview.strip():
+                            experience_data["company_overview"] = company_overview.strip()
+                        if role_overview and role_overview.strip():
+                            experience_data["role_overview"] = role_overview.strip()
+                        if skills_input and skills_input.strip():
+                            # Parse comma-separated skills
+                            skills_list = [s.strip() for s in skills_input.split(",") if s.strip()]
+                            if skills_list:
+                                experience_data["skills"] = skills_list
 
                         ExperienceService.create_experience(user_id, **experience_data)
                         st.success("Experience added successfully!")
@@ -104,12 +247,27 @@ def show_edit_experience_dialog(experience, user_id):
                 help="Leave empty for current position",
             )
 
-        # Description with stretch height
-        content = st.text_area(
-            "Description *",
-            value=experience.content,
-            help="Required - describe your role and achievements",
-            height=300,
+        # Optional fields
+        company_overview = st.text_area(
+            "Company Overview",
+            value=getattr(experience, "company_overview", None) or "",
+            help="Optional - provide context about the company",
+            height=100,
+        )
+        role_overview = st.text_area(
+            "Role Overview",
+            value=getattr(experience, "role_overview", None) or "",
+            help="Optional - summarize your role and responsibilities",
+            height=100,
+        )
+
+        # Skills as text input (comma-separated) - handle both new and legacy experiences
+        existing_skills = getattr(experience, "skills", None) or []
+        skills_str = ", ".join(existing_skills) if existing_skills else ""
+        skills_input = st.text_input(
+            "Skills",
+            value=skills_str,
+            help="Optional - enter skills separated by commas (e.g., Python, SQL, Project Management)",
         )
 
         with st.container(horizontal=True, horizontal_alignment="right"):
@@ -117,8 +275,8 @@ def show_edit_experience_dialog(experience, user_id):
                 st.rerun()
 
             if st.form_submit_button("Save", type="primary"):
-                if not company_name.strip() or not job_title.strip() or not content.strip():
-                    st.error("Company name, job title, and description are required.")
+                if not company_name.strip() or not job_title.strip():
+                    st.error("Company name and job title are required.")
                 elif end_date and start_date > end_date:
                     st.error("Start date must be before end date.")
                 else:
@@ -127,7 +285,6 @@ def show_edit_experience_dialog(experience, user_id):
                             "company_name": company_name.strip(),
                             "job_title": job_title.strip(),
                             "start_date": start_date.isoformat(),
-                            "content": content.strip(),
                         }
                         update_data["location"] = location
                         if end_date:
@@ -135,9 +292,104 @@ def show_edit_experience_dialog(experience, user_id):
                         else:
                             update_data["end_date"] = None
 
+                        # Add new optional fields
+                        if company_overview and company_overview.strip():
+                            update_data["company_overview"] = company_overview.strip()
+                        else:
+                            update_data["company_overview"] = None
+
+                        if role_overview and role_overview.strip():
+                            update_data["role_overview"] = role_overview.strip()
+                        else:
+                            update_data["role_overview"] = None
+
+                        if skills_input and skills_input.strip():
+                            # Parse comma-separated skills
+                            skills_list = [s.strip() for s in skills_input.split(",") if s.strip()]
+                            update_data["skills"] = skills_list
+                        else:
+                            update_data["skills"] = []
+
                         ExperienceService.update_experience(experience.id, **update_data)
                         st.success("Experience updated successfully!")
                         st.rerun()
                     except Exception as e:
                         st.error(f"Error updating experience: {str(e)}")
                         logger.error(f"Error updating experience: {e}")
+
+    # Achievements section (outside the form)
+    st.markdown("---")
+    display_achievements_management(experience.id)
+
+
+@st.dialog("Add Achievement", width="large")
+def show_add_achievement_dialog(experience_id: int) -> None:
+    """Show dialog for adding a new achievement to an experience."""
+
+    with st.form("add_achievement_dialog_form"):
+        title = st.text_input(
+            "Achievement Title *",
+            help="Required - a brief headline for the achievement",
+        )
+
+        content = st.text_area(
+            "Achievement Description *",
+            help="Required - describe the achievement or accomplishment",
+            height=150,
+        )
+
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if st.form_submit_button("Cancel"):
+                st.rerun()
+
+            if st.form_submit_button("Save", type="primary"):
+                if not title.strip():
+                    st.error("Achievement title is required.")
+                elif not content.strip():
+                    st.error("Achievement description is required.")
+                else:
+                    try:
+                        ExperienceService.add_achievement(experience_id, title.strip(), content.strip())
+                        st.success("Achievement added successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error adding achievement: {str(e)}")
+                        logger.exception(f"Error adding achievement: {e}")
+
+
+@st.dialog("Edit Achievement", width="large")
+def show_edit_achievement_dialog(achievement_id: int, current_title: str, current_content: str) -> None:
+    """Show dialog for editing an existing achievement."""
+    st.subheader("Edit Achievement")
+
+    with st.form(f"edit_achievement_dialog_form_{achievement_id}"):
+        title = st.text_input(
+            "Achievement Title *",
+            value=current_title,
+            help="Required - a brief headline for the achievement",
+        )
+
+        content = st.text_area(
+            "Achievement Description *",
+            value=current_content,
+            help="Required - describe the achievement or accomplishment",
+            height=150,
+        )
+
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if st.form_submit_button("Cancel"):
+                st.rerun()
+
+            if st.form_submit_button("Save", type="primary"):
+                if not title.strip():
+                    st.error("Achievement title is required.")
+                elif not content.strip():
+                    st.error("Achievement description is required.")
+                else:
+                    try:
+                        ExperienceService.update_achievement(achievement_id, title.strip(), content.strip())
+                        st.success("Achievement updated successfully!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error updating achievement: {str(e)}")
+                        logger.exception(f"Error updating achievement: {e}")

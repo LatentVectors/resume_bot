@@ -12,3 +12,8 @@ MIN_DATE: date = date(1950, 1, 1)
 class LLMTag(StrEnum):
     JOB_EXTRACTION = "job_extraction"
     RESUME_GENERATION = "resume_generation"
+    GAP_ANALYSIS = "gap_analysis"
+    INTAKE_SUMMARIZATION = "intake_summarization"
+    INTAKE_EXPERIENCE_CHAT = "intake_experience_chat"
+    INTAKE_CONVERSATION_SUMMARY = "intake_conversation_summary"
+    INTAKE_RESUME_CHAT = "intake_resume_chat"

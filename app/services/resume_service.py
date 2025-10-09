@@ -11,6 +11,7 @@ from sqlmodel import select
 
 from app.constants import LLMTag
 from app.services.render_pdf import _resume_templates_dir
+from app.shared.formatters import format_experience_with_achievements
 from src.database import Resume as DbResume
 from src.database import ResumeVersion as DbResumeVersion
 from src.database import ResumeVersionEvent, db_manager
@@ -214,6 +215,12 @@ class ResumeService:
             agent_experiences: list[AgentExperience] = []
             # Use user's raw experiences; points may be empty initially
             for exp in experiences:
+                # Fetch achievements for this experience
+                achievements = db_manager.list_experience_achievements(exp.id)
+
+                # Use the standardized formatter to create content string
+                full_content = format_experience_with_achievements(exp, achievements)
+
                 agent_experiences.append(
                     create_experience(
                         id=str(exp.id or ""),
@@ -221,8 +228,9 @@ class ResumeService:
                         title=exp.job_title,
                         start_date=exp.start_date,
                         end_date=exp.end_date,
-                        content=exp.content,
+                        content=full_content,
                         points=[],
+                        location=exp.location or "",
                     )
                 )
 

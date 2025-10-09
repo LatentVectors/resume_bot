@@ -40,8 +40,11 @@ class UserService:
             # Validate URL formats if provided
             url_fields = ["linkedin_url", "github_url", "website_url"]
             for field in url_fields:
-                if user_data.get(field) and not user_data[field].startswith(("http://", "https://")):
-                    user_data[field] = f"https://{user_data[field]}"
+                value = user_data.get(field, "").strip()
+                if value:
+                    user_data[field] = value
+                else:
+                    user_data[field] = ""
 
             user = User(**user_data)
             return db_manager.add_user(user)
@@ -80,11 +83,12 @@ class UserService:
             if updates.get("email") and "@" not in updates["email"]:
                 raise ValueError("Invalid email format")
 
-            # Validate URL formats if provided
+            # Normalize URL fields if provided
             url_fields = ["linkedin_url", "github_url", "website_url"]
             for field in url_fields:
-                if updates.get(field) and not updates[field].startswith(("http://", "https://")):
-                    updates[field] = f"https://{updates[field]}"
+                if field in updates:
+                    value = updates[field].strip() if updates[field] else ""
+                    updates[field] = value
 
             return db_manager.update_user(user_id, **updates)
         except Exception as e:

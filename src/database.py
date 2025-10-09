@@ -7,7 +7,8 @@ from datetime import date, datetime
 from enum import Enum, StrEnum
 from pathlib import Path
 
-from sqlalchemy import Index, UniqueConstraint, text
+from sqlalchemy import Column, Index, UniqueConstraint, text
+from sqlalchemy.types import JSON
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 from src.logging_config import logger
@@ -67,7 +68,11 @@ class User(SQLModel, table=True):
 
 
 class Experience(SQLModel, table=True):
-    """Experience model for work experience entries."""
+    """Experience model for work experience entries.
+
+    Experience details are stored with optional fields (company_overview, role_overview, skills).
+    Detailed content is tracked through associated Achievement records in a one-to-many relationship.
+    """
 
     id: int | None = Field(default=None, primary_key=True)
     user_id: int = Field(foreign_key="user.id")
@@ -76,7 +81,9 @@ class Experience(SQLModel, table=True):
     location: str | None = Field(default=None)
     start_date: date  # ISO date format (YYYY-MM-DD)
     end_date: date | None = Field(default=None)  # ISO date format (YYYY-MM-DD)
-    content: str
+    company_overview: str | None = Field(default=None)
+    role_overview: str | None = Field(default=None)
+    skills: list[str] = Field(default_factory=list, sa_column=Column(JSON))
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
@@ -90,6 +97,22 @@ class Education(SQLModel, table=True):
     degree: str
     major: str
     grad_date: date  # ISO date format (YYYY-MM-DD)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class Achievement(SQLModel, table=True):
+    """Achievement entries linked to specific work experiences.
+
+    One-to-many relationship: each experience can have multiple achievements.
+    Achievements are ordered via the order field for user-controlled sequencing.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    experience_id: int = Field(foreign_key="experience.id")
+    title: str  # Achievement title/headline
+    content: str  # Detailed achievement description
+    order: int = Field(default=0)  # For ordering achievements within experience
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
@@ -255,6 +278,40 @@ class Note(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.now)
 
 
+class JobIntakeSession(SQLModel, table=True):
+    """Tracks state of job intake workflow for resumption and analytics.
+
+    Unique constraint on job_id ensures one active session per job.
+    """
+
+    __table_args__ = (UniqueConstraint("job_id", name="uq_job_intake_session_job_id"),)
+
+    id: int | None = Field(default=None, primary_key=True)
+    job_id: int = Field(foreign_key="job.id")
+    current_step: int  # 1, 2, or 3
+    step1_completed: bool = Field(default=False)
+    step2_completed: bool = Field(default=False)
+    step3_completed: bool = Field(default=False)
+    gap_analysis_json: str | None = Field(default=None)  # Stores GapAnalysisReport
+    conversation_summary: str | None = Field(default=None)  # Summary from step 2
+    completed_at: datetime | None = Field(default=None)
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+
+class JobIntakeChatMessage(SQLModel, table=True):
+    """Stores chat history for intake flow steps 2 and 3.
+
+    Messages stored as JSON to accommodate any LangChain message format.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="jobintakesession.id")
+    step: int  # 2 or 3
+    messages: str  # JSON array of LangChain message format
+    created_at: datetime = Field(default_factory=datetime.now)
+
+
 class DatabaseManager:
     """Manages database connections and operations using SQLModel."""
 
@@ -291,6 +348,62 @@ class DatabaseManager:
         SQLModel.metadata.drop_all(self.engine)
         SQLModel.metadata.create_all(self.engine)
         logger.info("Database schema reset successfully")
+
+    def migrate_schema(self) -> None:
+        """Apply schema migrations to add new tables and columns.
+
+        This method ensures the database schema is up to date with the current models.
+        Handles Sprint 010 migrations:
+        - Creates Achievement table if it doesn't exist
+        - Adds company_overview, role_overview, skills columns to Experience if missing
+        - Adds title column to Achievement if missing
+
+        For SQLite, we use ALTER TABLE to add columns when safe.
+        If migration fails, use reset_database() in development.
+        """
+        with self.get_session() as session:
+            # First, create any new tables (Achievement, etc.)
+            SQLModel.metadata.create_all(self.engine)
+
+            # Check if Experience table needs new columns
+            # SQLite-specific: Check if columns exist by querying pragma
+            try:
+                result = session.exec(text("PRAGMA table_info(experience)"))
+                columns = {row[1] for row in result}  # row[1] is the column name
+
+                # Add company_overview if missing
+                if "company_overview" not in columns:
+                    session.exec(text("ALTER TABLE experience ADD COLUMN company_overview TEXT"))
+                    logger.info("Added company_overview column to experience table")
+
+                # Add role_overview if missing
+                if "role_overview" not in columns:
+                    session.exec(text("ALTER TABLE experience ADD COLUMN role_overview TEXT"))
+                    logger.info("Added role_overview column to experience table")
+
+                # Add skills if missing (stored as JSON)
+                if "skills" not in columns:
+                    session.exec(text("ALTER TABLE experience ADD COLUMN skills JSON"))
+                    logger.info("Added skills column to experience table")
+
+                # Check if Achievement table needs title column
+                result = session.exec(text("PRAGMA table_info(achievement)"))
+                achievement_columns = {row[1] for row in result}  # row[1] is the column name
+
+                # Add title if missing
+                if "title" not in achievement_columns:
+                    # For SQLite, we need to set a default value since the column is NOT NULL
+                    # We'll use a placeholder title for existing records
+                    session.exec(text("ALTER TABLE achievement ADD COLUMN title TEXT DEFAULT 'Achievement'"))
+                    logger.info("Added title column to achievement table")
+
+                session.commit()
+                logger.info("Database schema migration completed successfully")
+
+            except Exception as e:
+                logger.exception("Error during schema migration", exception=e)
+                session.rollback()
+                raise
 
     @contextmanager
     def get_session(self):
@@ -391,6 +504,56 @@ class DatabaseManager:
                 session.delete(experience)
                 session.commit()
                 logger.info(f"Deleted experience {experience_id}")
+                return True
+            return False
+
+    # Achievement methods
+    def add_achievement(self, achievement: Achievement) -> int:
+        """Add a new achievement to the database."""
+        with self.get_session() as session:
+            _set_timestamps_on_create(achievement)
+
+            session.add(achievement)
+            session.commit()
+            session.refresh(achievement)
+            logger.info(f"Added achievement (ID: {achievement.id}) to experience {achievement.experience_id}")
+            return achievement.id
+
+    def get_achievement(self, achievement_id: int) -> Achievement | None:
+        """Get an achievement by ID."""
+        with self.get_session() as session:
+            return session.get(Achievement, achievement_id)
+
+    def list_experience_achievements(self, experience_id: int) -> list[Achievement]:
+        """Get all achievements for an experience, ordered by order field."""
+        with self.get_session() as session:
+            statement = (
+                select(Achievement).where(Achievement.experience_id == experience_id).order_by(Achievement.order.asc())
+            )
+            return list(session.exec(statement))
+
+    def update_achievement(self, achievement_id: int, **updates) -> Achievement | None:
+        """Update an achievement by ID."""
+        with self.get_session() as session:
+            achievement = session.get(Achievement, achievement_id)
+            if achievement:
+                for key, value in updates.items():
+                    setattr(achievement, key, value)
+                _touch_updated_at(achievement)
+                session.add(achievement)
+                session.commit()
+                session.refresh(achievement)
+                logger.info(f"Updated achievement {achievement_id}")
+            return achievement
+
+    def delete_achievement(self, achievement_id: int) -> bool:
+        """Delete an achievement by ID."""
+        with self.get_session() as session:
+            achievement = session.get(Achievement, achievement_id)
+            if achievement:
+                session.delete(achievement)
+                session.commit()
+                logger.info(f"Deleted achievement {achievement_id}")
                 return True
             return False
 

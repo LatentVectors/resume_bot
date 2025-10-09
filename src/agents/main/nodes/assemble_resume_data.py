@@ -41,7 +41,7 @@ def assemble_resume_data(state: InternalState) -> PartialInternalState:
             ResumeExperience(
                 title=exp.title,
                 company=exp.company,
-                location="",
+                location=exp.location,
                 start_date=exp.start_date,
                 end_date=exp.end_date,
                 points=list(exp.points or []),

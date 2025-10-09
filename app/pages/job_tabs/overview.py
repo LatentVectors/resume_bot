@@ -186,6 +186,46 @@ def render_overview(job: DbJob) -> None:
                 JobService.update_job_fields(job.id, is_favorite=fav_value)
                 st.rerun()
 
+            # Job intake flow button (hidden if job is Applied)
+            if job.status != "Applied":
+                # Get intake session to determine resume vs restart state
+                intake_session = JobService.get_intake_session(job.id)
+
+                # Determine starting step
+                if intake_session and intake_session.completed_at is None:
+                    # Resume incomplete session from current step
+                    resume_step = intake_session.current_step
+                else:
+                    # Restart from step 1 (session complete or missing)
+                    resume_step = 1
+
+                button_label = "Intake Workflow"
+
+                if st.button(
+                    button_label,
+                    key=f"intake_flow_{job.id}",
+                    icon=":material/edit_note:",
+                    help=button_label,
+                    type="secondary",
+                ):
+                    # Import here to avoid circular import
+                    from app.dialog.job_intake_flow import show_job_intake_dialog
+
+                    # Set current step in session state before opening dialog
+                    st.session_state.current_step = resume_step
+                    # Clear any stale intake values to ensure fresh state
+                    st.session_state.intake_initial_title = job.job_title
+                    st.session_state.intake_initial_company = job.company_name
+                    st.session_state.intake_initial_description = job.job_description or ""
+                    st.session_state.intake_job_id = job.id
+                    # Open the dialog
+                    show_job_intake_dialog(
+                        initial_title=job.job_title,
+                        initial_company=job.company_name,
+                        initial_description=job.job_description or "",
+                        job_id=job.id,
+                    )
+
             try:
                 resume = JobService.get_resume_for_job(job.id)
                 if resume and (resume.resume_json or "").strip():

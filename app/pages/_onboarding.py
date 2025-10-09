@@ -19,8 +19,10 @@ def validate_email(email: str) -> bool:
 
 
 def validate_url(url: str) -> bool:
-    """Validate URL format."""
-    pattern = r"^https?://.+"
+    """Validate URL format - accepts URLs with or without protocol."""
+    # Accept URLs with protocol (http:// or https://) or without
+    # Basic validation: must have at least a domain with a dot (e.g., example.com)
+    pattern = r"^(https?://)?[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
     return re.match(pattern, url) is not None
 
 
@@ -65,13 +67,19 @@ def render_step1_basic_info():
             state = st.text_input("State", value=st.session_state.onboarding_data["user"].get("state", ""))
             zip_code = st.text_input("ZIP Code", value=st.session_state.onboarding_data["user"].get("zip_code", ""))
             linkedin_url = st.text_input(
-                "LinkedIn Profile URL", value=st.session_state.onboarding_data["user"].get("linkedin_url", "")
+                "LinkedIn Profile URL",
+                value=st.session_state.onboarding_data["user"].get("linkedin_url", ""),
+                help="Optional - https:// prefix not required, will be added automatically",
             )
             github_url = st.text_input(
-                "GitHub Profile URL", value=st.session_state.onboarding_data["user"].get("github_url", "")
+                "GitHub Profile URL",
+                value=st.session_state.onboarding_data["user"].get("github_url", ""),
+                help="Optional - https:// prefix not required, will be added automatically",
             )
             website_url = st.text_input(
-                "Website URL", value=st.session_state.onboarding_data["user"].get("website_url", "")
+                "Website URL",
+                value=st.session_state.onboarding_data["user"].get("website_url", ""),
+                help="Optional - https:// prefix not required, will be added automatically",
             )
 
         submitted = st.form_submit_button("Continue to Experience", type="primary")
@@ -92,7 +100,7 @@ def render_step1_basic_info():
 
             for field_name, field_value in url_fields:
                 if field_value and not validate_url(field_value):
-                    errors.append(f"{field_name} must be a valid URL (starting with http:// or https://)")
+                    errors.append(f"{field_name} must be a valid URL (e.g., example.com or https://example.com)")
 
             if errors:
                 for error in errors:

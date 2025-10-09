@@ -5,12 +5,16 @@ import streamlit as st
 from app.components.confirm_delete import confirm_delete
 from app.dialog.certificate_dialog import show_add_certificate_dialog, show_edit_certificate_dialog
 from app.dialog.education_dialog import show_add_education_dialog, show_edit_education_dialog
-from app.dialog.experience_dialog import show_add_experience_dialog, show_edit_experience_dialog
+from app.dialog.experience_dialog import (
+    show_add_experience_dialog,
+    show_edit_experience_dialog,
+)
 from app.services.certificate_service import CertificateService
 from app.services.education_service import EducationService
 from app.services.experience_service import ExperienceService
 from app.services.user_service import UserService
 from app.shared.formatters import format_all_experiences
+from src.database import db_manager
 from src.logging_config import logger
 
 
@@ -182,17 +186,17 @@ def display_edit_form(user):
         linkedin_url = st.text_input(
             "LinkedIn URL",
             value=st.session_state.user_data["linkedin_url"],
-            help="Optional - will add https:// if not provided",
+            help="Optional",
         )
         github_url = st.text_input(
             "GitHub URL",
             value=st.session_state.user_data["github_url"],
-            help="Optional - will add https:// if not provided",
+            help="Optional",
         )
         website_url = st.text_input(
             "Website URL",
             value=st.session_state.user_data["website_url"],
-            help="Optional - will add https:// if not provided",
+            help="Optional",
         )
 
         # Check if any changes were made
@@ -278,8 +282,13 @@ def display_experience_section(user_id):
                         import importlib
 
                         pyperclip = importlib.import_module("pyperclip")
+                        # Fetch achievements for all experiences
+                        achievements_by_exp = {}
+                        for exp in experiences:
+                            achievements = db_manager.list_experience_achievements(exp.id)
+                            achievements_by_exp[exp.id] = achievements
                         # Format the experiences for copying
-                        formatted_text = format_all_experiences(experiences)
+                        formatted_text = format_all_experiences(experiences, achievements_by_exp)
                         pyperclip.copy(formatted_text)
                         st.toast("All experience content copied!", icon=":material/check_circle:")
                     except Exception as exc:  # noqa: BLE001
@@ -309,10 +318,29 @@ def display_experience_section(user_id):
                 if location_val:
                     parts.append(location_val)
                 parts.append(f"{start_str} - {end_str}")
-                st.caption(" | ".join(parts))
+                st.write(" | ".join(parts))
 
-                with st.expander("Details", expanded=False):
-                    st.write(getattr(exp, "content", ""))
+                # Display company overview if available
+                company_overview = getattr(exp, "company_overview", None)
+                if company_overview:
+                    st.markdown("**Company Overview:**")
+                    st.write(company_overview)
+
+                # Display role overview if available
+                role_overview = getattr(exp, "role_overview", None)
+                if role_overview:
+                    st.markdown("**Role Overview:**")
+                    st.write(role_overview)
+
+                # Display skills if available
+                skills = getattr(exp, "skills", None) or []
+                if skills:
+                    st.markdown("**Skills:**")
+                    st.write(", ".join(skills))
+
+                # Display achievements section
+                with st.expander("Achievements", expanded=False):
+                    display_achievements_section(exp.id)
 
                 # Delete confirmation
                 if st.session_state.get(f"confirm_delete_exp_{exp.id}", False):
@@ -337,6 +365,28 @@ def display_experience_section(user_id):
                     confirm_delete("experience", _on_confirm, _on_cancel)
     else:
         st.info("No work experience added yet. Click 'Add Experience' to add your first experience.")
+
+
+def display_achievements_section(experience_id: int) -> None:
+    """Display achievements for a specific experience (read-only)."""
+    # Fetch achievements for this experience
+    try:
+        _, achievements = ExperienceService.get_experience_with_achievements(experience_id)
+    except Exception as e:
+        st.error(f"Error loading achievements: {str(e)}")
+        logger.exception(f"Error loading achievements for experience {experience_id}: {e}")
+        return
+
+    # Display achievements
+    if achievements:
+        for i, achievement in enumerate(achievements):
+            st.markdown(f"**{achievement.title}**")
+            st.write(achievement.content)
+            # Add divider between achievements (but not after the last one)
+            if i < len(achievements) - 1:
+                st.divider()
+    else:
+        st.info("No achievements added yet.")
 
 
 def display_education_section(user_id):

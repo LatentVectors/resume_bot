@@ -15,6 +15,7 @@ class Experience(BaseModel):
     id: str = Field(..., description="Unique identifier for the experience")
     company: str
     title: str
+    location: str = ""
     start_date: date
     end_date: date | None = None
     content: str
@@ -22,13 +23,21 @@ class Experience(BaseModel):
 
 
 def create_experience(
-    id: str, company: str, title: str, start_date: date, end_date: date | None, content: str, points: list[str]
+    id: str,
+    company: str,
+    title: str,
+    start_date: date,
+    end_date: date | None,
+    content: str,
+    points: list[str],
+    location: str = "",
 ) -> Experience:
     """Create an experience object."""
     return Experience(
         id=id,
         company=company,
         title=title,
+        location=location,
         start_date=start_date,
         end_date=end_date,
         content=content,
