@@ -12,6 +12,7 @@ from app.services.user_service import UserService
 from app.shared.filenames import build_resume_download_filename
 from app.shared.formatters import format_all_experiences
 from src.database import Job as DbJob
+from src.database import db_manager
 from src.features.resume.types import ResumeData
 from src.logging_config import logger
 
@@ -275,7 +276,14 @@ def render_overview(job: DbJob) -> None:
                     user = UserService.get_current_user()
                     if user:
                         experiences = ExperienceService.list_user_experiences(user.id)
-                        work_experience = format_all_experiences(experiences)
+
+                        # Fetch achievements for each experience
+                        achievements_by_exp: dict[int, list] = {}
+                        for exp in experiences:
+                            achievements = db_manager.list_experience_achievements(exp.id)
+                            achievements_by_exp[exp.id] = achievements
+
+                        work_experience = format_all_experiences(experiences, achievements_by_exp)
                     else:
                         work_experience = "No work experience available."
 
