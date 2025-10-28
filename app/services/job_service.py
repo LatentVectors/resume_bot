@@ -30,7 +30,6 @@ from src.database import (
 from src.database import (
     db_manager,
 )
-from src.features.jobs.extraction import extract_title_company
 from src.logging_config import logger
 
 AllowedStatus = Literal["Saved", "Applied", "Interviewing", "Not Selected", "No Offer", "Hired"]
@@ -44,20 +43,31 @@ class JobService:
 
     # ---------- Core Job APIs ----------
     @staticmethod
-    def save_job_with_extraction(description: str, favorite: bool) -> DbJob:
-        """Create a Job from a freeform description using LLM extraction.
+    def save_job(
+        title: str,
+        company: str,
+        description: str,
+        favorite: bool = False,
+    ) -> DbJob:
+        """Create a Job with provided title, company, and description.
 
         Args:
-            description: Raw job description text (required).
-            favorite: Whether to mark the job as a favorite.
+            title: Job title (required).
+            company: Company name (required).
+            description: Job description text (required).
+            favorite: Whether to mark as favorite.
 
         Returns:
-            Persisted DbJob with extracted title/company when available.
+            Persisted DbJob.
         """
+        # Validate inputs
+        if not title or not title.strip():
+            raise ValueError("title is required")
+        if not company or not company.strip():
+            raise ValueError("company is required")
         if not description or not description.strip():
             raise ValueError("description is required")
 
-        # Single-user app: attach to the first/only user
         try:
             from app.services.user_service import UserService  # local import to avoid cycles at import time
 
@@ -65,16 +75,12 @@ class JobService:
             if not current_user or not current_user.id:
                 raise ValueError("No user found. Create a user before saving a job.")
 
-            extracted = extract_title_company(description)
-            company = (extracted.company or "").strip() or None
-            title = (extracted.title or "").strip() or None
-
-            # Create Job without resume filename (single Resume per Job is modeled separately)
+            # Create Job with provided values
             job = DbJob(
                 user_id=current_user.id,
                 job_description=description.strip(),
-                company_name=company,
-                job_title=title,
+                company_name=company.strip(),
+                job_title=title.strip(),
                 is_favorite=bool(favorite),
                 status="Saved",
                 has_resume=False,
@@ -82,10 +88,10 @@ class JobService:
             )
             db_manager.add_job(job)
 
-            logger.info("Saved job with extraction: id=%s title=%s company=%s", job.id, job.job_title, job.company_name)
+            logger.info("Saved job: id=%s title=%s company=%s", job.id, job.job_title, job.company_name)
             return job
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Failed to save job with extraction: %s", exc)
+            logger.exception("Failed to save job: %s", exc)
             raise
 
     @staticmethod
@@ -636,11 +642,11 @@ class JobService:
 
     @staticmethod
     def save_gap_analysis(session_id: int, gap_analysis_json: str) -> DbJobIntakeSession | None:
-        """Save gap analysis JSON to the intake session.
+        """Save gap analysis to the intake session.
 
         Args:
             session_id: Intake session identifier.
-            gap_analysis_json: Serialized GapAnalysisReport JSON.
+            gap_analysis_json: Gap analysis report string (formatted markdown).
 
         Returns:
             Updated DbJobIntakeSession or None if not found.

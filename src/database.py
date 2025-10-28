@@ -292,7 +292,7 @@ class JobIntakeSession(SQLModel, table=True):
     step1_completed: bool = Field(default=False)
     step2_completed: bool = Field(default=False)
     step3_completed: bool = Field(default=False)
-    gap_analysis_json: str | None = Field(default=None)  # Stores GapAnalysisReport
+    gap_analysis_json: str | None = Field(default=None)  # Stores gap analysis report (formatted markdown)
     conversation_summary: str | None = Field(default=None)  # Summary from step 2
     completed_at: datetime | None = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.now)

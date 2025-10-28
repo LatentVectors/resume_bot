@@ -198,20 +198,18 @@ class TestJobIntakeSession:
             user = User(first_name="Step1", last_name="Tester")
             user_id = db_manager.add_user(user)
 
-            # Simulate Step 1: Save job with extraction
+            # Simulate Step 1: Save job with provided details
             description = "We are looking for a Senior Python Developer with 5+ years experience."
-            job = JobService.save_job_with_extraction(description=description, favorite=True)
+            job = JobService.save_job(
+                title="Senior Python Developer",
+                company="Tech Corp",
+                description=description,
+                favorite=True,
+            )
             assert job is not None
             assert job.job_description == description
             assert job.is_favorite is True
             assert job.status == "Saved"
-
-            # Update job fields (as Step 1 does)
-            JobService.update_job_fields(
-                job.id,
-                title="Senior Python Developer",
-                company="Tech Corp",
-            )
 
             # Verify updates
             updated_job = JobService.get_job(job.id)

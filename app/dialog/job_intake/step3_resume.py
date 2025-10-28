@@ -3,25 +3,22 @@
 from __future__ import annotations
 
 import re
-from typing import Annotated, cast
+from typing import cast
 
 import streamlit as st
-from langchain_core.messages import AIMessage, HumanMessage
-from langchain_core.runnables import RunnableConfig
-from langchain_core.tools import tool
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from streamlit_pdf_viewer import pdf_viewer
 
-from app.constants import MIN_DATE, LLMTag
+from app.constants import MIN_DATE
 from app.dialog.resume_add_certificate_dialog import show_resume_add_certificate_dialog
 from app.dialog.resume_add_education_dialog import show_resume_add_education_dialog
 from app.dialog.resume_add_experience_dialog import show_resume_add_experience_dialog
 from app.pages.job_tabs.utils import navigate_to_job
-from app.services.chat_message_service import ChatMessageService
+from app.services.job_intake_service import JobIntakeService
 from app.services.job_service import JobService
 from app.services.resume_service import ResumeService
 from app.services.user_service import UserService
 from app.shared.filenames import build_resume_download_filename
-from src.core.models import OpenAIModels, get_model
 from src.features.resume.types import (
     ResumeCertification,
     ResumeData,
@@ -69,34 +66,17 @@ def render_step3_resume(job_id: int | None) -> None:
     if not st.session_state.step3_initialized:
         with st.spinner("Generating initial resume from conversation..."):
             try:
-                # Get conversation summary and chat history from step 2
-                conversation_summary = session.conversation_summary or ""
-
-                # Get chat messages from database
-                chat_history = ChatMessageService.get_messages_for_step(session.id, step=2)
-
-                # Generate resume using conversation context
-                from src.features.jobs.intake_context import generate_resume_from_conversation
-
-                resume_data = generate_resume_from_conversation(
+                # Generate resume via service
+                resume_data, version_id = JobIntakeService.generate_initial_resume(
                     job_id=job_id,
                     user_id=user.id,
-                    conversation_summary=conversation_summary,
-                    chat_history=chat_history,
-                )
-
-                # Create first version
-                version = ResumeService.create_version(
-                    job_id=job_id,
-                    resume_data=resume_data,
-                    template_name="resume_000.html",
-                    event_type="generate",
+                    session_id=session.id,
                 )
 
                 # Initialize state
                 st.session_state.step3_initialized = True
                 st.session_state.step3_messages = []
-                st.session_state.step3_selected_version_id = version.id
+                st.session_state.step3_selected_version_id = version_id
                 st.session_state.step3_view_mode = "PDF"
                 st.session_state.step3_draft = resume_data
 
@@ -118,7 +98,13 @@ def render_step3_resume(job_id: int | None) -> None:
         st.warning("No resume versions found. You may skip this step.")
         with st.container(horizontal=True, horizontal_alignment="right"):
             if st.button("Skip", key="step3_skip_no_versions"):
-                _complete_step3_skip(session.id, job_id)
+                try:
+                    JobIntakeService.complete_step3(session.id, job_id, pin_version_id=None)
+                    _clear_step3_state(job_id)
+                    navigate_to_job(job_id)
+                except Exception as exc:
+                    logger.exception("Error completing step 3 (skip): %s", exc)
+                    st.error("Failed to complete step. Please try again.")
                 st.rerun()
         return
 
@@ -163,13 +149,25 @@ def render_step3_resume(job_id: int | None) -> None:
     st.markdown("---")
     with st.container(horizontal=True, horizontal_alignment="right"):
         if st.button("Skip", key="intake_step3_skip"):
-            _complete_step3_skip(session.id, job_id)
+            try:
+                JobIntakeService.complete_step3(session.id, job_id, pin_version_id=None)
+                _clear_step3_state(job_id)
+                navigate_to_job(job_id)
+            except Exception as exc:
+                logger.exception("Error completing step 3 (skip): %s", exc)
+                st.error("Failed to complete step. Please try again.")
             st.rerun()
 
         # Next enabled when version selected
         next_enabled = selected_version_id is not None
         if st.button("Next", type="primary", disabled=not next_enabled, key="intake_step3_next"):
-            _complete_step3_with_pin(session.id, job_id, selected_version_id)
+            try:
+                JobIntakeService.complete_step3(session.id, job_id, pin_version_id=selected_version_id)
+                _clear_step3_state(job_id)
+                navigate_to_job(job_id)
+            except Exception as exc:
+                logger.exception("Error completing step 3 (with pin): %s", exc)
+                st.error("Failed to complete step. Please try again.")
             st.rerun()
 
 
@@ -198,6 +196,10 @@ def _render_step3_chat(job, versions: list, selected_version) -> None:
             elif isinstance(msg, AIMessage):
                 with st.chat_message("assistant"):
                     st.markdown(msg.content)
+            elif isinstance(msg, ToolMessage):
+                with st.chat_message("assistant"):
+                    st.caption("🔧 Resume draft created")
+                    st.text(msg.content)
 
     # Chat input below the fixed container
     if user_input := st.chat_input("Ask for resume changes..."):
@@ -206,128 +208,28 @@ def _render_step3_chat(job, versions: list, selected_version) -> None:
 
         # Get AI response with tool
         with st.spinner("Thinking..."):
-            ai_response = _get_step3_ai_response(
+            ai_response, new_version_id = JobIntakeService.get_resume_chat_response(
                 st.session_state.step3_messages,
                 job,
                 selected_version,
             )
             st.session_state.step3_messages.append(ai_response)
 
+            # Execute tools immediately when AI calls them
+            if hasattr(ai_response, "tool_calls") and ai_response.tool_calls:
+                for tool_call in ai_response.tool_calls:
+                    # Execute the actual tool function to get its return value
+                    tool_result = _invoke_resume_tool(tool_call)
+
+                    # Add ToolMessage with actual tool result
+                    tool_msg = ToolMessage(content=tool_result, tool_call_id=tool_call.get("id"))
+                    st.session_state.step3_messages.append(tool_msg)
+
+            # If AI created a new version, update selection
+            if new_version_id:
+                st.session_state.step3_selected_version_id = new_version_id
+
         st.rerun()
-
-
-def _get_step3_ai_response(messages: list, job, selected_version) -> AIMessage:
-    """Get AI response for Step 3 resume refinement.
-
-    Args:
-        messages: Chat history
-        job: Job object
-        selected_version: Selected resume version
-
-    Returns:
-        AIMessage response
-    """
-
-    # Define the resume update tool
-    @tool
-    def update_resume_draft(
-        title: Annotated[str, "Candidate title/headline"],
-        professional_summary: Annotated[str, "Professional summary"],
-        skills: Annotated[list[str], "List of skills"],
-    ) -> str:
-        """Update the resume draft with new content.
-
-        Args:
-            title: Updated title
-            professional_summary: Updated summary
-            skills: Updated skills list
-
-        Returns:
-            Confirmation message
-        """
-        return f"Resume updated with title: {title[:50]}..."
-
-    system_prompt = f"""You are an expert resume writer helping refine a resume for a job application.
-
-Current job description:
-{job.job_description}
-
-Current resume version: v{selected_version.version_index}
-
-Your role:
-- Suggest specific improvements to the resume
-- Use the update_resume_draft tool to make changes
-- Focus on tailoring content to the job requirements
-- Be concise and actionable
-
-When you make updates, the system will create a new version automatically."""
-
-    llm = get_model(OpenAIModels.gpt_4o)
-    llm_with_tools = llm.bind_tools([update_resume_draft])
-
-    # Build messages
-    llm_messages = [{"role": "system", "content": system_prompt}]
-    for msg in messages:
-        if isinstance(msg, HumanMessage):
-            llm_messages.append({"role": "user", "content": msg.content})
-        elif isinstance(msg, AIMessage):
-            llm_messages.append({"role": "assistant", "content": msg.content})
-
-    config = RunnableConfig(tags=[LLMTag.INTAKE_RESUME_CHAT.value])
-
-    try:
-        response = llm_with_tools.invoke(llm_messages, config=config)
-
-        # Handle tool calls
-        if hasattr(response, "tool_calls") and response.tool_calls:
-            for tool_call in response.tool_calls:
-                if tool_call.get("name") == "update_resume_draft":
-                    _handle_resume_update_tool(job.id, selected_version, tool_call.get("args", {}))
-
-        return response
-    except Exception as exc:
-        logger.exception("Error getting AI response: %s", exc)
-        return AIMessage(content="I apologize, but I encountered an error. Please try again.")
-
-
-def _handle_resume_update_tool(job_id: int, current_version, tool_args: dict) -> None:
-    """Handle AI resume update tool call by creating new version.
-
-    Args:
-        job_id: Job ID
-        current_version: Current resume version
-        tool_args: Tool arguments with updates
-    """
-    try:
-        # Parse current resume
-        resume_data = ResumeData.model_validate_json(current_version.resume_json)
-
-        # Apply updates
-        if "title" in tool_args:
-            resume_data.title = tool_args["title"]
-        if "professional_summary" in tool_args:
-            resume_data.professional_summary = tool_args["professional_summary"]
-        if "skills" in tool_args:
-            resume_data.skills = tool_args["skills"]
-
-        # Create new version
-        new_version = ResumeService.create_version(
-            job_id=job_id,
-            resume_data=resume_data,
-            template_name=current_version.template_name,
-            event_type="generate",
-            parent_version_id=current_version.id,
-        )
-
-        # Update selected version and draft
-        st.session_state.step3_selected_version_id = new_version.id
-        st.session_state.step3_draft = resume_data
-        st.session_state.step3_loaded_version_id = new_version.id
-        st.session_state.step3_dirty = False
-
-        logger.info("Created new resume version from AI update", extra={"job_id": job_id, "version_id": new_version.id})
-    except Exception as exc:
-        logger.exception("Failed to handle resume update tool: %s", exc)
 
 
 # ==================== Resume Preview/Edit Section ====================
@@ -526,7 +428,18 @@ def _render_step3_resume_preview(job_id: int, versions: list, selected_version) 
                         st.error("Failed to discard changes")
 
                 if st.button("Save", type="primary", key="step3_save_changes"):
-                    _save_manual_edit_from_preview(job_id, selected_version, resume_data)
+                    try:
+                        new_version_id = JobIntakeService.save_manual_resume_edit(job_id, selected_version, resume_data)
+                        # Update selection
+                        st.session_state.step3_selected_version_id = new_version_id
+                        st.session_state.step3_draft = resume_data
+                        st.session_state.step3_loaded_version_id = new_version_id
+                        st.session_state.step3_dirty = False
+                        st.toast("Changes saved as new version!")
+                        st.rerun()
+                    except Exception as exc:
+                        logger.exception("Failed to save changes: %s", exc)
+                        st.error("Failed to save changes")
             else:
                 # Show Copy and Download when no unsaved changes
                 # Copy button (icon only)
@@ -850,35 +763,78 @@ def _render_skills_section(draft: ResumeData) -> ResumeData:
 # ==================== Completion Functions ====================
 
 
-def _save_manual_edit_from_preview(job_id: int, current_version, updated_data: ResumeData) -> None:
-    """Save manual edits from preview section as new resume version.
+def _clear_step3_state(job_id: int) -> None:
+    """Clear step 3 state and resume tab state.
 
     Args:
-        job_id: Job ID
-        current_version: Current resume version
-        updated_data: Updated resume data
+        job_id: Job ID.
     """
-    try:
-        # Create new version
-        new_version = ResumeService.create_version(
-            job_id=job_id,
-            resume_data=updated_data,
-            template_name=current_version.template_name,
-            event_type="save",
-            parent_version_id=current_version.id,
-        )
+    # Clear step 3 state
+    for key in list(st.session_state.keys()):
+        if key.startswith("step3_"):
+            st.session_state.pop(key, None)
 
-        # Update selection
-        st.session_state.step3_selected_version_id = new_version.id
-        st.session_state.step3_draft = updated_data
-        st.session_state.step3_loaded_version_id = new_version.id
-        st.session_state.step3_dirty = False
+    # Clear resume tab state
+    _clear_resume_tab_state(job_id)
 
-        st.toast("Changes saved as new version!")
-        st.rerun()
-    except Exception as exc:
-        logger.exception("Failed to save changes: %s", exc)
-        st.error("Failed to save changes")
+    # Clear intake flow state to prevent reopening on return to home
+    _clear_intake_flow_state()
+
+
+def _invoke_resume_tool(tool_call: dict) -> str:
+    """Invoke the actual tool function and return its result.
+
+    Args:
+        tool_call: Tool call dict with 'name', 'args', and 'id'.
+
+    Returns:
+        Tool result message from the actual tool function.
+    """
+    from app.services.job_intake_service.workflows.resume_refinement import propose_resume_draft
+
+    tool_name = tool_call.get("name", "")
+    args = tool_call.get("args", {})
+
+    # Currently only one tool for resume refinement
+    if tool_name == "propose_resume_draft":
+        try:
+            # Get the job context from session state
+            job_id = st.session_state.get("intake_job_id")
+            selected_version_id = st.session_state.get("step3_selected_version_id")
+
+            if not job_id or not selected_version_id:
+                return "Error: Missing job or version context"
+
+            # Get job and version details
+            job = JobService.get_job(job_id)
+            if not job:
+                return "Error: Job not found"
+
+            version = ResumeService.get_version(selected_version_id)
+            if not version:
+                return "Error: Version not found"
+
+            # Add injected arguments to the args
+            args["job_id"] = job.id
+            args["user_id"] = job.user_id
+            args["template_name"] = version.template_name
+            args["parent_version_id"] = version.id
+            args["version_tracker"] = {}  # Will be populated by tool
+
+            result = propose_resume_draft.invoke(args)
+
+            # Update selected version if a new one was created
+            version_id = args["version_tracker"].get("version_id")
+            if version_id:
+                st.session_state.step3_selected_version_id = version_id
+
+            return result
+        except Exception as exc:
+            logger.exception("Error invoking tool %s: %s", tool_name, exc)
+            return f"Error executing tool: {str(exc)}"
+
+    # If tool not found, return error
+    return f"Unknown tool: {tool_name}"
 
 
 def _clear_resume_tab_state(job_id: int) -> None:
@@ -920,58 +876,18 @@ def _clear_resume_tab_state(job_id: int) -> None:
         cache_root.pop(job_id, None)
 
 
-def _complete_step3_skip(session_id: int, job_id: int) -> None:
-    """Complete Step 3 without pinning (Skip).
+def _clear_intake_flow_state() -> None:
+    """Clear all intake flow session state to prevent dialog from reopening.
 
-    Args:
-        session_id: Intake session ID
-        job_id: Job ID
+    This ensures that when the user returns to the home page after completing
+    or closing the intake dialog, it doesn't try to reopen with the old job.
     """
-    try:
-        # Mark session as completed
-        JobService.complete_session(session_id)
-
-        # Clear step 3 state
-        for key in list(st.session_state.keys()):
-            if key.startswith("step3_"):
-                del st.session_state[key]
-
-        # Clear resume tab state to ensure clean initialization
-        _clear_resume_tab_state(job_id)
-
-        # Navigate to job detail
-        navigate_to_job(job_id)
-    except Exception as exc:
-        logger.exception("Error completing step 3 (skip): %s", exc)
-        st.error("Failed to complete step. Please try again.")
-
-
-def _complete_step3_with_pin(session_id: int, job_id: int, version_id: int | None) -> None:
-    """Complete Step 3 with version pinning (Next).
-
-    Args:
-        session_id: Intake session ID
-        job_id: Job ID
-        version_id: Version ID to pin as canonical
-    """
-    try:
-        if version_id:
-            # Pin the selected version
-            ResumeService.pin_canonical(job_id, version_id)
-
-        # Mark session as completed
-        JobService.complete_session(session_id)
-
-        # Clear step 3 state
-        for key in list(st.session_state.keys()):
-            if key.startswith("step3_"):
-                del st.session_state[key]
-
-        # Clear resume tab state to ensure clean initialization
-        _clear_resume_tab_state(job_id)
-
-        # Navigate to job detail
-        navigate_to_job(job_id)
-    except Exception as exc:
-        logger.exception("Error completing step 3 (with pin): %s", exc)
-        st.error("Failed to complete step. Please try again.")
+    intake_keys = [
+        "intake_job_id",
+        "current_step",
+        "intake_initial_title",
+        "intake_initial_company",
+        "intake_initial_description",
+    ]
+    for key in intake_keys:
+        st.session_state.pop(key, None)

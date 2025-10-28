@@ -6,8 +6,8 @@ from datetime import date
 
 import pytest
 
+from app.services.job_intake_service import analyze_job_experience_fit
 from src.database import Experience
-from src.features.jobs.gap_analysis import analyze_job_experience_fit
 
 
 @pytest.fixture
@@ -78,17 +78,12 @@ def test_technical_job_with_matching_experience(sample_experience: Experience) -
 
     report = analyze_job_experience_fit(job_description, [sample_experience])
 
-    # Should have no error
-    assert not report.has_error
+    # Should return a non-empty string (formatted markdown report)
+    assert isinstance(report, str)
+    assert len(report) > 0
 
-    # Should identify some matched requirements
-    assert len(report.matched_requirements) > 0
-
-    # May have partial matches or gaps
-    # Just verify the structure is correct
-    assert isinstance(report.partial_matches, list)
-    assert isinstance(report.gaps, list)
-    assert isinstance(report.suggested_questions, list)
+    # Should contain key sections from the gap analysis format
+    assert "Strategic Report" in report or "Areas of Strong Alignment" in report
 
 
 def test_non_technical_job_with_gap(sample_experience: Experience) -> None:
@@ -108,13 +103,12 @@ def test_non_technical_job_with_gap(sample_experience: Experience) -> None:
 
     report = analyze_job_experience_fit(job_description, [sample_experience])
 
-    assert not report.has_error
+    # Should return a non-empty string report
+    assert isinstance(report, str)
+    assert len(report) > 0
 
-    # Should identify significant gaps since experience is technical
-    assert len(report.gaps) > 0
-
-    # Should have suggested questions
-    assert len(report.suggested_questions) > 0
+    # Should likely identify gaps since experience is technical
+    assert "Gap" in report or "missing" in report.lower()
 
 
 def test_entry_level_job_with_limited_experience(
@@ -135,15 +129,12 @@ def test_entry_level_job_with_limited_experience(
 
     report = analyze_job_experience_fit(job_description, [entry_level_experience])
 
-    assert not report.has_error
+    # Should return a non-empty string report
+    assert isinstance(report, str)
+    assert len(report) > 0
 
-    # Should have some matches for SQL, Excel, Tableau
-    assert len(report.matched_requirements) > 0 or len(report.partial_matches) > 0
 
-
-def test_senior_role_with_mixed_experience(
-    sample_experience: Experience, legacy_experience: Experience
-) -> None:
+def test_senior_role_with_mixed_experience(sample_experience: Experience, legacy_experience: Experience) -> None:
     """Test gap analysis with multiple experiences for senior role."""
     job_description = """
     Engineering Manager
@@ -158,18 +149,11 @@ def test_senior_role_with_mixed_experience(
     - Experience scaling engineering teams
     """
 
-    report = analyze_job_experience_fit(
-        job_description, [sample_experience, legacy_experience]
-    )
+    report = analyze_job_experience_fit(job_description, [sample_experience, legacy_experience])
 
-    assert not report.has_error
-
-    # Should identify both matches and gaps
-    assert (
-        len(report.matched_requirements) > 0
-        or len(report.partial_matches) > 0
-        or len(report.gaps) > 0
-    )
+    # Should return a non-empty string report
+    assert isinstance(report, str)
+    assert len(report) > 0
 
 
 def test_legacy_experience_format(legacy_experience: Experience) -> None:
@@ -187,10 +171,9 @@ def test_legacy_experience_format(legacy_experience: Experience) -> None:
 
     report = analyze_job_experience_fit(job_description, [legacy_experience])
 
-    assert not report.has_error
-
-    # Should process legacy content field correctly
-    assert len(report.matched_requirements) > 0
+    # Should return a non-empty string report
+    assert isinstance(report, str)
+    assert len(report) > 0
 
 
 def test_no_experience() -> None:
@@ -205,10 +188,8 @@ def test_no_experience() -> None:
 
     report = analyze_job_experience_fit(job_description, [])
 
-    assert not report.has_error
-
-    # Should identify all requirements as gaps
-    assert len(report.gaps) > 0
+    # Should return a string report (may be empty or indicate no experience)
+    assert isinstance(report, str)
 
 
 def test_multiple_experiences_comprehensive(
@@ -235,18 +216,9 @@ def test_multiple_experiences_comprehensive(
         [sample_experience, legacy_experience, entry_level_experience],
     )
 
-    assert not report.has_error
-
-    # Should have a comprehensive analysis across all categories
-    total_items = (
-        len(report.matched_requirements)
-        + len(report.partial_matches)
-        + len(report.gaps)
-    )
-    assert total_items > 0
-
-    # Should suggest relevant questions
-    assert len(report.suggested_questions) > 0
+    # Should return a comprehensive non-empty string report
+    assert isinstance(report, str)
+    assert len(report) > 0
 
 
 def test_error_handling_with_invalid_description() -> None:
@@ -254,9 +226,5 @@ def test_error_handling_with_invalid_description() -> None:
     # Empty job description should still work, just may have different results
     report = analyze_job_experience_fit("", [])
 
-    # Should not raise an error, should return report with or without error flag
-    assert isinstance(report.matched_requirements, list)
-    assert isinstance(report.partial_matches, list)
-    assert isinstance(report.gaps, list)
-    assert isinstance(report.suggested_questions, list)
-
+    # Should return a string (even if empty or error message)
+    assert isinstance(report, str)

@@ -58,16 +58,12 @@ def render_step1_details(
     with st.container(horizontal=True, horizontal_alignment="right"):
         if st.button("Next", type="primary", disabled=next_disabled, key="intake_step1_next"):
             try:
-                # Save job with extraction
-                job = JobService.save_job_with_extraction(
-                    description=description.strip(),
-                    favorite=favorite,
-                )
-                # Update with user-provided title and company
-                JobService.update_job_fields(
-                    job.id,
+                # Save job with user-provided details (no extraction needed)
+                job = JobService.save_job(
                     title=title.strip(),
                     company=company.strip(),
+                    description=description.strip(),
+                    favorite=favorite,
                 )
 
                 # Create intake session

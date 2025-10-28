@@ -45,8 +45,12 @@ def show_save_job_dialog(
 
         if st.button("Save", type="primary", disabled=save_disabled, key="save_job_submit"):
             try:
-                job = JobService.save_job_with_extraction(description=description.strip(), favorite=favorite)
-                JobService.update_job_fields(job.id, title=title.strip(), company=company.strip())
+                job = JobService.save_job(
+                    title=title.strip(),
+                    company=company.strip(),
+                    description=description.strip(),
+                    favorite=favorite,
+                )
 
                 navigate_to_job(int(job.id))
                 return

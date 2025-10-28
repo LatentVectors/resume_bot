@@ -6,8 +6,9 @@ to ``ResumeData`` format for resume generation.
 
 from __future__ import annotations
 
-from datetime import date
-from typing import Literal, TypedDict
+from typing import Literal
+
+from pydantic import BaseModel
 
 from src.database import DatabaseManager, Education, Experience, User, db_manager
 from src.features.resume.types import (
@@ -19,8 +20,8 @@ from src.features.resume.types import (
 from src.logging_config import logger
 
 
-class UserData(TypedDict):
-    """Type definition for user data returned by fetch_user_data."""
+class UserData(BaseModel):
+    """User data model returned by fetch_user_data."""
 
     user: User
     education: list[Education]
@@ -54,10 +55,10 @@ def fetch_user_data(user_id: int, db_manager_instance: DatabaseManager | None = 
     # Fetch education data
     education_list = db.list_user_educations(user_id)
 
-    return {
-        "user": user,
-        "education": education_list,
-    }
+    return UserData(
+        user=user,
+        education=education_list,
+    )
 
 
 def fetch_experience_data(user_id: int, db_manager_instance: DatabaseManager | None = None) -> list[Experience]:
@@ -120,8 +121,8 @@ def transform_user_to_resume_data(
     Raises:
         ValueError: If required user data is missing
     """
-    user = user_data["user"]
-    education_list = user_data["education"]
+    user = user_data.user
+    education_list = user_data.education
 
     # Validate required user data
     if not user.first_name or not user.last_name:
@@ -186,7 +187,7 @@ def detect_missing_required_data(user_data: UserData) -> list[MissingRequiredFie
     Returns:
         List of missing required field names
     """
-    user = user_data["user"]
+    user = user_data.user
     missing_fields: list[MissingRequiredField] = []
 
     if not user.first_name:
@@ -213,14 +214,14 @@ def detect_missing_optional_data(
     Returns:
         List of missing optional field names
     """
-    user = user_data["user"]
+    user = user_data.user
     missing_fields: list[MissingOptionalField] = []
 
     if not getattr(user, "phone_number", None):
         missing_fields.append("phone")
     if not user.linkedin_url:
         missing_fields.append("linkedin_url")
-    if not user_data["education"]:
+    if not user_data.education:
         missing_fields.append("education")
     if not experience_data:
         missing_fields.append("experience")
