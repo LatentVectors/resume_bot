@@ -34,13 +34,19 @@ def run_resume_chat(
     messages: list,
     job,
     selected_version,
+    gap_analysis: str,
+    stakeholder_analysis: str,
+    work_experience: str,
 ) -> tuple[AIMessage, int | None]:
-    """Get AI response for Step 3 resume refinement.
+    """Get AI response for resume refinement conversation.
 
     Args:
         messages: Chat history.
         job: Job object.
         selected_version: Selected resume version.
+        gap_analysis: Gap analysis markdown from job intake (analyzes fit between job and experience).
+        stakeholder_analysis: Stakeholder analysis markdown from job intake (analyzes hiring stakeholders).
+        work_experience: Formatted work experience context for AI reference.
 
     Returns:
         Tuple of (AIMessage response, new_version_id if tool was used, else None).
@@ -89,6 +95,9 @@ def run_resume_chat(
                 "message_history": llm_messages,
                 "job_description": job.job_description,
                 "current_resume": current_resume_text,
+                "gap_analysis": gap_analysis,
+                "stakeholder_analysis": stakeholder_analysis,
+                "work_experience": work_experience,
             },
             config=config,
         )
@@ -113,6 +122,15 @@ Current job description:
 
 Current resume:
 {current_resume}
+
+Gap Analysis:
+{gap_analysis}
+
+Stakeholder Analysis:
+{stakeholder_analysis}
+
+Work Experience Context:
+{work_experience}
 
 Your role:
 - Review the current resume and propose specific improvements

@@ -6,10 +6,8 @@ from datetime import date
 from unittest.mock import patch
 
 import pytest
-from langchain_core.messages import AIMessage
 
 from app.services.job_intake_service import generate_resume_from_conversation
-from app.services.job_intake_service.workflows.conversation_summary import summarize_conversation
 from src.database import Achievement, Experience, Job, User, db_manager
 from src.features.resume.types import ResumeData
 
@@ -98,67 +96,6 @@ def test_job(test_user: User) -> Job:
     job_id = db_manager.add_job(job)
     job.id = job_id
     return job
-
-
-class TestSummarizeConversation:
-    """Tests for conversation summarization."""
-
-    @patch("app.services.job_intake_service.workflows.conversation_summary._chain")
-    def test_successful_summarization(self, mock_chain, sample_messages):
-        """Test successful conversation summarization."""
-        # Mock the chain response
-        mock_chain.invoke.return_value = (
-            "The user has strong Python and data analysis skills with pandas and numpy. "
-            "While they lack direct ML framework experience, they have relevant data processing background. "
-            "They have AWS deployment experience with ECS but not Kubernetes specifically."
-        )
-
-        # Convert sample_messages to LangChain message objects
-        from langchain_core.messages import AIMessage as LCAIMessage
-        from langchain_core.messages import HumanMessage
-
-        lc_messages = []
-        for msg in sample_messages:
-            if msg["type"] == "human":
-                lc_messages.append(HumanMessage(content=msg["content"]))
-            elif msg["type"] == "ai":
-                lc_messages.append(LCAIMessage(content=msg["content"]))
-
-        result = summarize_conversation(lc_messages)
-
-        assert isinstance(result, str)
-        assert len(result) > 0
-        mock_chain.invoke.assert_called_once()
-
-    def test_summarization_with_empty_conversation(self):
-        """Test summarization with no messages."""
-        result = summarize_conversation([])
-
-        assert isinstance(result, str)
-        assert result == "No conversation to summarize."
-
-    @patch("app.services.job_intake_service.workflows.conversation_summary._chain")
-    def test_summarization_error_handling(self, mock_chain, sample_messages):
-        """Test graceful handling of summarization errors."""
-        # Simulate chain failure
-        mock_chain.invoke.side_effect = Exception("LLM API error")
-
-        # Convert sample_messages to LangChain message objects
-        from langchain_core.messages import AIMessage as LCAIMessage
-        from langchain_core.messages import HumanMessage
-
-        lc_messages = []
-        for msg in sample_messages:
-            if msg["type"] == "human":
-                lc_messages.append(HumanMessage(content=msg["content"]))
-            elif msg["type"] == "ai":
-                lc_messages.append(LCAIMessage(content=msg["content"]))
-
-        result = summarize_conversation(lc_messages)
-
-        # Should return fallback summary
-        assert isinstance(result, str)
-        assert "Unable to generate conversation summary" in result
 
 
 class TestGenerateResumeFromConversation:

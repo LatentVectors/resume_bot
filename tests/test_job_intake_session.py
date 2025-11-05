@@ -13,7 +13,7 @@ class TestJobIntakeSession:
     """Test cases for job intake session lifecycle."""
 
     def test_intake_session_lifecycle(self):
-        """Test session lifecycle: create → update steps → save analysis/summary → complete."""
+        """Test session lifecycle: create → update steps → save analysis → complete."""
         with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as tmp:
             db_url = f"sqlite:///{tmp.name}"
 
@@ -57,10 +57,10 @@ class TestJobIntakeSession:
             assert session.step2_completed is False
 
             # Step 4: Save gap analysis
-            gap_analysis_json = '{"matched_requirements": [], "gaps": []}'
-            session = JobService.save_gap_analysis(session.id, gap_analysis_json)  # type: ignore[arg-type]
+            gap_analysis = '{"matched_requirements": [], "gaps": []}'
+            session = JobService.save_gap_analysis(session.id, gap_analysis)  # type: ignore[arg-type]
             assert session is not None
-            assert session.gap_analysis_json == gap_analysis_json
+            assert session.gap_analysis == gap_analysis
 
             # Step 5: Mark step 2 as completed
             session = JobService.update_session_step(session.id, step=2, completed=True)  # type: ignore[arg-type]
@@ -72,18 +72,12 @@ class TestJobIntakeSession:
             assert session is not None
             assert session.current_step == 3
 
-            # Step 7: Save conversation summary
-            summary = "User wants to highlight leadership experience and technical skills."
-            session = JobService.save_conversation_summary(session.id, summary)  # type: ignore[arg-type]
-            assert session is not None
-            assert session.conversation_summary == summary
-
-            # Step 8: Mark step 3 as completed
+            # Step 7: Mark step 3 as completed
             session = JobService.update_session_step(session.id, step=3, completed=True)  # type: ignore[arg-type]
             assert session is not None
             assert session.step3_completed is True
 
-            # Step 9: Complete the session
+            # Step 8: Complete the session
             session = JobService.complete_session(session.id)  # type: ignore[arg-type]
             assert session is not None
             assert session.completed_at is not None
@@ -92,8 +86,7 @@ class TestJobIntakeSession:
             retrieved_session = JobService.get_intake_session(job_id)
             assert retrieved_session is not None
             assert retrieved_session.id == session.id
-            assert retrieved_session.gap_analysis_json == gap_analysis_json
-            assert retrieved_session.conversation_summary == summary
+            assert retrieved_session.gap_analysis == gap_analysis
             assert retrieved_session.completed_at is not None
 
         finally:

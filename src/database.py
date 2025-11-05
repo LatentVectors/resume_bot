@@ -281,6 +281,7 @@ class Note(SQLModel, table=True):
 class JobIntakeSession(SQLModel, table=True):
     """Tracks state of job intake workflow for resumption and analytics.
 
+    Analysis fields store markdown-formatted content (not JSON).
     Unique constraint on job_id ensures one active session per job.
     """
 
@@ -288,12 +289,12 @@ class JobIntakeSession(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     job_id: int = Field(foreign_key="job.id")
-    current_step: int  # 1, 2, or 3
+    current_step: int  # 1 or 2 (step 3 eliminated)
     step1_completed: bool = Field(default=False)
     step2_completed: bool = Field(default=False)
-    step3_completed: bool = Field(default=False)
-    gap_analysis_json: str | None = Field(default=None)  # Stores gap analysis report (formatted markdown)
-    conversation_summary: str | None = Field(default=None)  # Summary from step 2
+    step3_completed: bool = Field(default=False)  # Deprecated but kept for backwards compatibility
+    gap_analysis: str | None = Field(default=None)  # Renamed from gap_analysis_json (stores markdown)
+    stakeholder_analysis: str | None = Field(default=None)  # NEW (stores markdown)
     completed_at: datetime | None = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)

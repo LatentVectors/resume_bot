@@ -641,20 +641,20 @@ class JobService:
             raise
 
     @staticmethod
-    def save_gap_analysis(session_id: int, gap_analysis_json: str) -> DbJobIntakeSession | None:
+    def save_gap_analysis(session_id: int, gap_analysis: str) -> DbJobIntakeSession | None:
         """Save gap analysis to the intake session.
 
         Args:
             session_id: Intake session identifier.
-            gap_analysis_json: Gap analysis report string (formatted markdown).
+            gap_analysis: Gap analysis report in markdown format.
 
         Returns:
             Updated DbJobIntakeSession or None if not found.
         """
         if not isinstance(session_id, int) or session_id <= 0:
             raise ValueError("Invalid session_id")
-        if not gap_analysis_json or not gap_analysis_json.strip():
-            raise ValueError("gap_analysis_json is required")
+        if not gap_analysis or not gap_analysis.strip():
+            raise ValueError("gap_analysis is required")
 
         try:
             with db_manager.get_session() as session:
@@ -663,7 +663,7 @@ class JobService:
                     logger.warning("Intake session %s not found", session_id)
                     return None
 
-                intake_session.gap_analysis_json = gap_analysis_json.strip()
+                intake_session.gap_analysis = gap_analysis.strip()
                 intake_session.updated_at = datetime.now()
                 session.add(intake_session)
                 session.commit()
@@ -676,20 +676,20 @@ class JobService:
             raise
 
     @staticmethod
-    def save_conversation_summary(session_id: int, summary: str) -> DbJobIntakeSession | None:
-        """Save conversation summary to the intake session.
+    def save_stakeholder_analysis(session_id: int, stakeholder_analysis: str) -> DbJobIntakeSession | None:
+        """Save stakeholder analysis to the intake session.
 
         Args:
             session_id: Intake session identifier.
-            summary: Conversation summary text.
+            stakeholder_analysis: Stakeholder analysis report in markdown format.
 
         Returns:
             Updated DbJobIntakeSession or None if not found.
         """
         if not isinstance(session_id, int) or session_id <= 0:
             raise ValueError("Invalid session_id")
-        if not summary or not summary.strip():
-            raise ValueError("summary is required")
+        if not stakeholder_analysis or not stakeholder_analysis.strip():
+            raise ValueError("stakeholder_analysis is required")
 
         try:
             with db_manager.get_session() as session:
@@ -698,16 +698,16 @@ class JobService:
                     logger.warning("Intake session %s not found", session_id)
                     return None
 
-                intake_session.conversation_summary = summary.strip()
+                intake_session.stakeholder_analysis = stakeholder_analysis.strip()
                 intake_session.updated_at = datetime.now()
                 session.add(intake_session)
                 session.commit()
                 session.refresh(intake_session)
 
-                logger.info("Saved conversation summary for intake session %s", session_id)
+                logger.info("Saved stakeholder analysis for intake session %s", session_id)
                 return intake_session
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Failed to save conversation summary for session %s: %s", session_id, exc)
+            logger.exception("Failed to save stakeholder analysis for session %s: %s", session_id, exc)
             raise
 
     @staticmethod

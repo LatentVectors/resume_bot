@@ -1,8 +1,7 @@
 """Business logic for job intake workflow.
 
 This service handles the multi-step intake process including:
-- Step 2: Experience gap filling with AI-assisted chat
-- Step 3: Resume generation and refinement
+- Step 2: Experience & Resume Development (unified conversation)
 
 All AI interactions and data persistence for the intake flow are centralized here.
 """
@@ -14,18 +13,15 @@ import json
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from app.services.chat_message_service import ChatMessageService
+from app.services.experience_service import ExperienceService
 from app.services.job_intake_service.workflows import (
-    accept_achievement_update,
-    accept_experience_update,
-    accept_new_achievement,
-    format_experiences_for_context,
     generate_resume_from_conversation,
-    run_experience_chat,
     run_resume_chat,
-    summarize_conversation,
 )
 from app.services.job_service import JobService
 from app.services.resume_service import ResumeService
+from app.shared.formatters import format_all_experiences
+from src.database import db_manager
 from src.features.resume.types import ResumeData
 from src.logging_config import logger
 
@@ -33,95 +29,7 @@ from src.logging_config import logger
 class JobIntakeService:
     """Business logic for job intake workflow."""
 
-    # ==================== Step 2: Experience Enhancement ====================
-
-    @staticmethod
-    def get_experience_chat_response(
-        messages: list,
-        job_description: str,
-        experiences: list,
-    ) -> AIMessage:
-        """Get AI response with tool binding for experience enhancement.
-
-        Args:
-            messages: Chat message history.
-            job_description: Job description text.
-            experiences: List of user experiences.
-
-        Returns:
-            AIMessage with possible tool calls.
-        """
-        return run_experience_chat(messages, job_description, experiences)
-
-    @staticmethod
-    def format_experiences_for_context(experiences: list) -> str:
-        """Format experiences for AI context.
-
-        Args:
-            experiences: List of Experience objects.
-
-        Returns:
-            Formatted string.
-        """
-        return format_experiences_for_context(experiences)
-
-    @staticmethod
-    def accept_experience_update(
-        exp_id: int,
-        company_overview: str | None,
-        role_overview: str | None,
-        skills: list[str] | None,
-    ) -> tuple[bool, str]:
-        """Accept and apply experience update proposal.
-
-        Args:
-            exp_id: Experience ID.
-            company_overview: Company overview text.
-            role_overview: Role overview text.
-            skills: List of skills.
-
-        Returns:
-            Tuple of (success: bool, message: str).
-        """
-        return accept_experience_update(exp_id, company_overview, role_overview, skills)
-
-    @staticmethod
-    def accept_achievement_update(
-        achievement_id: int,
-        title: str,
-        content: str,
-    ) -> tuple[bool, str]:
-        """Accept and apply achievement update proposal.
-
-        Args:
-            achievement_id: Achievement ID.
-            title: Updated title.
-            content: Updated content.
-
-        Returns:
-            Tuple of (success: bool, message: str).
-        """
-        return accept_achievement_update(achievement_id, title, content)
-
-    @staticmethod
-    def accept_new_achievement(
-        exp_id: int,
-        title: str,
-        content: str,
-        order: int | None,
-    ) -> tuple[bool, str]:
-        """Accept and apply new achievement proposal.
-
-        Args:
-            exp_id: Experience ID.
-            title: Achievement title.
-            content: Achievement content.
-            order: Optional order.
-
-        Returns:
-            Tuple of (success: bool, message: str).
-        """
-        return accept_new_achievement(exp_id, title, content, order)
+    # ==================== Step 2: Experience & Resume Development ====================
 
     @staticmethod
     def save_step2_messages(session_id: int, messages: list) -> None:
@@ -156,48 +64,6 @@ class JobIntakeService:
             ChatMessageService.append_messages(session_id, step=2, messages_json=messages_json)
         except Exception as exc:
             logger.exception("Error saving step 2 messages: %s", exc)
-
-    @staticmethod
-    def summarize_conversation(messages: list) -> str:
-        """Summarize the Step 2 conversation.
-
-        Args:
-            messages: Chat message history.
-
-        Returns:
-            Summary string.
-        """
-        return summarize_conversation(messages)
-
-    @staticmethod
-    def complete_step2(
-        session_id: int,
-        job_id: int,
-        messages: list,
-    ) -> None:
-        """Complete Step 2 and move to Step 3.
-
-        Runs conversation summarization and updates session state.
-
-        Args:
-            session_id: Intake session ID.
-            job_id: Job ID.
-            messages: Chat message history.
-        """
-        try:
-            # Run conversation summarization
-            if messages:
-                summary = JobIntakeService.summarize_conversation(messages)
-                JobService.save_conversation_summary(session_id, summary)
-
-            # Mark step 2 as completed and move to step 3
-            JobService.update_session_step(session_id, step=3, completed=False)
-
-        except Exception as exc:
-            logger.exception("Error completing step 2: %s", exc)
-            raise
-
-    # ==================== Step 3: Resume Refinement ====================
 
     @staticmethod
     def generate_initial_resume(
@@ -259,7 +125,7 @@ class JobIntakeService:
         job,
         selected_version,
     ) -> tuple[AIMessage, int | None]:
-        """Get AI response for Step 3 resume refinement.
+        """Get AI response for Step 2 unified conversation (experience & resume).
 
         Args:
             messages: Chat history.
@@ -268,8 +134,54 @@ class JobIntakeService:
 
         Returns:
             Tuple of (AIMessage response, new_version_id if tool was used, else None).
+
+        Raises:
+            ValueError: If gap_analysis or stakeholder_analysis are missing from session.
         """
-        return run_resume_chat(messages, job, selected_version)
+        # Get intake session to retrieve analyses
+        session = JobService.get_intake_session(job.id)
+        if not session:
+            error_msg = "Intake session not found. Cannot proceed with resume chat."
+            logger.error(error_msg)
+            return AIMessage(content=error_msg), None
+
+        # Validate required analyses are present
+        if not session.gap_analysis:
+            error_msg = "Gap analysis missing. Please restart the intake flow."
+            logger.error(error_msg)
+            return AIMessage(content=error_msg), None
+
+        if not session.stakeholder_analysis:
+            error_msg = "Stakeholder analysis missing. Please restart the intake flow."
+            logger.error(error_msg)
+            return AIMessage(content=error_msg), None
+
+        # Get and format user's work experience
+        try:
+            experiences = ExperienceService.list_user_experiences(job.user_id)
+
+            # Build achievements dict for formatting
+            achievements_by_exp: dict[int, list] = {}
+            for exp in experiences:
+                achievements = db_manager.list_experience_achievements(exp.id)
+                achievements_by_exp[exp.id] = achievements
+
+            # Format all experiences with their achievements
+            work_experience = format_all_experiences(experiences, achievements_by_exp)
+
+        except Exception as exc:
+            logger.exception("Error formatting work experience: %s", exc)
+            work_experience = "No work experience available."
+
+        # Call resume chat with all required context
+        return run_resume_chat(
+            messages=messages,
+            job=job,
+            selected_version=selected_version,
+            gap_analysis=session.gap_analysis,
+            stakeholder_analysis=session.stakeholder_analysis,
+            work_experience=work_experience,
+        )
 
     @staticmethod
     def save_manual_resume_edit(
@@ -311,12 +223,12 @@ class JobIntakeService:
             raise
 
     @staticmethod
-    def complete_step3(
+    def complete_step2_final(
         session_id: int,
         job_id: int,
         pin_version_id: int | None,
     ) -> None:
-        """Complete Step 3 and finalize intake session.
+        """Complete Step 2 and finalize intake session.
 
         Args:
             session_id: Intake session ID.
@@ -334,7 +246,7 @@ class JobIntakeService:
             # Mark session as completed
             JobService.complete_session(session_id)
 
-            logger.info("Completed intake step 3", extra={"job_id": job_id, "pinned": pin_version_id is not None})
+            logger.info("Completed intake step 2", extra={"job_id": job_id, "pinned": pin_version_id is not None})
 
         except Exception as exc:
             logger.exception("Error completing step 3: %s", exc)
