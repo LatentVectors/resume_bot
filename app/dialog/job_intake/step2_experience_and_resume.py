@@ -69,40 +69,6 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
         st.error("User not found.")
         return
 
-    # Initialize step 2 state
-    if "step2_initialized" not in st.session_state:
-        st.session_state.step2_initialized = False
-
-    # Generate initial resume if not done yet
-    if not st.session_state.step2_initialized:
-        with st.spinner("Generating initial resume from conversation..."):
-            try:
-                # Generate resume via service
-                resume_data, version_id = JobIntakeService.generate_initial_resume(
-                    job_id=job_id,
-                    user_id=user.id,
-                    session_id=session.id,
-                )
-
-                # Initialize state
-                st.session_state.step2_initialized = True
-                st.session_state.step2_messages = []
-                st.session_state.step2_selected_version_id = version_id
-                st.session_state.step2_view_mode = "PDF"
-                st.session_state.step2_draft = resume_data
-
-                st.rerun()
-
-            except Exception as exc:
-                logger.exception("Failed to generate initial resume: %s", exc)
-                st.error("Failed to generate initial resume. Please try again or skip this step.")
-                # Allow skip even on error
-                st.session_state.step2_initialized = True
-                st.session_state.step2_messages = []
-                st.session_state.step2_selected_version_id = None
-                st.session_state.step2_view_mode = "PDF"
-                st.rerun()
-
     # Get all versions
     versions = ResumeService.list_versions(job_id)
     if not versions:
@@ -178,7 +144,7 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
     with st.container(horizontal=True, horizontal_alignment="right"):
         if st.button("Skip", key="intake_step2_skip"):
             try:
-                JobIntakeService.complete_step3(session.id, job_id, pin_version_id=None)
+                JobIntakeService.complete_step2_final(session.id, job_id, pin_version_id=None)
                 _clear_step2_state(job_id)
                 navigate_to_job(job_id)
             except Exception as exc:

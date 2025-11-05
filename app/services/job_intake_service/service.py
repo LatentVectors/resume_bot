@@ -14,10 +14,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from app.services.chat_message_service import ChatMessageService
 from app.services.experience_service import ExperienceService
-from app.services.job_intake_service.workflows import (
-    generate_resume_from_conversation,
-    run_resume_chat,
-)
+from app.services.job_intake_service.workflows import run_resume_chat
 from app.services.job_service import JobService
 from app.services.resume_service import ResumeService
 from app.shared.formatters import format_all_experiences
@@ -64,60 +61,6 @@ class JobIntakeService:
             ChatMessageService.append_messages(session_id, step=2, messages_json=messages_json)
         except Exception as exc:
             logger.exception("Error saving step 2 messages: %s", exc)
-
-    @staticmethod
-    def generate_initial_resume(
-        job_id: int,
-        user_id: int,
-        session_id: int,
-    ) -> tuple[ResumeData, int]:
-        """Generate initial resume from conversation context.
-
-        Args:
-            job_id: Job ID.
-            user_id: User ID.
-            session_id: Intake session ID.
-
-        Returns:
-            Tuple of (resume_data, version_id).
-
-        Raises:
-            Exception: If resume generation fails.
-        """
-        try:
-            # Get session data
-            session = JobService.get_intake_session(job_id)
-            if not session:
-                raise ValueError("Intake session not found")
-
-            # Get chat messages from database and convert to LangChain messages
-            messages_dict = ChatMessageService.get_messages_for_step(session.id, step=2)
-            messages = _convert_dict_to_langchain_messages(messages_dict)
-
-            # Generate resume using conversation context
-            resume_data = generate_resume_from_conversation(
-                job_id=job_id,
-                user_id=user_id,
-                messages=messages,
-            )
-
-            # Create first version
-            version = ResumeService.create_version(
-                job_id=job_id,
-                resume_data=resume_data,
-                template_name="resume_000.html",
-                event_type="generate",
-            )
-
-            if not version.id:
-                raise ValueError("Failed to create resume version")
-
-            logger.info("Generated initial resume for intake", extra={"job_id": job_id, "version_id": version.id})
-            return resume_data, version.id
-
-        except Exception as exc:
-            logger.exception("Failed to generate initial resume: %s", exc)
-            raise
 
     @staticmethod
     def get_resume_chat_response(
@@ -251,37 +194,3 @@ class JobIntakeService:
         except Exception as exc:
             logger.exception("Error completing step 3: %s", exc)
             raise
-
-
-# ==================== Helper Functions ====================
-
-
-def _convert_dict_to_langchain_messages(messages_dict: list[dict]) -> list:
-    """Convert dict messages from database to LangChain message objects.
-
-    Args:
-        messages_dict: List of message dictionaries with 'type' and 'content'.
-
-    Returns:
-        List of LangChain BaseMessage objects.
-    """
-    from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-
-    langchain_messages = []
-    for msg in messages_dict:
-        msg_type = msg.get("type")
-        content = msg.get("content", "")
-
-        if msg_type == "human":
-            langchain_messages.append(HumanMessage(content=content))
-        elif msg_type == "ai":
-            ai_msg = AIMessage(content=content)
-            # Restore tool_calls if present
-            if "tool_calls" in msg:
-                ai_msg.tool_calls = msg["tool_calls"]
-            langchain_messages.append(ai_msg)
-        elif msg_type == "tool":
-            tool_call_id = msg.get("tool_call_id", "")
-            langchain_messages.append(ToolMessage(content=content, tool_call_id=tool_call_id))
-
-    return langchain_messages
