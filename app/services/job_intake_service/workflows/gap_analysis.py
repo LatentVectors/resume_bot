@@ -9,8 +9,10 @@ from __future__ import annotations
 
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnableConfig
+from openai import RateLimitError
 
 from app.constants import LLMTag
+from app.exceptions import OpenAIQuotaExceededError
 from app.shared.formatters import format_experience_with_achievements
 from src.core.models import OpenAIModels, get_model
 from src.core.prompts import PromptName, get_prompt
@@ -34,6 +36,9 @@ def analyze_job_experience_fit(job_description: str, experiences: list[Experienc
         String containing matched requirements, partial matches, gaps,
         and suggested questions. On error, returns a report with has_error=True
         and empty lists.
+
+    Raises:
+        OpenAIQuotaExceededError: If OpenAI API quota is exceeded.
     """
     try:
         if not job_description or not job_description.strip():
@@ -59,6 +64,15 @@ def analyze_job_experience_fit(job_description: str, experiences: list[Experienc
 
         return result
 
+    except RateLimitError as exc:
+        # Check if this is specifically a quota exceeded error
+        error_message = str(exc)
+        if "insufficient_quota" in error_message or "exceeded your current quota" in error_message:
+            logger.error("OpenAI API quota exceeded during gap analysis: %s", exc)
+            raise OpenAIQuotaExceededError() from exc
+        # Re-raise other rate limit errors as generic exceptions
+        logger.exception("OpenAI rate limit error during gap analysis: %s", exc)
+        return ""
     except Exception as exc:
         # Broad catch to prevent errors from bubbling to UI
         logger.exception(

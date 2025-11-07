@@ -9,16 +9,19 @@ import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from streamlit_pdf_viewer import pdf_viewer
 
+from app.components.api_quota_error_banner import show_api_quota_error_banner
 from app.constants import MIN_DATE
 from app.dialog.resume_add_certificate_dialog import show_resume_add_certificate_dialog
 from app.dialog.resume_add_education_dialog import show_resume_add_education_dialog
 from app.dialog.resume_add_experience_dialog import show_resume_add_experience_dialog
+from app.exceptions import OpenAIQuotaExceededError
 from app.pages.job_tabs.utils import navigate_to_job
 from app.services.job_intake_service import JobIntakeService
 from app.services.job_service import JobService
 from app.services.resume_service import ResumeService
 from app.services.user_service import UserService
 from app.shared.filenames import build_resume_download_filename
+from src.database import Job, ResumeVersion
 from src.features.resume.types import (
     ResumeCertification,
     ResumeData,
@@ -71,45 +74,55 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
 
     # Get all versions
     versions = ResumeService.list_versions(job_id)
-    if not versions:
-        st.warning("No resume versions found. You may skip this step.")
-        with st.container(horizontal=True, horizontal_alignment="right"):
-            if st.button("Skip", key="step2_skip_no_versions"):
-                try:
-                    JobIntakeService.complete_step2_final(session.id, job_id, pin_version_id=None)
-                    _clear_step2_state(job_id)
-                    navigate_to_job(job_id)
-                except Exception as exc:
-                    logger.exception("Error completing step 2 (skip): %s", exc)
-                    st.error("Failed to complete step. Please try again.")
-                st.rerun()
-        return
 
     # Get selected version
     selected_version_id = st.session_state.get("step2_selected_version_id")
     selected_version = None
-    if selected_version_id:
-        for v in versions:
-            if v.id == selected_version_id:
-                selected_version = v
-                break
+    if versions:
+        if selected_version_id:
+            for v in versions:
+                if v.id == selected_version_id:
+                    selected_version = v
+                    break
 
-    # Default to latest if not found
-    if not selected_version:
-        selected_version = versions[-1]
-        st.session_state.step2_selected_version_id = selected_version.id
+        # Default to latest if not found
+        if not selected_version:
+            selected_version = versions[-1]
+            st.session_state.step2_selected_version_id = selected_version.id
 
-    # Load draft from selected version if not in session or version changed
-    if "step2_draft" not in st.session_state or st.session_state.get("step2_loaded_version_id") != selected_version.id:
-        try:
-            draft = ResumeData.model_validate_json(selected_version.resume_json)
-            st.session_state.step2_draft = draft
-            st.session_state.step2_loaded_version_id = selected_version.id
+        # Load draft from selected version if not in session or version changed
+        if (
+            "step2_draft" not in st.session_state
+            or st.session_state.get("step2_loaded_version_id") != selected_version.id
+        ):
+            try:
+                draft = ResumeData.model_validate_json(selected_version.resume_json)
+                st.session_state.step2_draft = draft
+                st.session_state.step2_loaded_version_id = selected_version.id
+                st.session_state.step2_dirty = False
+            except Exception as exc:
+                logger.exception("Failed to load resume data: %s", exc)
+                st.error("Failed to load resume data")
+                return
+    else:
+        # No versions exist - initialize empty draft for manual editing
+        if "step2_draft" not in st.session_state:
+            # Create a minimal empty draft with user's basic info
+            full_name = f"{user.first_name} {user.last_name}".strip()
+            st.session_state.step2_draft = ResumeData(
+                name=full_name,
+                title="",
+                email=user.email or "",
+                phone=user.phone_number or "",
+                linkedin_url=user.linkedin_url or "",
+                professional_summary="",
+                experience=[],
+                education=[],
+                certifications=[],
+                skills=[],
+            )
+            st.session_state.step2_loaded_version_id = None
             st.session_state.step2_dirty = False
-        except Exception as exc:
-            logger.exception("Failed to load resume data: %s", exc)
-            st.error("Failed to load resume data")
-            return
 
     # Two-column layout [4, 3]
     left_col, right_col = st.columns([4, 3])
@@ -141,6 +154,20 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
 
     # Action buttons
     st.markdown("---")
+
+    # Determine if there's a pinned version
+    has_pinned_version = False
+    if versions:
+        try:
+            canonical_row = ResumeService.get_canonical(job_id)
+            if canonical_row:
+                for v in versions:
+                    if v.template_name == canonical_row.template_name and v.resume_json == canonical_row.resume_json:
+                        has_pinned_version = True
+                        break
+        except Exception:
+            pass
+
     with st.container(horizontal=True, horizontal_alignment="right"):
         if st.button("Skip", key="intake_step2_skip"):
             try:
@@ -152,11 +179,23 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
                 st.error("Failed to complete step. Please try again.")
             st.rerun()
 
-        # Next enabled when version selected
-        next_enabled = selected_version_id is not None
-        if st.button("Next", type="primary", disabled=not next_enabled, key="intake_step2_next"):
+        # Next enabled only when there's a pinned version
+        if st.button("Next", type="primary", disabled=not has_pinned_version, key="intake_step2_next"):
             try:
-                JobIntakeService.complete_step2_final(session.id, job_id, pin_version_id=selected_version_id)
+                # Find the pinned version ID
+                pinned_version_id = None
+                if has_pinned_version:
+                    canonical_row = ResumeService.get_canonical(job_id)
+                    if canonical_row:
+                        for v in versions:
+                            if (
+                                v.template_name == canonical_row.template_name
+                                and v.resume_json == canonical_row.resume_json
+                            ):
+                                pinned_version_id = cast(int, v.id)
+                                break
+
+                JobIntakeService.complete_step2_final(session.id, job_id, pin_version_id=pinned_version_id)
                 _clear_step2_state(job_id)
                 navigate_to_job(job_id)
             except Exception as exc:
@@ -168,17 +207,23 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
 # ==================== Chat Section ====================
 
 
-def _render_step2_chat(job, versions: list, selected_version) -> None:
+def _render_step2_chat(job: Job, versions: list[ResumeVersion], selected_version: ResumeVersion | None) -> None:
     """Render chat interface for Step 2 experience & resume development.
 
     Args:
         job: Job object
         versions: List of resume versions
-        selected_version: Currently selected version
+        selected_version: Currently selected version (can be None if no versions exist)
     """
     # Initialize chat messages if needed
     if "step2_messages" not in st.session_state:
         st.session_state.step2_messages = []
+
+    # Check if there's an API quota error to display
+    if st.session_state.get("step2_api_quota_error", False):
+        show_api_quota_error_banner()
+        # Clear the error flag after displaying (persist for one render)
+        # Don't clear immediately to allow user to see it
 
     # Fixed-height container for chat history (500px)
     with st.container(height=500):
@@ -197,31 +242,41 @@ def _render_step2_chat(job, versions: list, selected_version) -> None:
 
     # Chat input below the fixed container
     if user_input := st.chat_input("Ask for resume changes..."):
+        # Clear any previous API quota error
+        st.session_state.step2_api_quota_error = False
+
         # Add user message
         st.session_state.step2_messages.append(HumanMessage(content=user_input))
 
         # Get AI response with tool
         with st.spinner("Thinking..."):
-            ai_response, new_version_id = JobIntakeService.get_resume_chat_response(
-                st.session_state.step2_messages,
-                job,
-                selected_version,
-            )
-            st.session_state.step2_messages.append(ai_response)
+            try:
+                ai_response, new_version_id = JobIntakeService.get_resume_chat_response(
+                    st.session_state.step2_messages,
+                    job,
+                    selected_version,
+                )
+                st.session_state.step2_messages.append(ai_response)
 
-            # Execute tools immediately when AI calls them
-            if hasattr(ai_response, "tool_calls") and ai_response.tool_calls:
-                for tool_call in ai_response.tool_calls:
-                    # Execute the actual tool function to get its return value
-                    tool_result = _invoke_resume_tool(tool_call)
+                # Execute tools immediately when AI calls them
+                if hasattr(ai_response, "tool_calls") and ai_response.tool_calls:
+                    for tool_call in ai_response.tool_calls:
+                        # Execute the actual tool function to get its return value
+                        tool_result = _invoke_resume_tool(tool_call)
 
-                    # Add ToolMessage with actual tool result
-                    tool_msg = ToolMessage(content=tool_result, tool_call_id=tool_call.get("id"))
-                    st.session_state.step2_messages.append(tool_msg)
+                        # Add ToolMessage with actual tool result
+                        tool_msg = ToolMessage(content=tool_result, tool_call_id=tool_call.get("id"))
+                        st.session_state.step2_messages.append(tool_msg)
 
-            # If AI created a new version, update selection
-            if new_version_id:
-                st.session_state.step2_selected_version_id = new_version_id
+                # If AI created a new version, update selection
+                if new_version_id:
+                    st.session_state.step2_selected_version_id = new_version_id
+
+            except OpenAIQuotaExceededError:
+                # Set flag to show error banner on next render
+                st.session_state.step2_api_quota_error = True
+                # Remove the user message that triggered the error
+                st.session_state.step2_messages.pop()
 
         st.rerun()
 
@@ -229,14 +284,21 @@ def _render_step2_chat(job, versions: list, selected_version) -> None:
 # ==================== Resume Preview/Edit Section ====================
 
 
-def _render_step2_resume_preview(job_id: int, versions: list, selected_version) -> None:
+def _render_step2_resume_preview(
+    job_id: int, versions: list[ResumeVersion], selected_version: ResumeVersion | None
+) -> None:
     """Render resume preview/edit section for Step 2.
 
     Args:
         job_id: Job ID
         versions: List of resume versions
-        selected_version: Currently selected version
+        selected_version: Currently selected version (can be None if no versions exist)
     """
+    # Handle case where no resume has been generated yet
+    if not selected_version:
+        st.info("💡 Start a conversation with the AI to generate your first resume draft.")
+        return
+
     # Get canonical version ID for pin indicator
     try:
         canonical_row = ResumeService.get_canonical(job_id)
@@ -342,11 +404,17 @@ def _render_step2_resume_preview(job_id: int, versions: list, selected_version) 
 
     if pin_clicked and selected_version.id is not None:
         try:
-            ResumeService.pin_canonical(job_id, selected_version.id)
-            st.toast("Pinned canonical resume.")
+            if selected_is_canonical:
+                # Unpin if already pinned
+                ResumeService.unpin_canonical(job_id)
+                st.toast("Unpinned resume.")
+            else:
+                # Pin if not already pinned
+                ResumeService.pin_canonical(job_id, selected_version.id)
+                st.toast("Pinned canonical resume.")
         except Exception as exc:
-            logger.exception("Failed to pin canonical: %s", exc)
-            st.error("Failed to set canonical resume.")
+            logger.exception("Failed to toggle pin: %s", exc)
+            st.error("Failed to update canonical resume.")
         st.rerun()
 
     if new_selected_id is not None:
@@ -484,37 +552,92 @@ def _render_step2_resume_preview(job_id: int, versions: list, selected_version) 
         _render_edit_mode(job_id, selected_version)
 
 
-def _render_step2_resume_content_tab(job_id: int, versions: list, selected_version) -> None:
+def _render_step2_resume_content_tab(
+    job_id: int, versions: list[ResumeVersion], selected_version: ResumeVersion | None
+) -> None:
     """Render resume content editing tab for Step 2.
 
     Args:
         job_id: Job ID
         versions: List of resume versions
-        selected_version: Currently selected version
+        selected_version: Currently selected version (can be None if no versions exist)
     """
     _render_version_navigation_and_content(job_id, versions, selected_version, show_pdf=False)
 
 
-def _render_step2_resume_pdf_tab(job_id: int, versions: list, selected_version) -> None:
+def _render_step2_resume_pdf_tab(
+    job_id: int, versions: list[ResumeVersion], selected_version: ResumeVersion | None
+) -> None:
     """Render resume PDF preview tab for Step 2.
 
     Args:
         job_id: Job ID
         versions: List of resume versions
-        selected_version: Currently selected version
+        selected_version: Currently selected version (can be None if no versions exist)
     """
     _render_version_navigation_and_content(job_id, versions, selected_version, show_pdf=True)
 
 
-def _render_version_navigation_and_content(job_id: int, versions: list, selected_version, show_pdf: bool) -> None:
+def _render_version_navigation_and_content(
+    job_id: int, versions: list[ResumeVersion], selected_version: ResumeVersion | None, show_pdf: bool
+) -> None:
     """Render version navigation controls and content (PDF or edit form).
 
     Args:
         job_id: Job ID
         versions: List of resume versions
-        selected_version: Currently selected version
+        selected_version: Currently selected version (can be None if no versions exist)
         show_pdf: If True, show PDF preview; if False, show edit form
     """
+    # Use different keys for content vs PDF tab to avoid conflicts
+    tab_suffix = "pdf" if show_pdf else "content"
+
+    # Handle case when no versions exist
+    if not versions or selected_version is None:
+        if show_pdf:
+            # PDF tab - show message
+            st.info("No resume version available yet. Use the chat or edit the Resume Content tab to create one.")
+        else:
+            # Content tab - show save button and edit form
+            resume_data = st.session_state.get("step2_draft")
+            is_dirty = st.session_state.get("step2_dirty", False)
+
+            # Show save button if there are changes
+            if is_dirty and resume_data:
+                with st.container(horizontal=True, horizontal_alignment="right"):
+                    if st.button("Save as First Version", type="primary", key=f"step2_save_first_{tab_suffix}"):
+                        try:
+                            # Get user for default template
+                            user = UserService.get_current_user()
+                            if not user:
+                                st.error("User not found")
+                                return
+
+                            # Create first version with default template
+                            new_version = ResumeService.create_version(
+                                job_id=job_id,
+                                resume_data=resume_data,
+                                template_name=user.default_template or "modern",
+                                event_type="save",
+                                parent_version_id=None,
+                            )
+
+                            if new_version.id:
+                                st.session_state.step2_selected_version_id = new_version.id
+                                st.session_state.step2_loaded_version_id = new_version.id
+                                st.session_state.step2_dirty = False
+                                st.toast("First version created!")
+                                st.rerun()
+                            else:
+                                st.error("Failed to create version")
+                        except Exception as exc:
+                            logger.exception("Failed to save first version: %s", exc)
+                            st.error("Failed to save first version")
+
+            # Show edit form
+            _render_edit_mode(job_id, None)
+        return
+
     # Get canonical version ID for pin indicator
     try:
         canonical_row = ResumeService.get_canonical(job_id)
@@ -533,9 +656,6 @@ def _render_version_navigation_and_content(job_id: int, versions: list, selected
                 continue
 
     # Row 1: Version navigation (< | dropdown | > | pin)
-    # Use different keys for content vs PDF tab to avoid conflicts
-    tab_suffix = "pdf" if show_pdf else "content"
-
     with st.container(horizontal=True, horizontal_alignment="right"):
         current_index = int(selected_version.version_index)
         min_index = 1
@@ -623,11 +743,17 @@ def _render_version_navigation_and_content(job_id: int, versions: list, selected
 
     if pin_clicked and selected_version.id is not None:
         try:
-            ResumeService.pin_canonical(job_id, selected_version.id)
-            st.toast("Pinned canonical resume.")
+            if selected_is_canonical:
+                # Unpin if already pinned
+                ResumeService.unpin_canonical(job_id)
+                st.toast("Unpinned resume.")
+            else:
+                # Pin if not already pinned
+                ResumeService.pin_canonical(job_id, selected_version.id)
+                st.toast("Pinned canonical resume.")
         except Exception as exc:
-            logger.exception("Failed to pin canonical: %s", exc)
-            st.error("Failed to set canonical resume.")
+            logger.exception("Failed to toggle pin: %s", exc)
+            st.error("Failed to update canonical resume.")
         st.rerun()
 
     if new_selected_id is not None:
@@ -741,12 +867,12 @@ def _render_version_navigation_and_content(job_id: int, versions: list, selected
         _render_edit_mode(job_id, selected_version)
 
 
-def _render_edit_mode(job_id: int, selected_version) -> None:
+def _render_edit_mode(job_id: int, selected_version: ResumeVersion | None) -> None:
     """Render edit mode with expandable sections.
 
     Args:
         job_id: Job ID
-        selected_version: Current resume version
+        selected_version: Current resume version (can be None if no versions exist)
     """
     # Get draft from session state
     draft = st.session_state.get("step2_draft")
@@ -766,15 +892,25 @@ def _render_edit_mode(job_id: int, selected_version) -> None:
 
     # Check if dirty (compare with originally loaded version)
     original_draft = None
-    try:
-        original_draft = ResumeData.model_validate_json(selected_version.resume_json)
-    except Exception:
-        pass
+    if selected_version is not None:
+        try:
+            original_draft = ResumeData.model_validate_json(selected_version.resume_json)
+        except Exception:
+            pass
 
     if original_draft:
         is_dirty = updated.model_dump_json() != original_draft.model_dump_json()
     else:
-        is_dirty = False
+        # If no original version, consider it dirty if any content exists
+        is_dirty = bool(
+            updated.name
+            or updated.title
+            or updated.professional_summary
+            or updated.experience
+            or updated.education
+            or updated.certifications
+            or updated.skills
+        )
 
     st.session_state.step2_dirty = is_dirty
 
@@ -1053,23 +1189,33 @@ def _invoke_resume_tool(tool_call: dict) -> str:
             job_id = st.session_state.get("intake_job_id")
             selected_version_id = st.session_state.get("step2_selected_version_id")
 
-            if not job_id or not selected_version_id:
-                return "Error: Missing job or version context"
+            if not job_id:
+                return "Error: Missing job context"
 
-            # Get job and version details
+            # Get job details
             job = JobService.get_job(job_id)
             if not job:
                 return "Error: Job not found"
 
-            version = ResumeService.get_version(selected_version_id)
-            if not version:
-                return "Error: Version not found"
+            # Determine template_name and parent_version_id
+            # Match logic from resume_refinement.py run_resume_chat (lines 77-83)
+            if selected_version_id:
+                version = ResumeService.get_version(selected_version_id)
+                if not version:
+                    return "Error: Version not found"
+                template_name = version.template_name
+                parent_version_id = version.id
+            else:
+                # First time generating - no version exists yet
+                # Use the same fallback as resume_refinement.py
+                template_name = "resume_000.html"
+                parent_version_id = None
 
             # Add injected arguments to the args
             args["job_id"] = job.id
             args["user_id"] = job.user_id
-            args["template_name"] = version.template_name
-            args["parent_version_id"] = version.id
+            args["template_name"] = template_name
+            args["parent_version_id"] = parent_version_id
             args["version_tracker"] = {}  # Will be populated by tool
 
             result = propose_resume_draft.invoke(args)

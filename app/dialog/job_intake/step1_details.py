@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from app.components.api_quota_error_banner import show_api_quota_error_banner
+from app.exceptions import OpenAIQuotaExceededError
 from app.services.experience_service import ExperienceService
 from app.services.job_intake_service.workflows.gap_analysis import analyze_job_experience_fit
 from app.services.job_intake_service.workflows.stakeholder_analysis import analyze_stakeholders
@@ -27,6 +29,12 @@ def render_step1_details(
     # Progress indicator
     st.caption("Step 1 of 2: Job Details")
     st.markdown("---")
+
+    # Check if there's an API quota error to display
+    if st.session_state.get("step1_api_quota_error", False):
+        show_api_quota_error_banner()
+        # Clear the error flag after displaying
+        st.session_state.step1_api_quota_error = False
 
     # Form fields
     col1, col2 = st.columns(2)
@@ -83,27 +91,51 @@ def render_step1_details(
                     logger.error("No current user found during step 1 completion")
                     return
 
-                experiences = ExperienceService.list_experiences(current_user.id)
+                experiences = ExperienceService.list_user_experiences(current_user.id)
 
-                # Generate both analyses
-                with st.spinner("Analyzing job requirements and stakeholders..."):
-                    gap_analysis = analyze_job_experience_fit(job.job_description, experiences)
-                    stakeholder_analysis = analyze_stakeholders(job.job_description, experiences)
+                # Check and generate analyses individually (only regenerate what's missing)
+                gap_analysis = session.gap_analysis
+                stakeholder_analysis = session.stakeholder_analysis
 
-                    # Validate analyses were generated successfully
-                    if not gap_analysis or not gap_analysis.strip():
-                        st.error("Unable to load analyses. Please restart intake flow.")
-                        logger.error("Gap analysis failed for job_id=%s", job.id)
-                        return
+                needs_gap = not gap_analysis or not gap_analysis.strip()
+                needs_stakeholder = not stakeholder_analysis or not stakeholder_analysis.strip()
 
-                    if not stakeholder_analysis or not stakeholder_analysis.strip():
-                        st.error("Unable to load analyses. Please restart intake flow.")
-                        logger.error("Stakeholder analysis failed for job_id=%s", job.id)
-                        return
+                if needs_gap or needs_stakeholder:
+                    # Generate only missing analyses
+                    spinner_msg = "Analyzing job requirements and stakeholders..."
+                    if needs_gap and not needs_stakeholder:
+                        spinner_msg = "Analyzing job requirements..."
+                    elif needs_stakeholder and not needs_gap:
+                        spinner_msg = "Analyzing stakeholders..."
 
-                    # Save both analyses
-                    JobService.save_gap_analysis(session.id, gap_analysis)
-                    JobService.save_stakeholder_analysis(session.id, stakeholder_analysis)
+                    with st.spinner(spinner_msg):
+                        try:
+                            if needs_gap:
+                                gap_analysis = analyze_job_experience_fit(job.job_description, experiences)
+                                if not gap_analysis or not gap_analysis.strip():
+                                    st.error("Unable to load analyses. Please restart intake flow.")
+                                    logger.error("Gap analysis failed for job_id=%s", job.id)
+                                    return
+                                JobService.save_gap_analysis(session.id, gap_analysis)
+                                logger.info("Generated gap analysis for job_id=%s", job.id)
+
+                            if needs_stakeholder:
+                                stakeholder_analysis = analyze_stakeholders(job.job_description, experiences)
+                                if not stakeholder_analysis or not stakeholder_analysis.strip():
+                                    st.error("Unable to load analyses. Please restart intake flow.")
+                                    logger.error("Stakeholder analysis failed for job_id=%s", job.id)
+                                    return
+                                JobService.save_stakeholder_analysis(session.id, stakeholder_analysis)
+                                logger.info("Generated stakeholder analysis for job_id=%s", job.id)
+
+                        except OpenAIQuotaExceededError:
+                            # Set flag to show error banner on next render
+                            st.session_state.step1_api_quota_error = True
+                            st.rerun()
+                            return
+                else:
+                    # Both analyses already exist
+                    logger.info("Reusing existing analyses for job_id=%s", job.id)
 
                 # Mark step 1 as completed and move to step 2
                 JobService.update_session_step(session.id, step=2, completed=False)

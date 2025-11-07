@@ -80,6 +80,7 @@ class JobIntakeService:
 
         Raises:
             ValueError: If gap_analysis or stakeholder_analysis are missing from session.
+            OpenAIQuotaExceededError: If OpenAI API quota is exceeded.
         """
         # Get intake session to retrieve analyses
         session = JobService.get_intake_session(job.id)

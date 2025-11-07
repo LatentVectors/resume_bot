@@ -10,15 +10,18 @@ from typing import Annotated
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, tool
+from openai import RateLimitError
 from pydantic import BaseModel, Field
 
 from app.constants import LLMTag
+from app.exceptions import OpenAIQuotaExceededError
 from app.services.certificate_service import CertificateService
 from app.services.education_service import EducationService
 from app.services.experience_service import ExperienceService
 from app.services.resume_service import ResumeService
 from src.core.models import OpenAIModels, get_model
 from src.core.prompts import PromptName, get_prompt
+from src.database import Job, ResumeVersion
 from src.features.resume.types import (
     ResumeCertification,
     ResumeData,
@@ -32,8 +35,8 @@ from src.logging_config import logger
 
 def run_resume_chat(
     messages: list,
-    job,
-    selected_version,
+    job: Job,
+    selected_version: ResumeVersion | None,
     gap_analysis: str,
     stakeholder_analysis: str,
     work_experience: str,
@@ -43,7 +46,7 @@ def run_resume_chat(
     Args:
         messages: Chat history.
         job: Job object.
-        selected_version: Selected resume version.
+        selected_version: Selected resume version (None if no resume generated yet).
         gap_analysis: Gap analysis markdown from job intake (analyzes fit between job and experience).
         stakeholder_analysis: Stakeholder analysis markdown from job intake (analyzes hiring stakeholders).
         work_experience: Formatted work experience context for AI reference.
@@ -73,14 +76,22 @@ def run_resume_chat(
     # Create version tracker to capture version_id from tool execution
     version_tracker: dict[str, int | None] = {"version_id": None}
 
+    # Determine template_name and parent_version_id, handling None case
+    if selected_version:
+        template_name = selected_version.template_name
+        parent_version_id = selected_version.id
+    else:
+        template_name = "resume_000.html"
+        parent_version_id = None
+
     # Prepare configuration with injected tool arguments
     config = RunnableConfig(
         tags=[LLMTag.INTAKE_RESUME_CHAT.value],
         configurable={
             "job_id": job.id,
             "user_id": job.user_id,
-            "template_name": selected_version.template_name,
-            "parent_version_id": selected_version.id,
+            "template_name": template_name,
+            "parent_version_id": parent_version_id,
             "version_tracker": version_tracker,
         },
     )
@@ -102,6 +113,15 @@ def run_resume_chat(
 
         return response, new_version_id
 
+    except RateLimitError as exc:
+        # Check if this is specifically a quota exceeded error
+        error_message = str(exc)
+        if "insufficient_quota" in error_message or "exceeded your current quota" in error_message:
+            logger.error("OpenAI API quota exceeded: %s", exc)
+            raise OpenAIQuotaExceededError() from exc
+        # Re-raise other rate limit errors as generic exceptions
+        logger.exception("OpenAI rate limit error: %s", exc)
+        return AIMessage(content="I apologize, but I encountered a rate limit error. Please try again shortly."), None
     except Exception as exc:
         logger.exception("Error getting AI response: %s", exc)
         return AIMessage(content="I apologize, but I encountered an error. Please try again."), None
