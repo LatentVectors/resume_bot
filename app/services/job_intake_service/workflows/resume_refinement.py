@@ -8,7 +8,6 @@ from __future__ import annotations
 from typing import Annotated
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, tool
 from pydantic import BaseModel, Field
@@ -19,6 +18,7 @@ from app.services.education_service import EducationService
 from app.services.experience_service import ExperienceService
 from app.services.resume_service import ResumeService
 from src.core.models import OpenAIModels, get_model
+from src.core.prompts import PromptName, get_prompt
 from src.features.resume.types import (
     ResumeCertification,
     ResumeData,
@@ -51,10 +51,6 @@ def run_resume_chat(
     Returns:
         Tuple of (AIMessage response, new_version_id if tool was used, else None).
     """
-    # Parse current resume data for context
-    resume_data = ResumeData.model_validate_json(selected_version.resume_json)
-    current_resume_text = str(resume_data)
-
     # Build messages
     llm_messages = []
     for msg in messages:
@@ -94,7 +90,6 @@ def run_resume_chat(
             {
                 "message_history": llm_messages,
                 "job_description": job.job_description,
-                "current_resume": current_resume_text,
                 "gap_analysis": gap_analysis,
                 "stakeholder_analysis": stakeholder_analysis,
                 "work_experience": work_experience,
@@ -112,47 +107,9 @@ def run_resume_chat(
         return AIMessage(content="I apologize, but I encountered an error. Please try again."), None
 
 
-# ==================== System Prompt ====================
+# ==================== Prompt Loading ====================
 
-SYSTEM_PROMPT_TEMPLATE = """
-You are an expert resume writer helping refine a resume for a job application.
-
-Current job description:
-{job_description}
-
-Current resume:
-{current_resume}
-
-Gap Analysis:
-{gap_analysis}
-
-Stakeholder Analysis:
-{stakeholder_analysis}
-
-Work Experience Context:
-{work_experience}
-
-Your role:
-- Review the current resume and propose specific improvements
-- Use the propose_resume_draft tool to create new versions
-- Each tool call must include COMPLETE resume content:
-  * Professional title
-  * Professional summary tailored to the job
-  * All relevant skills
-  * ALL experiences with their database IDs, refined titles, and compelling bullet points
-  * Education IDs to include (reference the current resume for available education)
-  * Certification IDs to include (reference the current resume for available certifications)
-- Focus on tailoring content to match the job requirements
-- Be specific and actionable in your suggestions
-
-Important notes:
-- When you use propose_resume_draft, you're creating a complete new draft, not making incremental updates
-- You must provide the complete list of experiences every time, not just the ones you're changing
-- The system will automatically preserve candidate information (name, email, phone, LinkedIn)
-- For experiences, you provide the experience_id, refined job title, and bullet points
-- The system will pull company name, location, and employment dates from the database
-- Always include all education and certification IDs from the current resume unless you have a reason to exclude them
-"""
+_prompt = get_prompt(PromptName.RESUME_ALIGNMENT_WORKFLOW)
 
 # ==================== Pydantic Models for Tool Schema ====================
 
@@ -314,12 +271,4 @@ def propose_resume_draft(
 
 _llm = get_model(OpenAIModels.gpt_4o)
 _llm_with_tools = _llm.bind_tools([propose_resume_draft])
-_chain = (
-    ChatPromptTemplate.from_messages(
-        [
-            ("system", SYSTEM_PROMPT_TEMPLATE),
-            ("placeholder", "{message_history}"),
-        ]
-    )
-    | _llm_with_tools
-)
+_chain = _prompt | _llm_with_tools
