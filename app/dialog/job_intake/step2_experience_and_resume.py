@@ -10,6 +10,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from streamlit_pdf_viewer import pdf_viewer
 
 from app.components.api_quota_error_banner import show_api_quota_error_banner
+from app.components.copy_job_context_button import render_copy_job_context_button
 from app.constants import MIN_DATE
 from app.dialog.resume_add_certificate_dialog import show_resume_add_certificate_dialog
 from app.dialog.resume_add_education_dialog import show_resume_add_education_dialog
@@ -41,8 +42,13 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
         st.error("No job ID provided. Cannot proceed with experience & resume development.")
         return
 
-    # Progress indicator
-    st.caption("Step 2 of 2: Experience & Resume Development")
+    # Progress indicator with copy button
+    header_col1, header_col2 = st.columns([4, 1])
+    with header_col1:
+        st.caption("Step 2 of 2: Experience & Resume Development")
+    with header_col2:
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            render_copy_job_context_button(job_id, button_type="tertiary")
     st.markdown("---")
 
     # Get job and session
@@ -124,8 +130,8 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
             st.session_state.step2_loaded_version_id = None
             st.session_state.step2_dirty = False
 
-    # Two-column layout [4, 3]
-    left_col, right_col = st.columns([4, 3])
+    # Two-column layout [2, 3] - right column is 3/5 of width
+    left_col, right_col = st.columns([1, 1])
 
     # LEFT COLUMN: Chat interface
     with left_col:
@@ -133,22 +139,31 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
 
     # RIGHT COLUMN: Analysis and Resume tabs
     with right_col:
-        # Create 4 tabs for analyses and resume
-        tab1, tab2, tab3, tab4 = st.tabs(["Gap Analysis", "Stakeholder Analysis", "Resume Content", "Resume PDF"])
+        # Create 5 tabs for job description, analyses and resume
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(
+            ["Job Description", "Gap Analysis", "Stakeholder Analysis", "Resume Content", "Resume PDF"]
+        )
 
         with tab1:
+            # Display job description as markdown
+            if job.job_description:
+                st.markdown(job.job_description)
+            else:
+                st.info("No job description available.")
+
+        with tab2:
             # Display gap analysis as markdown
             st.markdown(session.gap_analysis)
 
-        with tab2:
+        with tab3:
             # Display stakeholder analysis as markdown
             st.markdown(session.stakeholder_analysis)
 
-        with tab3:
+        with tab4:
             # Display resume content editor
             _render_step2_resume_content_tab(job_id, versions, selected_version)
 
-        with tab4:
+        with tab5:
             # Display resume PDF preview
             _render_step2_resume_pdf_tab(job_id, versions, selected_version)
 
