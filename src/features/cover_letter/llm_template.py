@@ -7,7 +7,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from openai import APIConnectionError
 
-from src.core.models import OpenAIModels, get_model
+from src.core import ModelName, get_model
 from src.features.cover_letter.prompt import cover_letter_template_prompt
 
 
@@ -113,8 +113,8 @@ def generate_cover_letter_template_html(
             # If image handling fails, fall back to text-only
             pass
 
-    # Model setup (prefer GPT-5)
-    llm = get_model(OpenAIModels.gpt_5)
+    # Model setup (using GPT-4o via OpenRouter)
+    llm = get_model(ModelName.OPENAI__GPT_4O)
     llm_with_retry = llm.with_retry(retry_if_exception_type=(APIConnectionError,))
 
     # Send the system prompt as-is so examples show correct Jinja ``{{ }}`` syntax.

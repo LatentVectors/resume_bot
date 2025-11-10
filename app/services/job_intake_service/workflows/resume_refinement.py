@@ -19,7 +19,7 @@ from app.services.certificate_service import CertificateService
 from app.services.education_service import EducationService
 from app.services.experience_service import ExperienceService
 from app.services.resume_service import ResumeService
-from src.core.models import OpenAIModels, get_model
+from src.core import ModelName, get_model
 from src.core.prompts import PromptName, get_prompt
 from src.database import Job, ResumeVersion
 from src.features.resume.types import (
@@ -289,6 +289,6 @@ def propose_resume_draft(
 
 # ==================== Chain Definition ====================
 
-_llm = get_model(OpenAIModels.gpt_4o)
+_llm = get_model(ModelName.GOOGLE__GEMINI_2_5_PRO)
 _llm_with_tools = _llm.bind_tools([propose_resume_draft])
 _chain = _prompt | _llm_with_tools

@@ -6,7 +6,7 @@ from openai import APIConnectionError
 from pydantic import BaseModel
 
 from app.constants import LLMTag
-from src.core.models import OpenAIModels, get_model
+from src.core import ModelName, get_model
 from src.logging_config import logger
 
 
@@ -30,7 +30,7 @@ Text:
 
 
 # Model and chain setup
-_llm = get_model(OpenAIModels.gpt_4o_mini)
+_llm = get_model(ModelName.OPENAI__GPT_4O_MINI)
 _llm_structured = _llm.with_structured_output(TitleCompany).with_retry(retry_if_exception_type=(APIConnectionError,))
 _chain = (
     ChatPromptTemplate.from_messages(

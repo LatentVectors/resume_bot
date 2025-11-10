@@ -4,7 +4,7 @@ from langchain_core.prompts.chat import ChatPromptTemplate
 from openai import APIConnectionError
 from pydantic import BaseModel, Field
 
-from src.core.models import OpenAIModels, get_model
+from src.core import ModelName, get_model
 from src.logging_config import logger
 
 from ..state import InternalState, PartialInternalState
@@ -241,7 +241,7 @@ class SummaryOutput(BaseModel):
     professional_summary: str = Field(description="3-4 sentence professional summary tailored to the role")
 
 
-llm = get_model(OpenAIModels.gpt_4o)
+llm = get_model(ModelName.OPENAI__GPT_4O)
 llm_structured = llm.with_structured_output(SummaryOutput).with_retry(retry_if_exception_type=(APIConnectionError,))
 chain = (
     ChatPromptTemplate.from_messages(

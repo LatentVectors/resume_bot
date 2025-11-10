@@ -7,7 +7,7 @@ from typing import Any
 from langchain_core.messages import HumanMessage, SystemMessage
 from openai import APIConnectionError
 
-from src.core.models import OpenAIModels, get_model
+from src.core import ModelName, get_model
 from src.features.resume.prompt import resume_template_prompt
 
 
@@ -93,7 +93,7 @@ def generate_template_html(
             pass
 
     # Model setup (prefer GPT-5)
-    llm = get_model(OpenAIModels.gpt_5)
+    llm = get_model(ModelName.OPENAI__GPT_5)
     llm_with_retry = llm.with_retry(retry_if_exception_type=(APIConnectionError,))
 
     # Send the system prompt as-is so examples show correct Jinja ``{{ }}`` syntax.

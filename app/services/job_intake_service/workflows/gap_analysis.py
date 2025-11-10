@@ -14,7 +14,7 @@ from openai import RateLimitError
 from app.constants import LLMTag
 from app.exceptions import OpenAIQuotaExceededError
 from app.shared.formatters import format_experience_with_achievements
-from src.core.models import OpenAIModels, get_model
+from src.core import ModelName, get_model
 from src.core.prompts import PromptName, get_prompt
 from src.core.prompts.input_types import GapAnalysisInput
 from src.database import Experience, db_manager
@@ -110,5 +110,5 @@ def _format_experience_for_analysis(experiences: list[Experience]) -> str:
 
 # Load prompt template and chain setup
 _prompt = get_prompt(PromptName.GAP_ANALYSIS)
-_llm = get_model(OpenAIModels.gpt_4o)
+_llm = get_model(ModelName.OPENAI__GPT_4O)
 _chain = _prompt | _llm | StrOutputParser()

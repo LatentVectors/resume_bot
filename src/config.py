@@ -8,6 +8,8 @@ from dotenv import load_dotenv
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from src.logging_config import logger
+
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
@@ -21,10 +23,14 @@ class Settings(BaseSettings):
     # Database
     database_url: str = Field(default="sqlite:///data/resume_bot.db")
 
-    # LangChain / LLM providers
-    openai_api_key: str | None = Field(default=None)
+    # OpenRouter (LLM provider)
+    openrouter_api_key: str
+    openrouter_base_url: str = Field(default="https://openrouter.ai/api/v1")
+    openrouter_site_url: str | None = Field(default=None)
+    openrouter_site_name: str | None = Field(default=None)
+
+    # LangChain
     langchain_api_key: str | None = Field(default=None)
-    gemini_api_key: str | None = Field(default=None)
 
     # LangSmith / tracing
     langsmith_tracing: bool = Field(default=False)
@@ -52,6 +58,12 @@ def load_settings() -> Settings:
 
     # Ensure data directory exists
     settings.data_dir.mkdir(exist_ok=True)
+
+    # Log OpenRouter attribution status
+    if settings.openrouter_site_url and settings.openrouter_site_name:
+        logger.info("OpenRouter app attribution enabled")
+    else:
+        logger.info("OpenRouter app attribution disabled")
 
     return settings
 

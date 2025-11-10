@@ -178,14 +178,14 @@ def new_template(
     console = Console()
 
     # Lazy imports to keep CLI startup lean
-    from src.core.models import OpenAIModels, get_model
+    from src.core import ModelName, get_model
 
     from .content import DUMMY_RESUME_DATA
     from .prompt import resume_template_prompt
     from .utils import convert_html_to_pdf, render_template_to_html
 
     # Use default model per spec (gpt-4o)
-    llm = get_model(OpenAIModels.gpt_4o)
+    llm = get_model(ModelName.OPENAI__GPT_4O)
 
     # Assemble multimodal user message
     user_text = (
