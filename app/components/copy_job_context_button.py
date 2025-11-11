@@ -14,7 +14,9 @@ from src.logging_config import logger
 
 
 def render_copy_job_context_button(
-    job_id: int, button_type: Literal["primary", "secondary", "tertiary"] = "secondary"
+    job_id: int,
+    button_type: Literal["primary", "secondary", "tertiary"] = "secondary",
+    context: str = "default",
 ) -> None:
     """Render a copy button that copies job context to clipboard.
 
@@ -28,10 +30,12 @@ def render_copy_job_context_button(
         job_id: The ID of the job to copy context for.
         button_type: The Streamlit button type (primary, secondary, or tertiary).
             Defaults to "secondary" (Streamlit's default).
+        context: A unique context identifier to prevent key conflicts when the button
+            appears in multiple places for the same job. Defaults to "default".
     """
     if st.button(
         "",
-        key=f"copy_job_context_{job_id}",
+        key=f"copy_job_context_{job_id}_{context}",
         icon=":material/content_copy:",
         help="Copy job context (work experience, job description, analyses)",
         type=button_type,

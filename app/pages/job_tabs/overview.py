@@ -263,6 +263,6 @@ def render_overview(job: DbJob) -> None:
             st.button("Copy Cover Letter", disabled=True)
 
             # Copy job context button
-            render_copy_job_context_button(job.id, button_type="secondary")
+            render_copy_job_context_button(job.id, button_type="secondary", context="overview")
 
     # In editing mode, do not render the quick action column on the right

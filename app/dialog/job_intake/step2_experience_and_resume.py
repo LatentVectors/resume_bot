@@ -48,8 +48,7 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
         st.caption("Step 2 of 2: Experience & Resume Development")
     with header_col2:
         with st.container(horizontal=True, horizontal_alignment="right"):
-            render_copy_job_context_button(job_id, button_type="tertiary")
-    st.markdown("---")
+            render_copy_job_context_button(job_id, button_type="tertiary", context="intake")
 
     # Get job and session
     job = JobService.get_job(job_id)
@@ -140,24 +139,31 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
     # RIGHT COLUMN: Analysis and Resume tabs
     with right_col:
         # Create 5 tabs for job description, analyses and resume
-        tab1, tab2, tab3, tab4, tab5 = st.tabs(
-            ["Job Description", "Gap Analysis", "Stakeholder Analysis", "Resume Content", "Resume PDF"]
-        )
+        tab1, tab2, tab3, tab4, tab5 = st.tabs(["Job", "Gap Analysis", "Stakeholder Analysis", "Content", "Preview"])
 
         with tab1:
-            # Display job description as markdown
-            if job.job_description:
-                st.markdown(job.job_description)
-            else:
-                st.info("No job description available.")
+            # Display job details in scrollable container
+            with st.container(height=600, border=False):
+                # Job title and company on same line
+                title_text = job.job_title if job.job_title else "No title"
+                company_text = job.company_name if job.company_name else "No company"
+                st.markdown(f"**{title_text}** at **{company_text}**")
+
+                # Job description
+                if job.job_description:
+                    st.markdown(job.job_description)
+                else:
+                    st.info("No job description available.")
 
         with tab2:
-            # Display gap analysis as markdown
-            st.markdown(session.gap_analysis)
+            # Display gap analysis in scrollable container
+            with st.container(height=600, border=False):
+                st.markdown(session.gap_analysis)
 
         with tab3:
-            # Display stakeholder analysis as markdown
-            st.markdown(session.stakeholder_analysis)
+            # Display stakeholder analysis in scrollable container
+            with st.container(height=600, border=False):
+                st.markdown(session.stakeholder_analysis)
 
         with tab4:
             # Display resume content editor
@@ -168,8 +174,6 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
             _render_step2_resume_pdf_tab(job_id, versions, selected_version)
 
     # Action buttons
-    st.markdown("---")
-
     # Determine if there's a pinned version
     has_pinned_version = False
     if versions:
@@ -240,20 +244,24 @@ def _render_step2_chat(job: Job, versions: list[ResumeVersion], selected_version
         # Clear the error flag after displaying (persist for one render)
         # Don't clear immediately to allow user to see it
 
-    # Fixed-height container for chat history (500px)
-    with st.container(height=500):
+    # Chat title
+    st.write("Resume Agent")
+
+    # Fixed-height container for chat history (550px)
+    with st.container(height=550, border=False):
         # Display chat messages
         for msg in st.session_state.step2_messages:
             if isinstance(msg, HumanMessage):
                 with st.chat_message("user"):
                     st.markdown(msg.content)
             elif isinstance(msg, AIMessage):
-                with st.chat_message("assistant"):
-                    st.markdown(msg.content)
+                # Skip rendering AIMessages with tool calls (they appear empty)
+                if not (hasattr(msg, "tool_calls") and msg.tool_calls):
+                    with st.chat_message("assistant"):
+                        st.markdown(msg.content)
             elif isinstance(msg, ToolMessage):
                 with st.chat_message("assistant"):
-                    st.caption("🔧 Resume draft created")
-                    st.text(msg.content)
+                    st.caption(msg.content)
 
     # Chat input below the fixed container
     if user_input := st.chat_input("Ask for resume changes..."):
@@ -610,8 +618,9 @@ def _render_version_navigation_and_content(
     # Handle case when no versions exist
     if not versions or selected_version is None:
         if show_pdf:
-            # PDF tab - show message
-            st.info("No resume version available yet. Use the chat or edit the Resume Content tab to create one.")
+            # PDF tab - show message in scrollable container
+            with st.container(height=600, border=False):
+                st.info("No resume version available yet. Use the chat or edit the Resume Content tab to create one.")
         else:
             # Content tab - show save button and edit form
             resume_data = st.session_state.get("step2_draft")
@@ -620,7 +629,7 @@ def _render_version_navigation_and_content(
             # Show save button if there are changes
             if is_dirty and resume_data:
                 with st.container(horizontal=True, horizontal_alignment="right"):
-                    if st.button("Save as First Version", type="primary", key=f"step2_save_first_{tab_suffix}"):
+                    if st.button("Save", type="primary", key=f"step2_save_first_{tab_suffix}"):
                         try:
                             # Get user for default template
                             user = UserService.get_current_user()
@@ -649,8 +658,9 @@ def _render_version_navigation_and_content(
                             logger.exception("Failed to save first version: %s", exc)
                             st.error("Failed to save first version")
 
-            # Show edit form
-            _render_edit_mode(job_id, None)
+            # Show edit form in scrollable container
+            with st.container(height=600, border=False):
+                _render_edit_mode(job_id, None)
         return
 
     # Get canonical version ID for pin indicator
@@ -868,18 +878,19 @@ def _render_version_navigation_and_content(
                 logger.exception("Failed to render PDF: %s", exc)
                 st.button("Download", disabled=True, type="primary", key=f"step2_download_disabled_{tab_suffix}")
 
-    # Show content based on tab type
-    if show_pdf:
-        # PDF preview
-        try:
-            pdf_bytes = ResumeService.render_preview(job_id, resume_data, selected_version.template_name)
-            pdf_viewer(pdf_bytes, zoom_level="auto")
-        except Exception as exc:
-            logger.exception("Failed to render PDF: %s", exc)
-            st.error("Failed to render PDF preview")
-    else:
-        # Edit mode with expandable sections
-        _render_edit_mode(job_id, selected_version)
+    # Show content based on tab type in scrollable container
+    with st.container(height=600, border=False):
+        if show_pdf:
+            # PDF preview
+            try:
+                pdf_bytes = ResumeService.render_preview(job_id, resume_data, selected_version.template_name)
+                pdf_viewer(pdf_bytes, zoom_level="auto")
+            except Exception as exc:
+                logger.exception("Failed to render PDF: %s", exc)
+                st.error("Failed to render PDF preview")
+        else:
+            # Edit mode with expandable sections
+            _render_edit_mode(job_id, selected_version)
 
 
 def _render_edit_mode(job_id: int, selected_version: ResumeVersion | None) -> None:
@@ -1239,6 +1250,10 @@ def _invoke_resume_tool(tool_call: dict) -> str:
             version_id = args["version_tracker"].get("version_id")
             if version_id:
                 st.session_state.step2_selected_version_id = version_id
+                # Fetch the version to get its version_index for user-friendly message
+                new_version = ResumeService.get_version(version_id)
+                if new_version:
+                    return f"Resume draft created: v{new_version.version_index}"
 
             return result
         except Exception as exc:

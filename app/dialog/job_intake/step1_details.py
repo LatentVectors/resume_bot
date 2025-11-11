@@ -28,7 +28,6 @@ def render_step1_details(
     """
     # Progress indicator
     st.caption("Step 1 of 2: Job Details")
-    st.markdown("---")
 
     # Check if there's an API quota error to display
     if st.session_state.get("step1_api_quota_error", False):
@@ -66,7 +65,6 @@ def render_step1_details(
     # Next button (enabled only when required fields filled)
     next_disabled = not (title.strip() and company.strip() and description.strip())
 
-    st.markdown("---")
     with st.container(horizontal=True, horizontal_alignment="right"):
         if st.button("Next", type="primary", disabled=next_disabled, key="intake_step1_next"):
             try:
