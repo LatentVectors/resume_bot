@@ -304,275 +304,7 @@ def _render_step2_chat(job: Job, versions: list[ResumeVersion], selected_version
         st.rerun()
 
 
-# ==================== Resume Preview/Edit Section ====================
-
-
-def _render_step2_resume_preview(
-    job_id: int, versions: list[ResumeVersion], selected_version: ResumeVersion | None
-) -> None:
-    """Render resume preview/edit section for Step 2.
-
-    Args:
-        job_id: Job ID
-        versions: List of resume versions
-        selected_version: Currently selected version (can be None if no versions exist)
-    """
-    # Handle case where no resume has been generated yet
-    if not selected_version:
-        st.info("💡 Start a conversation with the AI to generate your first resume draft.")
-        return
-
-    # Get canonical version ID for pin indicator
-    try:
-        canonical_row = ResumeService.get_canonical(job_id)
-    except Exception as exc:
-        logger.exception("Failed to get canonical: %s", exc)
-        canonical_row = None
-
-    canonical_version_id = None
-    if canonical_row and versions:
-        for v in reversed(versions):
-            try:
-                if v.template_name == canonical_row.template_name and v.resume_json == canonical_row.resume_json:
-                    canonical_version_id = cast(int, v.id)
-                    break
-            except Exception:
-                continue
-
-    # Row 1: Version navigation (< | dropdown | > | pin)
-    with st.container(horizontal=True, horizontal_alignment="right"):
-        current_index = int(selected_version.version_index)
-        min_index = 1
-        max_index = int(versions[-1].version_index)
-
-        # Left arrow
-        go_left = st.button(
-            ":material/chevron_left:",
-            key="step2_ver_left",
-            disabled=current_index <= min_index,
-            help="Older version",
-        )
-
-        # Dropdown of versions in descending order (vN..v1) with pin indicator
-        try:
-            versions_desc = sorted(versions, key=lambda v: int(v.version_index), reverse=True)
-        except Exception:
-            versions_desc = list(reversed(versions))
-
-        labels = []
-        for v in versions_desc:
-            label = f"v{v.version_index}"
-            if canonical_version_id and cast(int, v.id) == canonical_version_id:
-                label += " (pinned)"
-            labels.append(label)
-
-        indices = [int(v.version_index) for v in versions_desc]
-        try:
-            dd_idx = indices.index(current_index)
-        except ValueError:
-            dd_idx = 0  # default to newest (first)
-
-        chosen_label = st.selectbox(
-            "Version",
-            options=labels,
-            index=dd_idx,
-            label_visibility="collapsed",
-            key="step2_version_select",
-        )
-
-        # Right arrow
-        go_right = st.button(
-            ":material/chevron_right:",
-            key="step2_ver_right",
-            disabled=current_index >= max_index,
-            help="Newer version",
-        )
-
-        # Pin icon
-        selected_is_canonical = (
-            selected_version.id is not None
-            and canonical_version_id is not None
-            and selected_version.id == canonical_version_id
-        )
-        pin_label = ":material/keep:" if selected_is_canonical else ":material/keep_off:"
-        pin_help = "Pinned (canonical)" if selected_is_canonical else "Set selected version as canonical"
-        pin_type = "primary" if selected_is_canonical else "secondary"
-        pin_clicked = st.button(pin_label, help=pin_help, key="step2_pin_btn", type=pin_type)
-
-    # Handle version navigation
-    new_selected_id = None
-    if go_left:
-        target_index = current_index - 1
-        for v in versions:
-            if int(v.version_index) == target_index:
-                new_selected_id = cast(int, v.id)
-                break
-    elif go_right:
-        target_index = current_index + 1
-        for v in versions:
-            if int(v.version_index) == target_index:
-                new_selected_id = cast(int, v.id)
-                break
-    else:
-        # Dropdown change
-        try:
-            chosen_index = int(chosen_label.replace(" (pinned)", "").removeprefix("v"))
-            if chosen_index != current_index:
-                for v in versions:
-                    if int(v.version_index) == chosen_index:
-                        new_selected_id = cast(int, v.id)
-                        break
-        except Exception:
-            pass
-
-    if pin_clicked and selected_version.id is not None:
-        try:
-            if selected_is_canonical:
-                # Unpin if already pinned
-                ResumeService.unpin_canonical(job_id)
-                st.toast("Unpinned resume.")
-            else:
-                # Pin if not already pinned
-                ResumeService.pin_canonical(job_id, selected_version.id)
-                st.toast("Pinned canonical resume.")
-        except Exception as exc:
-            logger.exception("Failed to toggle pin: %s", exc)
-            st.error("Failed to update canonical resume.")
-        st.rerun()
-
-    if new_selected_id is not None:
-        st.session_state.step2_selected_version_id = new_selected_id
-        # Load new version into draft
-        for v in versions:
-            if v.id == new_selected_id:
-                try:
-                    new_draft = ResumeData.model_validate_json(v.resume_json)
-                    st.session_state.step2_draft = new_draft
-                    st.session_state.step2_loaded_version_id = new_selected_id
-                    st.session_state.step2_dirty = False
-                except Exception as exc:
-                    logger.exception("Failed to load version: %s", exc)
-                break
-        st.rerun()
-
-    # Row 2: View mode selector (left) | Action buttons (right)
-    resume_data = st.session_state.get("step2_draft")
-    if not resume_data:
-        try:
-            resume_data = ResumeData.model_validate_json(selected_version.resume_json)
-        except Exception as exc:
-            logger.exception("Failed to parse resume data: %s", exc)
-            st.error("Failed to load resume data")
-            return
-
-    # Check if dirty
-    is_dirty = st.session_state.get("step2_dirty", False)
-
-    # Check if selected version is canonical (pinned)
-    selected_is_canonical = (
-        selected_version.id is not None
-        and canonical_version_id is not None
-        and selected_version.id == canonical_version_id
-    )
-
-    row2_col1, row2_col2 = st.columns([1, 2])
-
-    with row2_col1:
-        # Segmented control for PDF/Edit (left-aligned)
-        # Ensure view mode is always set, preserve when switching versions
-        if "step2_view_mode" not in st.session_state:
-            st.session_state.step2_view_mode = "PDF"
-
-        current_view_mode = st.session_state.step2_view_mode
-        view_mode = st.segmented_control(
-            "View",
-            options=["PDF", "Edit"],
-            selection_mode="single",
-            default=current_view_mode,
-            label_visibility="collapsed",
-            key="step2_view_mode_control",
-        )
-
-        # Update session state - ensure it's never None
-        st.session_state.step2_view_mode = view_mode if view_mode else current_view_mode
-
-    with row2_col2:
-        # Right-aligned buttons: Copy/Download OR Discard/Save based on dirty state
-        with st.container(horizontal=True, horizontal_alignment="right"):
-            if is_dirty:
-                # Show Discard and Save when there are unsaved changes
-                if st.button("Discard", key="step2_discard_changes"):
-                    # Reload from selected version
-                    try:
-                        original_draft = ResumeData.model_validate_json(selected_version.resume_json)
-                        st.session_state.step2_draft = original_draft
-                        st.session_state.step2_dirty = False
-                        st.rerun()
-                    except Exception as exc:
-                        logger.exception("Failed to discard changes: %s", exc)
-                        st.error("Failed to discard changes")
-
-                if st.button("Save", type="primary", key="step2_save_changes"):
-                    try:
-                        new_version_id = JobIntakeService.save_manual_resume_edit(job_id, selected_version, resume_data)
-                        # Update selection
-                        st.session_state.step2_selected_version_id = new_version_id
-                        st.session_state.step2_draft = resume_data
-                        st.session_state.step2_loaded_version_id = new_version_id
-                        st.session_state.step2_dirty = False
-                        st.toast("Changes saved as new version!")
-                        st.rerun()
-                    except Exception as exc:
-                        logger.exception("Failed to save changes: %s", exc)
-                        st.error("Failed to save changes")
-            else:
-                # Show Copy and Download when no unsaved changes
-                # Copy button (icon only)
-                if st.button(":material/content_copy:", key="step2_copy", help="Copy resume text"):
-                    try:
-                        import pyperclip
-
-                        pyperclip.copy(str(resume_data))
-                        st.toast("Copied to clipboard!")
-                    except Exception as exc:
-                        logger.exception("Failed to copy: %s", exc)
-                        st.error("Failed to copy to clipboard")
-
-                # Download button (text only, enabled only when pinned, primary button)
-                download_help = None if selected_is_canonical else "Pin this version to enable download"
-                try:
-                    pdf_bytes = ResumeService.render_preview(job_id, resume_data, selected_version.template_name)
-                    job = JobService.get_job(job_id)
-                    filename = build_resume_download_filename(job.company_name, job.job_title, resume_data.name)
-
-                    st.download_button(
-                        label="Download",
-                        data=pdf_bytes,
-                        file_name=filename,
-                        mime="application/pdf",
-                        disabled=not selected_is_canonical,
-                        type="primary",
-                        help=download_help,
-                        key="step2_download",
-                    )
-                except Exception as exc:
-                    logger.exception("Failed to render PDF: %s", exc)
-                    st.button("Download", disabled=True, type="primary", key="step2_download_disabled")
-
-    # Show preview or edit based on view mode
-    current_view_mode = st.session_state.get("step2_view_mode", "PDF")
-
-    if current_view_mode == "PDF":
-        # PDF preview
-        try:
-            pdf_bytes = ResumeService.render_preview(job_id, resume_data, selected_version.template_name)
-            pdf_viewer(pdf_bytes, zoom_level="auto")
-        except Exception as exc:
-            logger.exception("Failed to render PDF: %s", exc)
-            st.error("Failed to render PDF preview")
-    else:
-        # Edit mode with expandable sections (identical to resume tab)
-        _render_edit_mode(job_id, selected_version)
+# ==================== Resume Content Tab (Edit Mode) ====================
 
 
 def _render_step2_resume_content_tab(
@@ -740,6 +472,69 @@ def _render_version_navigation_and_content(
         pin_type = "primary" if selected_is_canonical else "secondary"
         pin_clicked = st.button(pin_label, help=pin_help, key=f"step2_pin_btn_{tab_suffix}", type=pin_type)
 
+        # Three-dot menu for additional actions
+        with st.popover(":material/more_vert:", help="Additional actions"):
+            # Get resume data for actions
+            resume_data_for_actions = st.session_state.get("step2_draft")
+            if not resume_data_for_actions:
+                try:
+                    resume_data_for_actions = ResumeData.model_validate_json(selected_version.resume_json)
+                except Exception:
+                    resume_data_for_actions = None
+
+            # Copy action
+            if st.button(
+                "Copy resume",
+                help="Copy resume text to clipboard",
+                key=f"step2_copy_popover_{tab_suffix}",
+                use_container_width=True,
+                disabled=resume_data_for_actions is None,
+            ):
+                if resume_data_for_actions:
+                    try:
+                        import pyperclip
+
+                        pyperclip.copy(str(resume_data_for_actions))
+                        st.toast("Copied to clipboard!")
+                    except Exception as exc:
+                        logger.exception("Failed to copy: %s", exc)
+                        st.error("Failed to copy to clipboard")
+
+            # Download action
+            download_help = None if selected_is_canonical else "Pin this version to enable download"
+            pdf_bytes_for_download: bytes | None = None
+            if resume_data_for_actions and selected_version:
+                try:
+                    pdf_bytes_for_download = ResumeService.render_preview(
+                        job_id, resume_data_for_actions, selected_version.template_name
+                    )
+                    job = JobService.get_job(job_id)
+                    filename = build_resume_download_filename(
+                        job.company_name, job.job_title, resume_data_for_actions.name
+                    )
+
+                    st.download_button(
+                        label="Download resume",
+                        data=pdf_bytes_for_download,
+                        file_name=filename,
+                        mime="application/pdf",
+                        disabled=not selected_is_canonical,
+                        help=download_help,
+                        key=f"step2_download_popover_{tab_suffix}",
+                        use_container_width=True,
+                    )
+                except Exception as exc:
+                    logger.exception("Failed to render PDF: %s", exc)
+                    st.download_button(
+                        label="Download resume",
+                        data=b"",
+                        file_name="resume.pdf",
+                        mime="application/pdf",
+                        disabled=True,
+                        key=f"step2_download_disabled_popover_{tab_suffix}",
+                        use_container_width=True,
+                    )
+
     # Handle version navigation
     new_selected_id = None
     if go_left:
@@ -818,9 +613,9 @@ def _render_version_navigation_and_content(
 
     # Row 2: Action buttons
     with st.container(horizontal=True, horizontal_alignment="right"):
-        if is_dirty and not show_pdf:
-            # Show Discard and Save when there are unsaved changes (only in content tab)
-            if st.button("Discard", key=f"step2_discard_changes_{tab_suffix}"):
+        if not show_pdf:
+            # Show Discard and Save buttons (only in content tab)
+            if st.button("Discard", key=f"step2_discard_changes_{tab_suffix}", disabled=not is_dirty):
                 # Reload from selected version
                 try:
                     original_draft = ResumeData.model_validate_json(selected_version.resume_json)
@@ -831,7 +626,7 @@ def _render_version_navigation_and_content(
                     logger.exception("Failed to discard changes: %s", exc)
                     st.error("Failed to discard changes")
 
-            if st.button("Save", type="primary", key=f"step2_save_changes_{tab_suffix}"):
+            if st.button("Save", type="primary", key=f"step2_save_changes_{tab_suffix}", disabled=not is_dirty):
                 try:
                     new_version_id = JobIntakeService.save_manual_resume_edit(job_id, selected_version, resume_data)
                     # Update selection
@@ -844,39 +639,6 @@ def _render_version_navigation_and_content(
                 except Exception as exc:
                     logger.exception("Failed to save changes: %s", exc)
                     st.error("Failed to save changes")
-        else:
-            # Show Copy and Download when no unsaved changes or in PDF tab
-            # Copy button (icon only)
-            if st.button(":material/content_copy:", key=f"step2_copy_{tab_suffix}", help="Copy resume text"):
-                try:
-                    import pyperclip
-
-                    pyperclip.copy(str(resume_data))
-                    st.toast("Copied to clipboard!")
-                except Exception as exc:
-                    logger.exception("Failed to copy: %s", exc)
-                    st.error("Failed to copy to clipboard")
-
-            # Download button (text only, enabled only when pinned, primary button)
-            download_help = None if selected_is_canonical else "Pin this version to enable download"
-            try:
-                pdf_bytes = ResumeService.render_preview(job_id, resume_data, selected_version.template_name)
-                job = JobService.get_job(job_id)
-                filename = build_resume_download_filename(job.company_name, job.job_title, resume_data.name)
-
-                st.download_button(
-                    label="Download",
-                    data=pdf_bytes,
-                    file_name=filename,
-                    mime="application/pdf",
-                    disabled=not selected_is_canonical,
-                    type="primary",
-                    help=download_help,
-                    key=f"step2_download_{tab_suffix}",
-                )
-            except Exception as exc:
-                logger.exception("Failed to render PDF: %s", exc)
-                st.button("Download", disabled=True, type="primary", key=f"step2_download_disabled_{tab_suffix}")
 
     # Show content based on tab type in scrollable container
     with st.container(height=600, border=False):
@@ -945,7 +707,6 @@ def _render_edit_mode(job_id: int, selected_version: ResumeVersion | None) -> No
 
 
 # ==================== Edit Mode Section Renderers ====================
-# (Copied from resume.py for identical behavior)
 
 
 def _render_profile_section(draft: ResumeData) -> ResumeData:

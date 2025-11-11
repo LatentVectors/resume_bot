@@ -26,6 +26,35 @@ class JobTab(StrEnum):
 
 
 def main() -> None:
+    # Check for active intake session and reopen dialog if needed
+    if "intake_job_id" in st.session_state and "current_step" in st.session_state:
+        job_id = st.session_state.intake_job_id
+        if job_id:
+            session = JobService.get_intake_session(job_id)
+            # Only reopen if session exists and is not completed
+            if session and session.completed_at is None:
+                # Reopen the dialog at the current step
+                from app.dialog.job_intake_flow import show_job_intake_dialog
+
+                job = JobService.get_job(job_id)
+                show_job_intake_dialog(
+                    initial_title=job.job_title if job else None,
+                    initial_company=job.company_name if job else None,
+                    initial_description=job.job_description if job else "",
+                    job_id=job_id,
+                )
+            else:
+                # Session is completed or doesn't exist - clear stale state
+                intake_keys = [
+                    "intake_job_id",
+                    "current_step",
+                    "intake_initial_title",
+                    "intake_initial_company",
+                    "intake_initial_description",
+                ]
+                for key in intake_keys:
+                    st.session_state.pop(key, None)
+
     # Session-state based routing
     job_id = st.session_state.get("selected_job_id")
     if not isinstance(job_id, int):

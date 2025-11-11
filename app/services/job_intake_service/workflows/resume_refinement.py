@@ -5,7 +5,7 @@ Handles AI-assisted resume editing with tool-based update proposals.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, TypedDict
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
@@ -149,6 +149,14 @@ class ProposedExperience(BaseModel):
 # ==================== Tool Definitions ====================
 
 
+class ProposedResumeDraft(TypedDict):
+    """Proposed resume draft with version information."""
+
+    resume_draft: ResumeData
+    version_id: int = Field(description="Database ID of the created resume version")
+    version_index: int = Field(description="Monotonic version index of the created resume version")
+
+
 @tool(response_format="content_and_artifact")
 def propose_resume_draft(
     title: Annotated[str, "Professional title/headline for the resume"],
@@ -162,7 +170,7 @@ def propose_resume_draft(
     template_name: Annotated[str, InjectedToolArg],
     parent_version_id: Annotated[int | None, InjectedToolArg],
     version_tracker: Annotated[dict[str, int | None], InjectedToolArg],
-) -> tuple[str, int]:
+) -> tuple[str, ProposedResumeDraft]:
     """Propose a complete resume draft.
 
     Creates a new resume version with the proposed content. Each call must include
@@ -276,11 +284,15 @@ def propose_resume_draft(
 
         logger.info(
             "Created new resume draft from AI proposal",
-            extra={"job_id": job_id, "version_id": new_version.id},
+            extra={"job_id": job_id, "version_id": new_version.id, "version_index": new_version.version_index},
         )
 
         # Return confirmation message for AI and version_id as artifact
-        return f"Resume Draft Created: {new_version.id}", new_version.id
+        return f"Resume Draft Created: v{new_version.version_index}", ProposedResumeDraft(
+            resume_draft=resume_data,
+            version_id=new_version.id,
+            version_index=new_version.version_index,
+        )
 
     except Exception as exc:
         logger.exception("Failed to create resume draft: %s", exc)
