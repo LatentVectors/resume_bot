@@ -279,8 +279,9 @@ def propose_resume_draft(
         if not new_version.id:
             raise ValueError("Failed to create resume version")
 
-        # Track version_id for return to caller via injected tracker
+        # Track version_id and version_index for return to caller via injected tracker
         version_tracker["version_id"] = new_version.id
+        version_tracker["version_index"] = new_version.version_index
 
         logger.info(
             "Created new resume draft from AI proposal",

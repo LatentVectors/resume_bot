@@ -1008,13 +1008,15 @@ def _invoke_resume_tool(tool_call: dict) -> str:
             result = propose_resume_draft.invoke(args)
 
             # Update selected version if a new one was created
+            # Get version_id and version_index from version_tracker (populated by tool)
             version_id = args["version_tracker"].get("version_id")
+            version_index = args["version_tracker"].get("version_index")
+
             if version_id:
                 st.session_state.step2_selected_version_id = version_id
-                # Fetch the version to get its version_index for user-friendly message
-                new_version = ResumeService.get_version(version_id)
-                if new_version:
-                    return f"Resume draft created: v{new_version.version_index}"
+                # Return user-friendly message with version_index
+                if version_index is not None:
+                    return f"Resume draft created: v{version_index}"
 
             return result
         except Exception as exc:
