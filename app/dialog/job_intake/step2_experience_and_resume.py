@@ -16,6 +16,7 @@ from app.dialog.resume_add_certificate_dialog import show_resume_add_certificate
 from app.dialog.resume_add_education_dialog import show_resume_add_education_dialog
 from app.dialog.resume_add_experience_dialog import show_resume_add_experience_dialog
 from app.exceptions import OpenAIQuotaExceededError
+from app.services.chat_message_service import ChatMessageService
 from app.services.job_intake_service import JobIntakeService
 from app.services.job_service import JobService
 from app.services.resume_service import ResumeService
@@ -320,6 +321,30 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
 # ==================== Chat Section ====================
 
 
+def _convert_dict_to_langchain_messages(messages_dict: list[dict]) -> list:
+    """Convert dict messages from database to LangChain message objects.
+
+    Args:
+        messages_dict: List of message dictionaries from database.
+
+    Returns:
+        List of LangChain message objects (HumanMessage, AIMessage, ToolMessage).
+    """
+    messages = []
+    for msg_dict in messages_dict:
+        msg_type = msg_dict.get("type")
+        if msg_type == "human":
+            messages.append(HumanMessage(content=msg_dict["content"]))
+        elif msg_type == "ai":
+            ai_msg = AIMessage(content=msg_dict["content"])
+            if "tool_calls" in msg_dict:
+                ai_msg.tool_calls = msg_dict["tool_calls"]
+            messages.append(ai_msg)
+        elif msg_type == "tool":
+            messages.append(ToolMessage(content=msg_dict["content"], tool_call_id=msg_dict.get("tool_call_id", "")))
+    return messages
+
+
 def _render_step2_chat(job: Job, versions: list[ResumeVersion], selected_version: ResumeVersion | None) -> None:
     """Render chat interface for Step 2 experience & resume development.
 
@@ -330,7 +355,23 @@ def _render_step2_chat(job: Job, versions: list[ResumeVersion], selected_version
     """
     # Initialize chat messages if needed
     if "step2_messages" not in st.session_state:
-        st.session_state.step2_messages = []
+        # Try to load from database first
+        session = JobService.get_intake_session(job.id)
+        if session and session.id:
+            try:
+                messages_dict = ChatMessageService.get_messages_for_step(session.id, step=2)
+                # Convert dict messages back to LangChain message objects
+                st.session_state.step2_messages = _convert_dict_to_langchain_messages(messages_dict)
+                logger.info(
+                    "Loaded %d chat messages from database for session %s",
+                    len(st.session_state.step2_messages),
+                    session.id,
+                )
+            except Exception as exc:
+                logger.exception("Failed to load chat history: %s", exc)
+                st.session_state.step2_messages = []
+        else:
+            st.session_state.step2_messages = []
 
     # Check if there's an API quota error to display
     if st.session_state.get("step2_api_quota_error", False):
@@ -388,6 +429,11 @@ def _render_step2_chat(job: Job, versions: list[ResumeVersion], selected_version
                 # If AI created a new version, update selection
                 if new_version_id:
                     st.session_state.step2_selected_version_id = new_version_id
+
+                # Save messages to database
+                session = JobService.get_intake_session(job.id)
+                if session and session.id:
+                    JobIntakeService.save_step2_messages(session.id, st.session_state.step2_messages)
 
             except OpenAIQuotaExceededError:
                 # Set flag to show error banner on next render
