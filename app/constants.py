@@ -17,3 +17,4 @@ class LLMTag(StrEnum):
     INTAKE_SUMMARIZATION = "intake_summarization"
     INTAKE_EXPERIENCE_CHAT = "intake_experience_chat"
     INTAKE_RESUME_CHAT = "intake_resume_chat"
+    EXPERIENCE_EXTRACTION = "experience_extraction"

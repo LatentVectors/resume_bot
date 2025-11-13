@@ -1,8 +1,9 @@
 """Job intake flow dialog with multi-step workflow.
 
-This dialog guides users through a 2-step process:
+This dialog guides users through a 3-step process:
 1. Job details confirmation
 2. Experience & resume development (AI-assisted continuous conversation)
+3. Experience updates (AI-generated proposals from Step 2 conversation)
 
 This is the main entry point that routes to individual step modules.
 """
@@ -14,6 +15,9 @@ import streamlit as st
 from app.dialog.job_intake.step1_details import render_step1_details
 from app.dialog.job_intake.step2_experience_and_resume import (
     render_step2_experience_and_resume,
+)
+from app.dialog.job_intake.step3_experience_proposals import (
+    render_step3_experience_proposals,
 )
 
 
@@ -58,3 +62,5 @@ def show_job_intake_dialog(
         )
     elif st.session_state.current_step == 2:
         render_step2_experience_and_resume(st.session_state.intake_job_id)
+    elif st.session_state.current_step == 3:
+        render_step3_experience_proposals(st.session_state.intake_job_id)

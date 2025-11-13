@@ -34,6 +34,12 @@ alwaysApply: false
 - Prefer list comprehensions over explicit loops for simple transformations
 - Use type guards for complex conditional logic
 
+## String Formatting
+
+- **ALWAYS use f-strings** for string formatting and interpolation
+- **NEVER use percent-style formatting** (`%s`, `%d`, `%f`, etc.)
+- Use f-strings for all string concatenation and formatting needs
+
 ## Configuration and Constants
 
 - Define constants at module level

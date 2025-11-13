@@ -6,8 +6,11 @@ from contextlib import contextmanager
 from datetime import date, datetime
 from enum import Enum, StrEnum
 from pathlib import Path
+from typing import Literal
 
-from sqlalchemy import Column, Index, UniqueConstraint, text
+from pydantic import BaseModel
+from pydantic import Field as PydanticField
+from sqlalchemy import Column, Index, UniqueConstraint, inspect, text
 from sqlalchemy.types import JSON
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
@@ -34,6 +37,102 @@ class MessageChannel(str, Enum):
 class ResponseSource(str, Enum):
     manual = "manual"
     application = "application"
+
+
+class ProposalType(str, Enum):
+    achievement_add = "achievement_add"
+    achievement_update = "achievement_update"
+    achievement_delete = "achievement_delete"
+    skill_add = "skill_add"
+    skill_delete = "skill_delete"
+    role_overview_update = "role_overview_update"
+    company_overview_update = "company_overview_update"
+
+
+class ProposalStatus(str, Enum):
+    pending = "pending"
+    accepted = "accepted"
+    rejected = "rejected"
+
+
+# ==================== Pydantic Models for Proposal Content ===================
+
+
+class RoleOverviewUpdate(BaseModel):
+    """Update suggestion for a role overview."""
+
+    command: Literal["UPDATE"] = PydanticField(default="UPDATE", description="The operation to perform")
+    experience_id: int = PydanticField(description="The unique identifier of the work experience entry to update")
+    content: str = PydanticField(description="The complete, new text for the role overview")
+
+
+class CompanyOverviewUpdate(BaseModel):
+    """Update suggestion for a company overview."""
+
+    command: Literal["UPDATE"] = PydanticField(default="UPDATE", description="The operation to perform")
+    experience_id: int = PydanticField(description="The unique identifier of the work experience entry to update")
+    content: str = PydanticField(description="The complete, new text for the company overview")
+
+
+class SkillAdd(BaseModel):
+    """Add suggestion for new skills."""
+
+    command: Literal["ADD"] = PydanticField(default="ADD", description="The operation to perform")
+    experience_id: int = PydanticField(
+        description="The unique identifier of the work experience entry to add skills to"
+    )
+    skills: list[str] = PydanticField(description="A list of new, granular skills to add")
+
+
+class SkillDelete(BaseModel):
+    """Delete suggestion for skills."""
+
+    command: Literal["DELETE"] = PydanticField(default="DELETE", description="The operation to perform")
+    experience_id: int = PydanticField(
+        description="The unique identifier of the work experience entry to delete skills from"
+    )
+    skills: list[str] = PydanticField(description="A list of skills to delete")
+
+
+class AchievementAdd(BaseModel):
+    """Add suggestion for a new achievement."""
+
+    command: Literal["ADD"] = PydanticField(default="ADD", description="The operation to perform")
+    experience_id: int = PydanticField(description="The unique identifier of the parent work experience")
+    title: str = PydanticField(description="The required title for the new achievement")
+    content: str = PydanticField(description="The full content of the new achievement")
+
+
+class AchievementUpdate(BaseModel):
+    """Update suggestion for an existing achievement."""
+
+    command: Literal["UPDATE"] = PydanticField(default="UPDATE", description="The operation to perform")
+    experience_id: int = PydanticField(description="The unique identifier of the parent work experience")
+    achievement_id: int = PydanticField(description="The required unique identifier of the achievement to update")
+    title: str | None = PydanticField(
+        default=None, description="An optional new title. If null or omitted, the existing title is preserved"
+    )
+    content: str = PydanticField(description="The complete, new text for the achievement's content")
+
+
+class AchievementDelete(BaseModel):
+    """Delete suggestion for an achievement."""
+
+    command: Literal["DELETE"] = PydanticField(default="DELETE", description="The operation to perform")
+    experience_id: int = PydanticField(description="The unique identifier of the parent work experience")
+    achievement_id: int = PydanticField(description="The required unique identifier of the achievement to delete")
+
+
+# Union type for all proposal content types
+ProposalContent = (
+    RoleOverviewUpdate
+    | CompanyOverviewUpdate
+    | SkillAdd
+    | SkillDelete
+    | AchievementAdd
+    | AchievementUpdate
+    | AchievementDelete
+)
 
 
 # specs/008-resume_history
@@ -289,10 +388,10 @@ class JobIntakeSession(SQLModel, table=True):
 
     id: int | None = Field(default=None, primary_key=True)
     job_id: int = Field(foreign_key="job.id")
-    current_step: int  # 1 or 2 (step 3 eliminated)
+    current_step: int  # 1, 2, or 3
     step1_completed: bool = Field(default=False)
     step2_completed: bool = Field(default=False)
-    step3_completed: bool = Field(default=False)  # Deprecated but kept for backwards compatibility
+    step3_completed: bool = Field(default=False)
     gap_analysis: str | None = Field(default=None)  # Renamed from gap_analysis_json (stores markdown)
     stakeholder_analysis: str | None = Field(default=None)  # NEW (stores markdown)
     completed_at: datetime | None = Field(default=None)
@@ -311,6 +410,155 @@ class JobIntakeChatMessage(SQLModel, table=True):
     step: int  # 2 or 3
     messages: str  # JSON array of LangChain message format
     created_at: datetime = Field(default_factory=datetime.now)
+
+
+class ExperienceProposal(SQLModel, table=True):
+    """Proposals for updating experience entries based on Step 2 conversation analysis.
+
+    Stores AI-generated suggestions for updating experiences, achievements, and skills.
+    Proposals can be edited, accepted, or rejected by the user.
+    """
+
+    id: int | None = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="jobintakesession.id")
+    proposal_type: ProposalType
+    experience_id: int = Field(foreign_key="experience.id")
+    achievement_id: int | None = Field(
+        default=None, foreign_key="achievement.id"
+    )  # Only for achievement updates/deletes
+    proposed_content: str  # JSON containing the full proposal data (Pydantic model serialized to JSON)
+    original_proposed_content: str  # JSON of the original AI-generated proposal (for revert functionality)
+    status: ProposalStatus  # enum: 'pending', 'accepted', 'rejected'
+    created_at: datetime = Field(default_factory=datetime.now)
+    updated_at: datetime = Field(default_factory=datetime.now)
+
+    def parse_proposed_content(self) -> ProposalContent:
+        """Parse and validate proposed_content JSON string, return typed Pydantic model.
+
+        Returns:
+            Typed Pydantic model instance matching the proposal content structure.
+
+        Raises:
+            ValueError: If JSON is invalid or cannot be parsed into a valid ProposalContent model.
+        """
+        import json
+
+        try:
+            data = json.loads(self.proposed_content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON in proposed_content: {exc}") from exc
+
+        # Use Pydantic's model_validate to parse based on command field
+        command = data.get("command")
+        if command == "UPDATE":
+            if "achievement_id" in data:
+                return AchievementUpdate.model_validate(data)
+            elif self.proposal_type == ProposalType.role_overview_update:
+                return RoleOverviewUpdate.model_validate(data)
+            elif self.proposal_type == ProposalType.company_overview_update:
+                return CompanyOverviewUpdate.model_validate(data)
+        elif command == "ADD":
+            if "title" in data:
+                return AchievementAdd.model_validate(data)
+            elif "skills" in data:
+                return SkillAdd.model_validate(data)
+        elif command == "DELETE":
+            if "achievement_id" in data:
+                return AchievementDelete.model_validate(data)
+            elif "skills" in data:
+                return SkillDelete.model_validate(data)
+
+        # Fallback: try to validate against proposal_type
+        if self.proposal_type == ProposalType.role_overview_update:
+            return RoleOverviewUpdate.model_validate(data)
+        elif self.proposal_type == ProposalType.company_overview_update:
+            return CompanyOverviewUpdate.model_validate(data)
+        elif self.proposal_type == ProposalType.skill_add:
+            return SkillAdd.model_validate(data)
+        elif self.proposal_type == ProposalType.skill_delete:
+            return SkillDelete.model_validate(data)
+        elif self.proposal_type == ProposalType.achievement_add:
+            return AchievementAdd.model_validate(data)
+        elif self.proposal_type == ProposalType.achievement_update:
+            return AchievementUpdate.model_validate(data)
+        elif self.proposal_type == ProposalType.achievement_delete:
+            return AchievementDelete.model_validate(data)
+
+        raise ValueError(f"Unable to parse proposed_content for proposal_type {self.proposal_type}")
+
+    def parse_original_proposed_content(self) -> ProposalContent:
+        """Parse and validate original_proposed_content JSON string, return typed Pydantic model.
+
+        Returns:
+            Typed Pydantic model instance matching the original proposal content structure.
+
+        Raises:
+            ValueError: If JSON is invalid or cannot be parsed into a valid ProposalContent model.
+        """
+        import json
+
+        try:
+            data = json.loads(self.original_proposed_content)
+        except json.JSONDecodeError as exc:
+            raise ValueError(f"Invalid JSON in original_proposed_content: {exc}") from exc
+
+        # Use Pydantic's model_validate to parse based on command field
+        command = data.get("command")
+        if command == "UPDATE":
+            if "achievement_id" in data:
+                return AchievementUpdate.model_validate(data)
+            elif self.proposal_type == ProposalType.role_overview_update:
+                return RoleOverviewUpdate.model_validate(data)
+            elif self.proposal_type == ProposalType.company_overview_update:
+                return CompanyOverviewUpdate.model_validate(data)
+        elif command == "ADD":
+            if "title" in data:
+                return AchievementAdd.model_validate(data)
+            elif "skills" in data:
+                return SkillAdd.model_validate(data)
+        elif command == "DELETE":
+            if "achievement_id" in data:
+                return AchievementDelete.model_validate(data)
+            elif "skills" in data:
+                return SkillDelete.model_validate(data)
+
+        # Fallback: try to validate against proposal_type
+        if self.proposal_type == ProposalType.role_overview_update:
+            return RoleOverviewUpdate.model_validate(data)
+        elif self.proposal_type == ProposalType.company_overview_update:
+            return CompanyOverviewUpdate.model_validate(data)
+        elif self.proposal_type == ProposalType.skill_add:
+            return SkillAdd.model_validate(data)
+        elif self.proposal_type == ProposalType.skill_delete:
+            return SkillDelete.model_validate(data)
+        elif self.proposal_type == ProposalType.achievement_add:
+            return AchievementAdd.model_validate(data)
+        elif self.proposal_type == ProposalType.achievement_update:
+            return AchievementUpdate.model_validate(data)
+        elif self.proposal_type == ProposalType.achievement_delete:
+            return AchievementDelete.model_validate(data)
+
+        raise ValueError(f"Unable to parse original_proposed_content for proposal_type {self.proposal_type}")
+
+    @staticmethod
+    def serialize_proposed_content(content: ProposalContent) -> str:
+        """Serialize Pydantic model to JSON string for database storage.
+
+        Args:
+            content: Pydantic model instance to serialize.
+
+        Returns:
+            JSON string representation of the model.
+
+        Raises:
+            ValueError: If content cannot be serialized to JSON.
+        """
+        import json
+
+        try:
+            return json.dumps(content.model_dump())
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Cannot serialize proposal content to JSON: {exc}") from exc
 
 
 class DatabaseManager:
@@ -358,13 +606,49 @@ class DatabaseManager:
         - Creates Achievement table if it doesn't exist
         - Adds company_overview, role_overview, skills columns to Experience if missing
         - Adds title column to Achievement if missing
+        Handles Sprint 014 migrations:
+        - Creates ExperienceProposal table if it doesn't exist
 
         For SQLite, we use ALTER TABLE to add columns when safe.
         If migration fails, use reset_database() in development.
         """
         with self.get_session() as session:
-            # First, create any new tables (Achievement, etc.)
+            # Check existing tables before migration
+            inspector = inspect(self.engine)
+            tables_before = set(inspector.get_table_names())
+
+            # First, create any new tables (Achievement, ExperienceProposal, etc.)
+            # SQLModel's create_all() safely checks if tables exist and only creates missing ones
             SQLModel.metadata.create_all(self.engine)
+
+            # Verify ExperienceProposal table was created if it didn't exist
+            table_name = "experienceproposal"  # SQLModel converts ExperienceProposal to lowercase
+            tables_after = set(inspector.get_table_names())
+            if table_name.lower() in tables_after and table_name.lower() not in tables_before:
+                logger.info(f"Created new table '{table_name}' during migration")
+                # Verify table structure
+                result = session.exec(text(f"PRAGMA table_info({table_name})"))
+                columns = {row[1] for row in result}  # row[1] is the column name
+                expected_columns = {
+                    "id",
+                    "session_id",
+                    "proposal_type",
+                    "experience_id",
+                    "achievement_id",
+                    "proposed_content",
+                    "original_proposed_content",
+                    "status",
+                    "created_at",
+                    "updated_at",
+                }
+                if columns == expected_columns:
+                    logger.info(f"Verified '{table_name}' table structure: all expected columns present")
+                else:
+                    missing = expected_columns - columns
+                    if missing:
+                        logger.warning(f"'{table_name}' table is missing columns: {missing}")
+            elif table_name.lower() in tables_after:
+                logger.info(f"Table '{table_name}' already exists, skipping creation")
 
             # Check if Experience table needs new columns
             # SQLite-specific: Check if columns exist by querying pragma
@@ -725,6 +1009,202 @@ class DatabaseManager:
                 statement = statement.where(Response.ignore == ignore)
             statement = statement.order_by(Response.created_at.desc())
             return list(session.exec(statement))
+
+    # ExperienceProposal methods
+    def add_experience_proposal(self, proposal: ExperienceProposal) -> int:
+        """Validate a new experience proposal (read-only validation only - does not execute insert).
+
+        Args:
+            proposal: The ExperienceProposal object to validate.
+
+        Returns:
+            Would return the proposal ID if insert were executed (currently returns 0 for validation).
+
+        Note:
+            This method only validates the proposal object structure and required fields.
+            Database insert is NOT executed per database safety constraints.
+        """
+        # Validate proposal object structure
+        if not isinstance(proposal, ExperienceProposal):
+            raise ValueError("proposal must be an ExperienceProposal instance")
+
+        # Validate required fields
+        if not proposal.session_id:
+            raise ValueError("session_id is required")
+        if not proposal.experience_id:
+            raise ValueError("experience_id is required")
+        if not proposal.proposal_type:
+            raise ValueError("proposal_type is required")
+        if not proposal.proposed_content:
+            raise ValueError("proposed_content is required")
+        if not proposal.original_proposed_content:
+            raise ValueError("original_proposed_content is required")
+        if not proposal.status:
+            raise ValueError("status is required")
+
+        # Validate proposal_type enum
+        if proposal.proposal_type not in ProposalType:
+            raise ValueError(f"Invalid proposal_type: {proposal.proposal_type}")
+
+        # Validate status enum
+        if proposal.status not in ProposalStatus:
+            raise ValueError(f"Invalid status: {proposal.status}")
+
+        # Validate achievement_id is provided when required
+        if proposal.proposal_type in (ProposalType.achievement_update, ProposalType.achievement_delete):
+            if not proposal.achievement_id:
+                raise ValueError("achievement_id is required for achievement_update and achievement_delete proposals")
+
+        # Validate JSON content
+        import json
+
+        try:
+            json.loads(proposal.proposed_content)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"proposed_content must be valid JSON: {e}")
+
+        try:
+            json.loads(proposal.original_proposed_content)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"original_proposed_content must be valid JSON: {e}")
+
+        # Validate foreign key references exist (read-only check)
+        with self.get_session() as session:
+            session_obj = session.get(JobIntakeSession, proposal.session_id)
+            if not session_obj:
+                raise ValueError(f"session_id {proposal.session_id} does not exist")
+
+            experience_obj = session.get(Experience, proposal.experience_id)
+            if not experience_obj:
+                raise ValueError(f"experience_id {proposal.experience_id} does not exist")
+
+            if proposal.achievement_id:
+                achievement_obj = session.get(Achievement, proposal.achievement_id)
+                if not achievement_obj:
+                    raise ValueError(f"achievement_id {proposal.achievement_id} does not exist")
+
+        logger.info(
+            f"Validated experience proposal: type={proposal.proposal_type}, "
+            f"experience_id={proposal.experience_id}, session_id={proposal.session_id}"
+        )
+        # Return 0 as placeholder since we're not actually inserting
+        return 0
+
+    def get_experience_proposal(self, proposal_id: int) -> ExperienceProposal | None:
+        """Get an experience proposal by ID (read-only - safe to test)."""
+        with self.get_session() as session:
+            return session.get(ExperienceProposal, proposal_id)
+
+    def list_session_proposals(self, session_id: int) -> list[ExperienceProposal]:
+        """Get all proposals for a session (read-only - safe to test).
+
+        Args:
+            session_id: The job intake session ID.
+
+        Returns:
+            A list of ExperienceProposal records for the session, ordered by created_at desc.
+        """
+        with self.get_session() as session:
+            statement = (
+                select(ExperienceProposal)
+                .where(ExperienceProposal.session_id == session_id)
+                .order_by(ExperienceProposal.created_at.desc())
+            )
+            return list(session.exec(statement))
+
+    def update_experience_proposal(self, proposal_id: int, **updates) -> ExperienceProposal | None:
+        """Validate updates to an experience proposal (read-only validation only - does not execute update).
+
+        Args:
+            proposal_id: The ID of the proposal to update.
+            **updates: Dictionary of field names and values to update.
+
+        Returns:
+            Would return the updated proposal if update were executed (currently returns None for validation).
+
+        Note:
+            This method only validates the update fields and checks that the proposal exists.
+            Database update is NOT executed per database safety constraints.
+        """
+        with self.get_session() as session:
+            proposal = session.get(ExperienceProposal, proposal_id)
+            if not proposal:
+                logger.warning(f"Experience proposal {proposal_id} not found")
+                return None
+
+            # Validate update fields
+            valid_fields = {
+                "session_id",
+                "proposal_type",
+                "experience_id",
+                "achievement_id",
+                "proposed_content",
+                "original_proposed_content",
+                "status",
+            }
+
+            for key, value in updates.items():
+                if key not in valid_fields:
+                    raise ValueError(f"Invalid field for update: {key}")
+
+                # Validate enum fields
+                if key == "proposal_type" and value not in ProposalType:
+                    raise ValueError(f"Invalid proposal_type: {value}")
+
+                if key == "status" and value not in ProposalStatus:
+                    raise ValueError(f"Invalid status: {value}")
+
+                # Validate JSON content fields
+                if key in ("proposed_content", "original_proposed_content"):
+                    import json
+
+                    try:
+                        json.loads(value)
+                    except json.JSONDecodeError as e:
+                        raise ValueError(f"{key} must be valid JSON: {e}")
+
+                # Validate foreign key references if updated
+                if key == "session_id":
+                    session_obj = session.get(JobIntakeSession, value)
+                    if not session_obj:
+                        raise ValueError(f"session_id {value} does not exist")
+
+                if key == "experience_id":
+                    experience_obj = session.get(Experience, value)
+                    if not experience_obj:
+                        raise ValueError(f"experience_id {value} does not exist")
+
+                if key == "achievement_id" and value is not None:
+                    achievement_obj = session.get(Achievement, value)
+                    if not achievement_obj:
+                        raise ValueError(f"achievement_id {value} does not exist")
+
+            logger.info(f"Validated updates for experience proposal {proposal_id}: {list(updates.keys())}")
+            # Return None as placeholder since we're not actually updating
+            return None
+
+    def delete_experience_proposal(self, proposal_id: int) -> bool:
+        """Validate deletion of an experience proposal (read-only validation only - does not execute delete).
+
+        Args:
+            proposal_id: The ID of the proposal to delete.
+
+        Returns:
+            Would return True if delete were executed (currently returns False for validation).
+
+        Note:
+            This method only validates that the proposal exists.
+            Database delete is NOT executed per database safety constraints.
+        """
+        with self.get_session() as session:
+            proposal = session.get(ExperienceProposal, proposal_id)
+            if not proposal:
+                logger.warning(f"Experience proposal {proposal_id} not found")
+                return False
+
+            logger.info(f"Validated deletion for experience proposal {proposal_id}")
+            # Return False as placeholder since we're not actually deleting
+            return False
 
 
 # Global database manager instance

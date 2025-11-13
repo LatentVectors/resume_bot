@@ -27,7 +27,7 @@ def render_step1_details(
         initial_description: Job description text.
     """
     # Progress indicator
-    st.caption("Step 1 of 2: Job Details")
+    st.caption("Step 1 of 3: Job Details")
 
     # Check if there's an API quota error to display
     if st.session_state.get("step1_api_quota_error", False):
