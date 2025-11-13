@@ -1,8 +1,10 @@
 """Main Streamlit application entry point."""
 
+import asyncio
+
 import streamlit as st
 
-from app.services.user_service import UserService
+from app.api_client.endpoints.users import UsersAPI
 from src.logging_config import logger
 
 
@@ -20,20 +22,18 @@ def main() -> None:
 
     # Check if users exist in database
     try:
-        has_users = UserService.has_users()
-
-        if not has_users:
-            # No users exist, redirect to onboarding
-            logger.info("No users found, redirecting to onboarding")
-            st.switch_page("pages/_onboarding.py")
-            return
-        else:
-            # Users exist, check if we should redirect to home
-            current_user = UserService.get_current_user()
+        # Try to get current user - if it fails, redirect to onboarding
+        try:
+            current_user = asyncio.run(UsersAPI.get_current_user())
             if current_user:
                 # Set current user in session state for easy access
                 st.session_state.current_user = current_user
                 logger.info(f"Current user: {current_user.first_name} {current_user.last_name}")
+        except Exception:
+            # No users exist, redirect to onboarding
+            logger.info("No users found, redirecting to onboarding")
+            st.switch_page("pages/_onboarding.py")
+            return
 
     except Exception as e:
         logger.error(f"Error checking user existence: {e}")

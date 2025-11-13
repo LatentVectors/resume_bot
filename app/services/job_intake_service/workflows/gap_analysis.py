@@ -12,12 +12,12 @@ from langchain_core.runnables import RunnableConfig
 from openai import RateLimitError
 
 from app.constants import LLMTag
-from app.exceptions import OpenAIQuotaExceededError
 from app.shared.formatters import format_experience_with_achievements
 from src.core import ModelName, get_model
 from src.core.prompts import PromptName, get_prompt
 from src.core.prompts.input_types import GapAnalysisInput
 from src.database import Experience, db_manager
+from src.exceptions import OpenAIQuotaExceededError
 from src.logging_config import logger
 
 

@@ -1,12 +1,13 @@
 """Certificate dialog components for adding and editing certification entries."""
 
+import asyncio
 from datetime import date
 
 import streamlit as st
 
+from app.api_client.endpoints.certificates import CertificatesAPI
 from app.components.confirm_delete import confirm_delete
 from app.constants import MIN_DATE
-from app.services.certificate_service import CertificateService
 from src.logging_config import logger
 
 
@@ -35,7 +36,14 @@ def show_add_certificate_dialog(user_id):
                         data = {"title": title.strip(), "date": cert_date.isoformat()}
                         if institution.strip():
                             data["institution"] = institution.strip()
-                        CertificateService.create_certification(user_id, **data)
+                        asyncio.run(
+                            CertificatesAPI.create_certificate(
+                                user_id=user_id,
+                                title=data["title"],
+                                date=data["date"],
+                                institution=data.get("institution"),
+                            )
+                        )
                         st.success("Certificate added successfully!")
                         st.rerun()
                     except Exception as e:  # noqa: BLE001
@@ -54,7 +62,7 @@ def show_edit_certificate_dialog(certificate, user_id):
 
         def _on_confirm() -> None:
             try:
-                CertificateService.delete_certification(certificate.id)
+                asyncio.run(CertificatesAPI.delete_certificate(certificate.id))
                 st.session_state[confirm_key] = False
                 st.success("Certificate deleted successfully!")
                 st.rerun()
@@ -83,7 +91,14 @@ def show_edit_certificate_dialog(certificate, user_id):
                     try:
                         updates = {"title": title.strip(), "date": cert_date.isoformat()}
                         updates["institution"] = institution.strip() if institution.strip() else None
-                        CertificateService.update_certification(certificate.id, **updates)
+                        asyncio.run(
+                            CertificatesAPI.update_certificate(
+                                certificate_id=certificate.id,
+                                title=updates["title"],
+                                date=updates["date"],
+                                institution=updates.get("institution"),
+                            )
+                        )
                         st.success("Certificate updated successfully!")
                         st.rerun()
                     except Exception as e:  # noqa: BLE001

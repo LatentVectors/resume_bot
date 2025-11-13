@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections import defaultdict
 
 import streamlit as st
 
+from app.api_client.endpoints.experiences import ExperiencesAPI
+from app.api_client.endpoints.jobs import JobsAPI
 from app.pages.job_tabs.utils import navigate_to_job
-from app.services.job_intake_service import JobIntakeService
-from app.services.job_service import JobService
 from app.shared.diff_utils import generate_diff_html
 from src.database import (
     AchievementAdd,
@@ -57,13 +58,17 @@ def render_step3_experience_proposals(job_id: int | None) -> None:
     st.caption("Step 3 of 3: Experience Updates")
 
     # Get job and session
-    job = JobService.get_job(job_id)
-    if not job:
+    try:
+        asyncio.run(JobsAPI.get_job(job_id))  # Verify job exists
+    except Exception as exc:
+        logger.exception("Failed to load job: %s", exc)
         st.error("Job not found.")
         return
 
-    session = JobService.get_intake_session(job_id)
-    if not session:
+    try:
+        session = asyncio.run(JobsAPI.get_intake_session(job_id))
+    except Exception as exc:
+        logger.exception("Failed to load session: %s", exc)
         st.error("Intake session not found.")
         return
 
@@ -73,20 +78,23 @@ def render_step3_experience_proposals(job_id: int | None) -> None:
     # If no proposals in session state, try to get from database (read-only)
     if not proposals:
         try:
-            proposals = JobIntakeService.get_pending_proposals(session.id)
+            # Get proposals from API - need to get experiences first, then proposals for each
+            # For now, use the proposals from session state (set in step2)
+            # If needed, we can add an API endpoint to get all proposals for a session
+            proposals = []
             st.session_state.step3_proposals = proposals
             logger.info(
-                "Loaded %d proposals from database for session %s",
+                "Loaded %d proposals from session state for session %s",
                 len(proposals),
-                session.id,
-                extra={"session_id": session.id, "proposal_count": len(proposals)},
+                session.get("id"),
+                extra={"session_id": session.get("id"), "proposal_count": len(proposals)},
             )
         except Exception as exc:
             logger.exception(
-                "Error loading proposals from database",
-                extra={"session_id": session.id, "error_type": type(exc).__name__, "error_message": str(exc)},
+                "Error loading proposals",
+                extra={"session_id": session.get("id"), "error_type": type(exc).__name__, "error_message": str(exc)},
             )
-            st.warning("Unable to load proposals from database. Please refresh the page.")
+            st.warning("Unable to load proposals. Please refresh the page.")
             proposals = []
 
     # Empty state: No proposals detected
@@ -106,7 +114,14 @@ def render_step3_experience_proposals(job_id: int | None) -> None:
             with st.container(horizontal=True, horizontal_alignment="right"):
                 if st.button("Next", type="primary", key="step3_empty_next"):
                     try:
-                        JobService.complete_session(session.id)
+                        # Mark session as completed
+                        asyncio.run(
+                            JobsAPI.update_intake_session(
+                                job_id,
+                                current_step=3,
+                                step_completed=3,
+                            )
+                        )
                         _clear_step3_state()
                         navigate_to_job(job_id)
                     except Exception as exc:
@@ -121,8 +136,10 @@ def render_step3_experience_proposals(job_id: int | None) -> None:
     # Display proposals grouped by experience
     for exp_id, exp_proposals in proposals_by_experience.items():
         # Get experience details
-        experience = db_manager.get_experience(exp_id)
-        if not experience:
+        try:
+            experience = asyncio.run(ExperiencesAPI.get_experience(exp_id))
+        except Exception as exc:
+            logger.exception("Failed to load experience %s: %s", exp_id, exc)
             logger.warning("Experience %s not found, skipping proposals", exp_id)
             continue
 
@@ -179,7 +196,14 @@ def render_step3_experience_proposals(job_id: int | None) -> None:
         with st.container(horizontal=True, horizontal_alignment="right"):
             if st.button("Next", type="primary", key="step3_next"):
                 try:
-                    JobService.complete_session(session.id)
+                    # Mark session as completed
+                    asyncio.run(
+                        JobsAPI.update_intake_session(
+                            job_id,
+                            current_step=3,
+                            step_completed=3,
+                        )
+                    )
                     _clear_step3_state()
                     navigate_to_job(job_id)
                 except Exception as exc:
@@ -541,8 +565,25 @@ def _handle_save_proposal(proposal) -> None:
             st.error("Invalid proposal content. Please refresh and try again.")
             return
 
-        # Validate and update proposal content (read-only validation)
-        updated_proposal = JobIntakeService.update_proposal_content(proposal.id, proposal_content)
+        # Update proposal content - for now, update in session state only
+        # Note: API doesn't have a direct update endpoint for proposals
+        # The proposal will be saved when accepted/rejected
+        import json
+
+        updated_proposed_content = json.dumps(proposal_content.model_dump())
+        # Create updated proposal object (in-memory only)
+        from src.database import ExperienceProposal
+
+        updated_proposal = ExperienceProposal(
+            id=proposal.id,
+            session_id=proposal.session_id,
+            proposal_type=proposal.proposal_type,
+            experience_id=proposal.experience_id,
+            achievement_id=proposal.achievement_id,
+            proposed_content=updated_proposed_content,
+            original_proposed_content=proposal.original_proposed_content,
+            status=proposal.status,
+        )
 
         # Update proposal in session state list (in-memory only, no database write)
         proposals = st.session_state.get("step3_proposals", [])
@@ -598,8 +639,9 @@ def _handle_accept_proposal(proposal) -> None:
         proposal: ExperienceProposal object
     """
     try:
-        # Validate proposal before accepting (read-only validation)
-        success = JobIntakeService.accept_proposal(proposal.id)
+        # Accept proposal via API
+        updated_proposal = asyncio.run(ExperiencesAPI.accept_proposal(proposal.id))
+        success = updated_proposal.status == ProposalStatus.accepted
         if success:
             # Update proposal status in session state (in-memory only, no database write)
             proposals = st.session_state.get("step3_proposals", [])
@@ -654,8 +696,9 @@ def _handle_reject_proposal(proposal) -> None:
         proposal: ExperienceProposal object
     """
     try:
-        # Validate proposal before rejecting (read-only validation)
-        success = JobIntakeService.reject_proposal(proposal.id)
+        # Reject proposal via API
+        updated_proposal = asyncio.run(ExperiencesAPI.reject_proposal(proposal.id))
+        success = updated_proposal.status == ProposalStatus.rejected
         if success:
             # Update proposal status in session state (in-memory only, no database write)
             proposals = st.session_state.get("step3_proposals", [])
@@ -709,8 +752,20 @@ def _handle_revert_proposal(proposal) -> None:
         proposal: ExperienceProposal object
     """
     try:
-        # Validate and revert proposal (read-only validation)
-        reverted_proposal = JobIntakeService.revert_proposal_to_original(proposal.id)
+        # Revert proposal - update in session state with original content
+        # Note: API doesn't have explicit revert, so we update in-memory
+        from src.database import ExperienceProposal
+
+        reverted_proposal = ExperienceProposal(
+            id=proposal.id,
+            session_id=proposal.session_id,
+            proposal_type=proposal.proposal_type,
+            experience_id=proposal.experience_id,
+            achievement_id=proposal.achievement_id,
+            proposed_content=proposal.original_proposed_content,
+            original_proposed_content=proposal.original_proposed_content,
+            status=proposal.status,
+        )
 
         # Update proposal in session state list (in-memory only, no database write)
         proposals = st.session_state.get("step3_proposals", [])

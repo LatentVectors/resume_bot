@@ -1,20 +1,11 @@
-"""Shared UI constants for the Streamlit app."""
+"""Shared UI constants for the Streamlit app.
+
+This module re-exports constants from src.constants for backward compatibility.
+"""
 
 from __future__ import annotations
 
-from datetime import date
-from enum import StrEnum
+# Re-export from src for backward compatibility
+from src.constants import LLMTag, MIN_DATE
 
-# Use a single application-wide minimum date for all date inputs
-MIN_DATE: date = date(1950, 1, 1)
-
-
-class LLMTag(StrEnum):
-    JOB_EXTRACTION = "job_extraction"
-    RESUME_GENERATION = "resume_generation"
-    GAP_ANALYSIS = "gap_analysis"
-    STAKEHOLDER_ANALYSIS = "stakeholder_analysis"
-    INTAKE_SUMMARIZATION = "intake_summarization"
-    INTAKE_EXPERIENCE_CHAT = "intake_experience_chat"
-    INTAKE_RESUME_CHAT = "intake_resume_chat"
-    EXPERIENCE_EXTRACTION = "experience_extraction"
+__all__ = ["LLMTag", "MIN_DATE"]

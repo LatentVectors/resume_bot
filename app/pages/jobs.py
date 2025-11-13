@@ -2,19 +2,22 @@
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Sequence
 from datetime import datetime
 
 import streamlit as st
 
+from api.schemas.job import JobResponse
+from app.api_client.endpoints.jobs import JobsAPI
+from app.api_client.endpoints.users import UsersAPI
 from app.components.confirm_delete import confirm_delete
 from app.components.status_badge import render_status_badge
 from app.pages.job_tabs.utils import navigate_to_job
-from app.services.job_service import AllowedStatus, JobService
-from app.services.user_service import UserService
+from src.database import JobStatus
 from src.logging_config import logger
 
-AllowedStatuses: tuple[AllowedStatus, ...] = (
+AllowedStatuses: tuple[str, ...] = (
     "Saved",
     "Applied",
     "Interviewing",
@@ -22,6 +25,8 @@ AllowedStatuses: tuple[AllowedStatus, ...] = (
     "No Offer",
     "Hired",
 )
+
+AllowedStatus = str  # Type alias for compatibility
 
 
 def _parse_status_params(value: object) -> list[AllowedStatus]:
@@ -109,7 +114,13 @@ def _format_dt(dt: object) -> str:
 
 
 def main() -> None:
-    user = UserService.get_current_user()
+    try:
+        user = asyncio.run(UsersAPI.get_current_user())
+    except Exception as e:
+        st.error(f"Error loading user: {str(e)}")
+        logger.error(f"Error loading current user: {e}")
+        return
+
     if not user:
         st.error("No user found. Please complete onboarding first.")
         return
@@ -162,9 +173,39 @@ def main() -> None:
     if changed:
         st.rerun()
 
-    # Query jobs via service with default sort by created desc
+    # Query jobs via API - need to handle multiple statuses
+    # Since API only accepts single status_filter, make multiple calls and combine
     try:
-        jobs = JobService.list_jobs(user.id, statuses_widget or default_statuses, favorites_widget)
+        all_jobs: list[JobResponse] = []
+        seen_job_ids: set[int] = set()
+
+        # If no statuses selected, use default statuses
+        statuses_to_query = statuses_widget or default_statuses
+
+        # Make API call for each status and combine results (deduplicate by ID)
+        for status_str in statuses_to_query:
+            try:
+                # Convert string status to JobStatus enum
+                status_enum = JobStatus(status_str)
+                status_jobs = asyncio.run(
+                    JobsAPI.list_jobs(
+                        user_id=user.id,
+                        status_filter=status_enum,
+                        favorite_only=favorites_widget,
+                    )
+                )
+                # Add jobs that haven't been seen yet
+                for job in status_jobs:
+                    if job.id not in seen_job_ids:
+                        all_jobs.append(job)
+                        seen_job_ids.add(job.id)
+            except ValueError:
+                # Invalid status, skip
+                logger.warning(f"Invalid status: {status_str}")
+                continue
+
+        # Sort by created_at descending (most recent first)
+        jobs = sorted(all_jobs, key=lambda j: j.created_at, reverse=True)
     except Exception as e:  # noqa: BLE001
         st.error("Failed to load jobs. Please try again later.")
         logger.exception("Error listing jobs for user %s: %s", user.id, e)
@@ -205,7 +246,17 @@ def main() -> None:
             def on_confirm() -> None:
                 try:
                     job_ids_to_delete = list(st.session_state.selected_job_ids)
-                    successful, failed = JobService.delete_jobs(job_ids_to_delete)
+                    successful = 0
+                    failed = 0
+
+                    # Delete each job individually via API
+                    for job_id in job_ids_to_delete:
+                        try:
+                            asyncio.run(JobsAPI.delete_job(job_id))
+                            successful += 1
+                        except Exception as e:  # noqa: BLE001
+                            logger.error(f"Failed to delete job {job_id}: {e}")
+                            failed += 1
 
                     if failed > 0:
                         st.error(f"Deleted {successful} job(s), but {failed} failed to delete.")

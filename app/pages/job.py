@@ -1,7 +1,12 @@
+import asyncio
 from enum import StrEnum
 
 import streamlit as st
 
+from api.schemas.job import JobResponse
+from app.api_client.endpoints.jobs import JobsAPI
+from app.api_client.endpoints.messages import MessagesAPI
+from app.api_client.endpoints.responses import ResponsesAPI
 from app.pages.job_tabs import (
     badge as _badge,
 )
@@ -30,21 +35,33 @@ def main() -> None:
     if "intake_job_id" in st.session_state and "current_step" in st.session_state:
         job_id = st.session_state.intake_job_id
         if job_id:
-            session = JobService.get_intake_session(job_id)
-            # Only reopen if session exists and is not completed
-            if session and session.completed_at is None:
-                # Reopen the dialog at the current step
-                from app.dialog.job_intake_flow import show_job_intake_dialog
+            try:
+                session = asyncio.run(JobsAPI.get_intake_session(job_id))
+                # Only reopen if session exists and is not completed
+                if session and session.get("completed_at") is None:
+                    # Reopen the dialog at the current step
+                    from app.dialog.job_intake_flow import show_job_intake_dialog
 
-                job = JobService.get_job(job_id)
-                show_job_intake_dialog(
-                    initial_title=job.job_title if job else None,
-                    initial_company=job.company_name if job else None,
-                    initial_description=job.job_description if job else "",
-                    job_id=job_id,
-                )
-            else:
-                # Session is completed or doesn't exist - clear stale state
+                    job = asyncio.run(JobsAPI.get_job(job_id))
+                    show_job_intake_dialog(
+                        initial_title=job.job_title if job else None,
+                        initial_company=job.company_name if job else None,
+                        initial_description=job.job_description if job else "",
+                        job_id=job_id,
+                    )
+                else:
+                    # Session is completed or doesn't exist - clear stale state
+                    intake_keys = [
+                        "intake_job_id",
+                        "current_step",
+                        "intake_initial_title",
+                        "intake_initial_company",
+                        "intake_initial_description",
+                    ]
+                    for key in intake_keys:
+                        st.session_state.pop(key, None)
+            except Exception:
+                # If API call fails, clear stale state
                 intake_keys = [
                     "intake_job_id",
                     "current_step",
@@ -79,15 +96,33 @@ def main() -> None:
         # Non-fatal if session_state not accessible
         st.session_state["_last_job_id"] = job_id
 
-    job = JobService.get_job(job_id)
+    try:
+        job = asyncio.run(JobsAPI.get_job(job_id))
+    except Exception as e:
+        st.error(f"Error loading job: {str(e)}")
+        st.page_link("pages/jobs.py", label="Back to Jobs", icon=":material/work:")
+        return
+
     if not job:
         st.error("Job not found. It may have been removed.")
         st.page_link("pages/jobs.py", label="Back to Jobs", icon=":material/work:")
         return
 
     # Segmented control options with badges
-    resp_count = JobService.count_job_responses(job.id)
-    msg_count = JobService.count_job_messages(job.id)
+    # Count by fetching lists (no count endpoints available)
+    try:
+        responses = asyncio.run(ResponsesAPI.list_responses())
+        resp_count = len([r for r in responses if r.job_id == job.id])
+    except Exception:
+        resp_count = 0
+
+    try:
+        messages = asyncio.run(MessagesAPI.list_messages(job.id))
+        msg_count = len(messages)
+    except Exception:
+        msg_count = 0
+
+    # Notes still use service (no API endpoint yet)
     notes_count = JobService.count_job_notes(job.id)
 
     resume_badge = _badge(bool(job.has_resume))

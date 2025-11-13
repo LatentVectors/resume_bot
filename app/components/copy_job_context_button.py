@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Literal
 
 import streamlit as st
 
-from app.services.experience_service import ExperienceService
-from app.services.job_service import JobService
+from app.api_client.endpoints.experiences import ExperiencesAPI
+from app.api_client.endpoints.jobs import JobsAPI
 from app.shared.formatters import format_all_experiences
-from src.database import db_manager
 from src.logging_config import logger
 
 
@@ -46,21 +46,21 @@ def render_copy_job_context_button(
             pyperclip = importlib.import_module("pyperclip")
 
             # Get job
-            job = JobService.get_job(job_id)
+            job = asyncio.run(JobsAPI.get_job(job_id))
             if not job:
                 st.error("Job not found.")
                 return
 
             # Get intake session for analyses
-            session = JobService.get_intake_session(job_id)
+            session = asyncio.run(JobsAPI.get_intake_session(job_id))
 
             # Get user's work experience
-            experiences = ExperienceService.list_user_experiences(job.user_id)
+            experiences = asyncio.run(ExperiencesAPI.list_experiences(job.user_id))
 
             # Fetch achievements for each experience
             achievements_by_exp: dict[int, list] = {}
             for exp in experiences:
-                achievements = db_manager.list_experience_achievements(exp.id)
+                achievements = asyncio.run(ExperiencesAPI.list_achievements(exp.id))
                 achievements_by_exp[exp.id] = achievements
 
             work_experience = format_all_experiences(experiences, achievements_by_exp)
@@ -69,8 +69,8 @@ def render_copy_job_context_button(
             job_description = job.job_description or ""
 
             # Get analyses (may be None if not yet created)
-            gap_analysis = session.gap_analysis if session else ""
-            stakeholder_analysis = session.stakeholder_analysis if session else ""
+            gap_analysis = session.get("gap_analysis", "") if session else ""
+            stakeholder_analysis = session.get("stakeholder_analysis", "") if session else ""
 
             # Build the formatted prompt
             prompt = f"""<work_experience>

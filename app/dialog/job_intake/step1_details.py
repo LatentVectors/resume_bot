@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import streamlit as st
 
+from app.api_client.endpoints.experiences import ExperiencesAPI
+from app.api_client.endpoints.jobs import JobsAPI
+from app.api_client.endpoints.users import UsersAPI
+from app.api_client.endpoints.workflows import WorkflowsAPI
 from app.components.api_quota_error_banner import show_api_quota_error_banner
 from app.exceptions import OpenAIQuotaExceededError
-from app.services.experience_service import ExperienceService
-from app.services.job_intake_service.workflows.gap_analysis import analyze_job_experience_fit
-from app.services.job_intake_service.workflows.stakeholder_analysis import analyze_stakeholders
-from app.services.job_service import JobService
-from app.services.user_service import UserService
 from src.logging_config import logger
 
 
@@ -38,13 +39,17 @@ def render_step1_details(
     # Check if we're returning from a later step and load existing values
     existing_job_id = st.session_state.get("intake_job_id")
     if existing_job_id:
-        existing_job = JobService.get_job(existing_job_id)
-        if existing_job:
-            initial_title = existing_job.job_title or initial_title
-            initial_company = existing_job.company_name or initial_company
-            initial_description = existing_job.job_description or initial_description
-            favorite_value = existing_job.is_favorite or False
-        else:
+        try:
+            existing_job = asyncio.run(JobsAPI.get_job(existing_job_id))
+            if existing_job:
+                initial_title = existing_job.job_title or initial_title
+                initial_company = existing_job.company_name or initial_company
+                initial_description = existing_job.job_description or initial_description
+                favorite_value = existing_job.is_favorite or False
+            else:
+                favorite_value = False
+        except Exception as exc:
+            logger.exception("Failed to load existing job: %s", exc)
             favorite_value = False
     else:
         favorite_value = False
@@ -85,9 +90,16 @@ def render_step1_details(
                 # Check if we're returning from a later step (job already exists)
                 existing_job_id = st.session_state.get("intake_job_id")
                 
+                # Get current user first (needed for job creation)
+                current_user = asyncio.run(UsersAPI.get_current_user())
+                if not current_user or not current_user.id:
+                    st.error("Unable to load user data. Please try again.")
+                    logger.error("No current user found during step 1 completion")
+                    return
+
                 if existing_job_id:
                     # Returning from later step - check if job details changed
-                    existing_job = JobService.get_job(existing_job_id)
+                    existing_job = asyncio.run(JobsAPI.get_job(existing_job_id))
                     if existing_job:
                         # Check if any details changed
                         details_changed = (
@@ -98,66 +110,76 @@ def render_step1_details(
                         
                         if details_changed:
                             # Update job details
-                            JobService.update_job_fields(
-                                existing_job_id,
-                                title=title.strip(),
-                                company=company.strip(),
-                                job_description=description.strip(),
-                                is_favorite=favorite,
+                            asyncio.run(
+                                JobsAPI.update_job(
+                                    existing_job_id,
+                                    title=title.strip(),
+                                    company=company.strip(),
+                                    description=description.strip(),
+                                    favorite=favorite,
+                                )
                             )
                             
                             # Clear analyses to force regeneration
-                            session = JobService.get_intake_session(existing_job_id)
+                            session = asyncio.run(JobsAPI.get_intake_session(existing_job_id))
                             if session:
-                                JobService.save_gap_analysis(session.id, "")
-                                JobService.save_stakeholder_analysis(session.id, "")
+                                # Update session with empty analyses
+                                asyncio.run(
+                                    JobsAPI.update_intake_session(
+                                        existing_job_id,
+                                        current_step=session.get("current_step"),
+                                        step_completed=session.get("step_completed"),
+                                        gap_analysis="",
+                                        stakeholder_analysis="",
+                                    )
+                                )
                                 logger.info(
                                     "Cleared analyses due to job detail changes for job_id=%s",
                                     existing_job_id
                                 )
                         
                         # Use existing job
-                        job = JobService.get_job(existing_job_id)
+                        job = asyncio.run(JobsAPI.get_job(existing_job_id))
                         if not job:
                             st.error("Failed to load job. Please try again.")
                             return
-                        session = JobService.get_intake_session(existing_job_id)
+                        session = asyncio.run(JobsAPI.get_intake_session(existing_job_id))
                         if not session:
                             st.error("Failed to load session. Please try again.")
                             return
                     else:
                         # Job not found, create new one
-                        job = JobService.save_job(
+                        job = asyncio.run(
+                            JobsAPI.create_job(
+                                user_id=current_user.id,
+                                title=title.strip(),
+                                company=company.strip(),
+                                description=description.strip(),
+                                favorite=favorite,
+                            )
+                        )
+                        session = asyncio.run(JobsAPI.create_intake_session(job.id))
+                        st.session_state.intake_job_id = job.id
+                else:
+                    # First time through - create new job
+                    job = asyncio.run(
+                        JobsAPI.create_job(
+                            user_id=current_user.id,
                             title=title.strip(),
                             company=company.strip(),
                             description=description.strip(),
                             favorite=favorite,
                         )
-                        session = JobService.create_intake_session(job.id)
-                        st.session_state.intake_job_id = job.id
-                else:
-                    # First time through - create new job
-                    job = JobService.save_job(
-                        title=title.strip(),
-                        company=company.strip(),
-                        description=description.strip(),
-                        favorite=favorite,
                     )
-                    session = JobService.create_intake_session(job.id)
+                    session = asyncio.run(JobsAPI.create_intake_session(job.id))
                     st.session_state.intake_job_id = job.id
 
                 # Get user experiences for analysis
-                current_user = UserService.get_current_user()
-                if not current_user or not current_user.id:
-                    st.error("Unable to load user data. Please try again.")
-                    logger.error("No current user found during step 1 completion")
-                    return
-
-                experiences = ExperienceService.list_user_experiences(current_user.id)
+                experiences = asyncio.run(ExperiencesAPI.list_experiences(current_user.id))
 
                 # Check and generate analyses individually (only regenerate what's missing)
-                gap_analysis = session.gap_analysis
-                stakeholder_analysis = session.stakeholder_analysis
+                gap_analysis = session.get("gap_analysis", "")
+                stakeholder_analysis = session.get("stakeholder_analysis", "")
 
                 needs_gap = not gap_analysis or not gap_analysis.strip()
                 needs_stakeholder = not stakeholder_analysis or not stakeholder_analysis.strip()
@@ -172,22 +194,49 @@ def render_step1_details(
 
                     with st.spinner(spinner_msg):
                         try:
+                            # Get experience IDs for API calls
+                            experience_ids = [exp.id for exp in experiences]
+
                             if needs_gap:
-                                gap_analysis = analyze_job_experience_fit(job.job_description, experiences)
+                                gap_response = asyncio.run(
+                                    WorkflowsAPI.gap_analysis(
+                                        job_description=job.job_description,
+                                        experience_ids=experience_ids,
+                                    )
+                                )
+                                gap_analysis = gap_response.analysis
                                 if not gap_analysis or not gap_analysis.strip():
                                     st.error("Unable to load analyses. Please restart intake flow.")
                                     logger.error("Gap analysis failed for job_id=%s", job.id)
                                     return
-                                JobService.save_gap_analysis(session.id, gap_analysis)
+                                # Update session with gap analysis
+                                asyncio.run(
+                                    JobsAPI.update_intake_session(
+                                        job.id,
+                                        gap_analysis=gap_analysis,
+                                    )
+                                )
                                 logger.info("Generated gap analysis for job_id=%s", job.id)
 
                             if needs_stakeholder:
-                                stakeholder_analysis = analyze_stakeholders(job.job_description, experiences)
+                                stakeholder_response = asyncio.run(
+                                    WorkflowsAPI.stakeholder_analysis(
+                                        job_description=job.job_description,
+                                        experience_ids=experience_ids,
+                                    )
+                                )
+                                stakeholder_analysis = stakeholder_response.analysis
                                 if not stakeholder_analysis or not stakeholder_analysis.strip():
                                     st.error("Unable to load analyses. Please restart intake flow.")
                                     logger.error("Stakeholder analysis failed for job_id=%s", job.id)
                                     return
-                                JobService.save_stakeholder_analysis(session.id, stakeholder_analysis)
+                                # Update session with stakeholder analysis
+                                asyncio.run(
+                                    JobsAPI.update_intake_session(
+                                        job.id,
+                                        stakeholder_analysis=stakeholder_analysis,
+                                    )
+                                )
                                 logger.info("Generated stakeholder analysis for job_id=%s", job.id)
 
                         except OpenAIQuotaExceededError:
@@ -200,7 +249,13 @@ def render_step1_details(
                     logger.info("Reusing existing analyses for job_id=%s", job.id)
 
                 # Mark step 1 as completed and move to step 2
-                JobService.update_session_step(session.id, step=2, completed=False)
+                asyncio.run(
+                    JobsAPI.update_intake_session(
+                        job.id,
+                        current_step=2,
+                        step_completed=None,
+                    )
+                )
 
                 # Update current step and rerun
                 st.session_state.current_step = 2

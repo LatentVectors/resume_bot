@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import re
 from pathlib import Path
 from typing import cast
@@ -7,6 +8,8 @@ from typing import cast
 import streamlit as st
 from streamlit_pdf_viewer import pdf_viewer
 
+from app.api_client.endpoints.resumes import ResumesAPI
+from app.api_client.endpoints.workflows import WorkflowsAPI
 from app.components.info_banner import top_info_banner
 from app.constants import MIN_DATE
 from app.dialog.resume_add_certificate_dialog import show_resume_add_certificate_dialog
@@ -15,7 +18,6 @@ from app.dialog.resume_add_experience_dialog import show_resume_add_experience_d
 from app.dialog.resume_reset_dialog import show_resume_reset_dialog
 from app.services.experience_service import ExperienceService
 from app.services.job_service import JobService
-from app.services.resume_service import ResumeService
 from app.services.user_service import UserService
 from app.shared.filenames import build_resume_download_filename
 from src.database import Job as DbJob
@@ -57,19 +59,23 @@ def _load_or_seed_draft(job_id: int, job_title: str | None) -> tuple[ResumeData,
             return cast(ResumeData, st.session_state["resume_draft"]), cast(str, st.session_state["resume_template"])  # type: ignore[return-value]
 
         # Try existing persisted resume
-        row = JobService.get_resume_for_job(job_id)
-        if row and (row.resume_json or "").strip():
-            try:
-                draft = ResumeData.model_validate_json(row.resume_json)  # type: ignore[arg-type]
-                template = (row.template_name or "resume_000.html").strip() or "resume_000.html"
-                st.session_state["resume_draft"] = draft
-                st.session_state["resume_template"] = template
-                st.session_state["resume_last_saved"] = draft
-                st.session_state["resume_template_saved"] = template
-                st.session_state["resume_dirty"] = False
-                return draft, template
-            except Exception as exc:  # noqa: BLE001
-                logger.exception(exc)
+        try:
+            row = asyncio.run(ResumesAPI.get_current(job_id))
+            if row and (row.resume_json or "").strip():
+                try:
+                    draft = ResumeData.model_validate_json(row.resume_json)  # type: ignore[arg-type]
+                    template = (row.template_name or "resume_000.html").strip() or "resume_000.html"
+                    st.session_state["resume_draft"] = draft
+                    st.session_state["resume_template"] = template
+                    st.session_state["resume_last_saved"] = draft
+                    st.session_state["resume_template_saved"] = template
+                    st.session_state["resume_dirty"] = False
+                    return draft, template
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(exc)
+        except Exception as exc:  # noqa: BLE001
+            # No current resume found, continue to seed from profile
+            logger.debug(f"No current resume found for job {job_id}: {exc}")
 
         # Seed from user profile
         user = UserService.get_current_user()
@@ -414,13 +420,14 @@ def render_resume(job: DbJob) -> None:
 
     # Fetch version history and canonical
     try:
-        versions = ResumeService.list_versions(job.id)
+        versions_response = asyncio.run(ResumesAPI.list_versions(job.id))
+        versions = versions_response
     except Exception as exc:  # noqa: BLE001
         logger.exception(exc)
         versions = []
 
     try:
-        canonical_row = ResumeService.get_canonical(job.id)
+        canonical_row = asyncio.run(ResumesAPI.get_current(job.id))
     except Exception as exc:  # noqa: BLE001
         logger.exception(exc)
         canonical_row = None
@@ -607,14 +614,14 @@ def render_resume(job: DbJob) -> None:
 
                 if pin_clicked and selected_version_id is not None:
                     try:
-                        ResumeService.pin_canonical(job.id, selected_version_id)
+                        asyncio.run(ResumesAPI.pin_version(job.id, selected_version_id))
                         st.toast("Pinned canonical resume.")
                     except Exception as exc:  # noqa: BLE001
                         logger.exception(exc)
                         st.error("Failed to set canonical resume.")
                     # Recompute canonical mapping
                     try:
-                        canonical_row = ResumeService.get_canonical(job.id)
+                        canonical_row = asyncio.run(ResumesAPI.get_current(job.id))
                     except Exception:
                         canonical_row = None
                     canonical_version_id = None
@@ -743,34 +750,45 @@ def render_resume(job: DbJob) -> None:
                 st.error("No user found. Create a user before generating a resume.")
             else:
                 prompt = cast(str, st.session_state.get("resume_instructions", ""))
-                new_draft = ResumeService.generate_resume_for_job(
-                    user.id, job.id, prompt, cast(ResumeData | None, st.session_state.get("resume_draft"))
-                )
-                st.session_state["resume_draft"] = new_draft
-                st.session_state["resume_dirty"] = True
-                # Clear widget keys so that the widgets re-initialize from the new draft values
+                job_desc = job.job_description or ""
                 try:
-                    for key in (
-                        "resume_title",
-                        "resume_summary",
-                        "resume_skills_textarea",
-                    ):
-                        st.session_state.pop(key, None)
-                    st.session_state["resume_instructions"] = ""
-                    for key in list(st.session_state.keys()):
-                        if isinstance(key, str) and key.startswith("exp_") and key.endswith("_points_text"):
+                    generation_response = asyncio.run(
+                        WorkflowsAPI.resume_generation(
+                            user_id=user.id,
+                            job_description=job_desc,
+                            resume_draft=cast(ResumeData | None, st.session_state.get("resume_draft")),
+                            special_instructions=prompt if prompt else None,
+                        )
+                    )
+                    new_draft = generation_response.resume_data
+                    st.session_state["resume_draft"] = new_draft
+                    st.session_state["resume_dirty"] = True
+                    # Clear widget keys so that the widgets re-initialize from the new draft values
+                    try:
+                        for key in (
+                            "resume_title",
+                            "resume_summary",
+                            "resume_skills_textarea",
+                        ):
                             st.session_state.pop(key, None)
+                        st.session_state["resume_instructions"] = ""
+                        for key in list(st.session_state.keys()):
+                            if isinstance(key, str) and key.startswith("exp_") and key.endswith("_points_text"):
+                                st.session_state.pop(key, None)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.exception(exc)
+                    # After generate, select the new head if available
+                    try:
+                        versions_response = asyncio.run(ResumesAPI.list_versions(job.id))
+                        if versions_response:
+                            st.session_state["resume_selected_version_id"] = cast(int, versions_response[-1].id)
+                    except Exception as exc:  # noqa: BLE001
+                        logger.exception(exc)
+                    st.toast("Draft updated via AI. Preview refreshed.")
+                    st.rerun()
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(exc)
-                # After generate, select the new head if available
-                try:
-                    versions = ResumeService.list_versions(job.id)
-                    if versions:
-                        st.session_state["resume_selected_version_id"] = cast(int, versions[-1].id)
-                except Exception as exc:  # noqa: BLE001
-                    logger.exception(exc)
-                st.toast("Draft updated via AI. Preview refreshed.")
-                st.rerun()
+                    st.error(f"Failed to generate resume draft: {exc}")
         except Exception as exc:  # noqa: BLE001
             logger.exception(exc)
             st.error("Failed to generate resume draft.")
@@ -778,14 +796,17 @@ def render_resume(job: DbJob) -> None:
     if save_clicked:
         try:
             current_draft = cast(ResumeData, st.session_state.get("resume_draft", draft))
-            saved_version = ResumeService.save_resume(
-                job.id, current_draft, cast(str, st.session_state.get("resume_template", template_name))
+            current_template = cast(str, st.session_state.get("resume_template", template_name))
+            saved_version = asyncio.run(
+                ResumesAPI.create_version(
+                    job_id=job.id,
+                    template_name=current_template,
+                    resume_json=current_draft.model_dump_json(),
+                )
             )
             # Clear dirty and update saved state and selection
             st.session_state["resume_last_saved"] = current_draft
-            st.session_state["resume_template_saved"] = cast(
-                str, st.session_state.get("resume_template", template_name)
-            )
+            st.session_state["resume_template_saved"] = current_template
             st.session_state["resume_dirty"] = False
             try:
                 st.session_state["resume_selected_version_id"] = cast(int, saved_version.id)
@@ -795,7 +816,7 @@ def render_resume(job: DbJob) -> None:
             st.rerun()
         except Exception as exc:  # noqa: BLE001
             logger.exception(exc)
-            st.error("Failed to save resume.")
+            st.error(f"Failed to save resume: {exc}")
 
     # Right column: preview and download (bytes only)
     with right:
@@ -822,10 +843,14 @@ def render_resume(job: DbJob) -> None:
                     # Applied: show canonical only
                     if canonical_row is not None:
                         can_draft = ResumeData.model_validate_json(canonical_row.resume_json)  # type: ignore[arg-type]
-                        pdf_bytes = ResumeService.render_preview(job.id, can_draft, canonical_row.template_name)
+                        pdf_bytes = asyncio.run(
+                            ResumesAPI.preview_pdf_draft(job.id, can_draft, canonical_row.template_name)
+                        )
                 else:
                     if not missing:
-                        pdf_bytes = ResumeService.render_preview(job.id, current_draft, current_template)
+                        pdf_bytes = asyncio.run(
+                            ResumesAPI.preview_pdf_draft(job.id, current_draft, current_template)
+                        )
             except Exception as exc:  # noqa: BLE001
                 logger.exception(exc)
                 pdf_bytes = None
@@ -860,17 +885,26 @@ def render_resume(job: DbJob) -> None:
 
                     pyperclip = importlib.import_module("pyperclip")
                     pyperclip.copy(str(current_draft))
-                    st.toast("Coppied!")
+                    st.toast("Copied!")
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(exc)
                     st.error("Failed to copy to clipboard.")
 
+            # Download button - fetch PDF bytes if needed
+            download_pdf_bytes: bytes | None = None
+            if allow_download and selected_version_id is not None:
+                try:
+                    download_pdf_bytes = asyncio.run(ResumesAPI.download_pdf(job.id, selected_version_id))
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(exc)
+                    download_pdf_bytes = None
+
             st.download_button(
                 label="Download",
-                data=(pdf_bytes or b""),
+                data=(download_pdf_bytes or b""),
                 file_name=_build_download_filename(job, current_draft.name),
                 mime="application/pdf",
-                disabled=not (allow_download and pdf_bytes),
+                disabled=not (allow_download and download_pdf_bytes),
                 type="primary",
                 help=help_text,
                 key="resume_download_btn_header",
@@ -883,7 +917,9 @@ def render_resume(job: DbJob) -> None:
             else:
                 try:
                     can_draft = ResumeData.model_validate_json(canonical_row.resume_json)  # type: ignore[arg-type]
-                    can_bytes = ResumeService.render_preview(job.id, can_draft, canonical_row.template_name)
+                    can_bytes = asyncio.run(
+                        ResumesAPI.preview_pdf_draft(job.id, can_draft, canonical_row.template_name)
+                    )
                     _embed_pdf_bytes(can_bytes)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(exc)
@@ -893,7 +929,9 @@ def render_resume(job: DbJob) -> None:
                 st.warning("Preview disabled until required identity fields are filled")
             else:
                 try:
-                    preview_bytes = ResumeService.render_preview(job.id, current_draft, current_template)
+                    preview_bytes = asyncio.run(
+                        ResumesAPI.preview_pdf_draft(job.id, current_draft, current_template)
+                    )
                     _embed_pdf_bytes(preview_bytes)
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(exc)

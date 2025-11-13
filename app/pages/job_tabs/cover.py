@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import datetime as dt
 
 import streamlit as st
 from streamlit_pdf_viewer import pdf_viewer
 
+from app.api_client.endpoints.cover_letters import CoverLettersAPI
 from app.components.info_banner import top_info_banner
 from app.constants import MIN_DATE
-from app.services.cover_letter_service import CoverLetterService
 from app.services.user_service import UserService
 from app.shared.filenames import build_cover_letter_download_filename
 from src.database import Job as DbJob
@@ -34,19 +35,23 @@ def _load_or_seed_draft(job: DbJob) -> tuple[CoverLetterData, str]:
             return st.session_state["cover_letter_draft"], st.session_state["cover_letter_template"]  # type: ignore[return-value]
 
         # Try existing persisted cover letter
-        row = CoverLetterService.get_canonical(job.id)
-        if row and (row.cover_letter_json or "").strip():
-            try:
-                draft = CoverLetterData.model_validate_json(row.cover_letter_json)  # type: ignore[arg-type]
-                template = (row.template_name or "cover_000.html").strip() or "cover_000.html"
-                st.session_state["cover_letter_draft"] = draft
-                st.session_state["cover_letter_template"] = template
-                st.session_state["cover_letter_last_saved"] = draft
-                st.session_state["cover_letter_template_saved"] = template
-                st.session_state["cover_letter_dirty"] = False
-                return draft, template
-            except Exception as exc:  # noqa: BLE001
-                logger.exception(exc)
+        try:
+            row = asyncio.run(CoverLettersAPI.get_current(job.id))
+            if row and (row.cover_letter_json or "").strip():
+                try:
+                    draft = CoverLetterData.model_validate_json(row.cover_letter_json)  # type: ignore[arg-type]
+                    template = (row.template_name or "cover_000.html").strip() or "cover_000.html"
+                    st.session_state["cover_letter_draft"] = draft
+                    st.session_state["cover_letter_template"] = template
+                    st.session_state["cover_letter_last_saved"] = draft
+                    st.session_state["cover_letter_template_saved"] = template
+                    st.session_state["cover_letter_dirty"] = False
+                    return draft, template
+                except Exception as exc:  # noqa: BLE001
+                    logger.exception(exc)
+        except Exception as exc:  # noqa: BLE001
+            # No current cover letter found, continue to seed from profile
+            logger.debug(f"No current cover letter found for job {job.id}: {exc}")
 
         # Seed from user profile
         user = UserService.get_current_user()
@@ -109,8 +114,17 @@ def render_cover(job: DbJob) -> None:
         st.session_state["cover_letter_dirty"] = False
 
     # Load versions
-    versions = CoverLetterService.list_versions(job_id)
-    canonical = CoverLetterService.get_canonical(job_id)
+    try:
+        versions = asyncio.run(CoverLettersAPI.list_versions(job_id))
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(exc)
+        versions = []
+
+    try:
+        canonical = asyncio.run(CoverLettersAPI.get_current(job_id))
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(exc)
+        canonical = None
 
     # Version selection logic
     selected_version_id = st.session_state.get("cover_letter_selected_version_id")
@@ -272,11 +286,11 @@ def render_cover(job: DbJob) -> None:
 
                     if pin_clicked and selected_version_id:
                         try:
-                            CoverLetterService.pin_canonical(job_id, selected_version_id)
+                            asyncio.run(CoverLettersAPI.pin_version(job_id, selected_version_id))
                             st.toast("Pinned canonical cover letter.")
                         except Exception as exc:  # noqa: BLE001
                             logger.exception(exc)
-                            st.error("Failed to set canonical cover letter.")
+                            st.error(f"Failed to set canonical cover letter: {exc}")
                         st.rerun()
 
                     if new_selected_id is not None:
@@ -299,7 +313,7 @@ def render_cover(job: DbJob) -> None:
 
         # Template selector (load here for layout and dirty state tracking)
         try:
-            available_templates = CoverLetterService.list_available_templates()
+            available_templates = asyncio.run(CoverLettersAPI.list_templates())
         except Exception as exc:  # noqa: BLE001
             logger.exception(exc)
             available_templates = ["cover_000.html"]
@@ -403,7 +417,13 @@ def render_cover(job: DbJob) -> None:
     # Handle save action after rendering to avoid layout jumps
     if save_clicked:
         try:
-            new_version = CoverLetterService.save_cover_letter(job_id, updated_draft, template_selected)
+            new_version = asyncio.run(
+                CoverLettersAPI.create_version(
+                    job_id=job_id,
+                    cover_letter_json=updated_draft.model_dump_json(),
+                    template_name=template_selected,
+                )
+            )
             st.session_state["cover_letter_last_saved"] = updated_draft
             st.session_state["cover_letter_template_saved"] = template_selected
             st.session_state["cover_letter_dirty"] = False
@@ -449,22 +469,25 @@ def render_cover(job: DbJob) -> None:
 
             # Download button
             download_disabled = is_dirty or not canonical
-            if canonical and not is_dirty:
+            download_pdf_bytes: bytes | None = None
+            if canonical and not is_dirty and selected_version_id is not None:
                 try:
-                    pdf_bytes = CoverLetterService.render_preview(job_id, updated_draft, template_selected)
-                    filename = _build_download_filename(job, updated_draft.name)
-                    st.download_button(
-                        label="Download",
-                        data=pdf_bytes,
-                        file_name=filename,
-                        mime="application/pdf",
-                        type="primary",
-                        disabled=download_disabled,
-                        key="cover_download",
-                    )
+                    download_pdf_bytes = asyncio.run(CoverLettersAPI.download_pdf(job_id, selected_version_id))
                 except Exception as exc:  # noqa: BLE001
                     logger.exception(exc)
-                    st.button("Download", disabled=True, key="cover_download_disabled")
+                    download_pdf_bytes = None
+
+            if download_pdf_bytes:
+                filename = _build_download_filename(job, updated_draft.name)
+                st.download_button(
+                    label="Download",
+                    data=download_pdf_bytes,
+                    file_name=filename,
+                    mime="application/pdf",
+                    type="primary",
+                    disabled=download_disabled,
+                    key="cover_download",
+                )
             else:
                 st.button("Download", disabled=True, key="cover_download_disabled")
 
@@ -474,8 +497,10 @@ def render_cover(job: DbJob) -> None:
             if not updated_draft.name or not updated_draft.email:
                 st.info("Fill in required fields (name, email) to see preview")
             else:
-                pdf_bytes = CoverLetterService.render_preview(job_id, updated_draft, template_selected)
+                pdf_bytes = asyncio.run(
+                    CoverLettersAPI.preview_pdf_draft(job_id, updated_draft, template_selected)
+                )
                 pdf_viewer(pdf_bytes, zoom_level="auto")
         except Exception as exc:  # noqa: BLE001
-            st.error("Failed to render PDF preview")
+            st.error(f"Failed to render PDF preview: {exc}")
             logger.exception(exc)

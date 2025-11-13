@@ -1,9 +1,11 @@
 """Experience dialog components for adding and editing experience entries."""
 
+import asyncio
 from datetime import date
 
 import streamlit as st
 
+from app.api_client.endpoints.experiences import ExperiencesAPI
 from app.components.confirm_delete import confirm_delete
 from app.constants import MIN_DATE
 from app.services.experience_service import ExperienceService
@@ -20,7 +22,7 @@ def display_achievements_management(experience_id: int) -> None:
 
     # Fetch achievements for this experience
     try:
-        _, achievements = ExperienceService.get_experience_with_achievements(experience_id)
+        achievements = asyncio.run(ExperiencesAPI.list_achievements(experience_id))
     except Exception as e:
         st.error(f"Error loading achievements: {str(e)}")
         logger.exception(f"Error loading achievements for experience {experience_id}: {e}")
@@ -106,11 +108,8 @@ def display_achievements_management(experience_id: int) -> None:
 
                     def _on_confirm(ach_id: int = achievement.id) -> None:
                         try:
-                            success = ExperienceService.delete_achievement(ach_id)
-                            if success:
-                                st.success("Achievement deleted successfully!")
-                            else:
-                                st.error("Failed to delete achievement.")
+                            asyncio.run(ExperiencesAPI.delete_achievement(ach_id))
+                            st.success("Achievement deleted successfully!")
                         except Exception as e:
                             st.error(f"Error deleting achievement: {str(e)}")
                             logger.exception(f"Error deleting achievement {ach_id}: {e}")
@@ -205,7 +204,19 @@ def show_add_experience_dialog(user_id):
                             if skills_list:
                                 experience_data["skills"] = skills_list
 
-                        ExperienceService.create_experience(user_id, **experience_data)
+                        asyncio.run(
+                            ExperiencesAPI.create_experience(
+                                user_id=user_id,
+                                company_name=experience_data["company_name"],
+                                job_title=experience_data["job_title"],
+                                location=experience_data.get("location"),
+                                start_date=experience_data["start_date"],
+                                end_date=experience_data.get("end_date"),
+                                company_overview=experience_data.get("company_overview"),
+                                role_overview=experience_data.get("role_overview"),
+                                skills=experience_data.get("skills", []),
+                            )
+                        )
                         st.success("Experience added successfully!")
                         st.rerun()
                     except Exception as e:
@@ -310,7 +321,19 @@ def show_edit_experience_dialog(experience, user_id):
                         else:
                             update_data["skills"] = []
 
-                        ExperienceService.update_experience(experience.id, **update_data)
+                        asyncio.run(
+                            ExperiencesAPI.update_experience(
+                                experience_id=experience.id,
+                                company_name=update_data["company_name"],
+                                job_title=update_data["job_title"],
+                                location=update_data.get("location"),
+                                start_date=update_data["start_date"],
+                                end_date=update_data.get("end_date"),
+                                company_overview=update_data.get("company_overview"),
+                                role_overview=update_data.get("role_overview"),
+                                skills=update_data.get("skills", []),
+                            )
+                        )
                         st.success("Experience updated successfully!")
                         st.rerun()
                     except Exception as e:
@@ -349,7 +372,13 @@ def show_add_achievement_dialog(experience_id: int) -> None:
                     st.error("Achievement description is required.")
                 else:
                     try:
-                        ExperienceService.add_achievement(experience_id, title.strip(), content.strip())
+                        asyncio.run(
+                            ExperiencesAPI.create_achievement(
+                                experience_id=experience_id,
+                                title=title.strip(),
+                                content=content.strip(),
+                            )
+                        )
                         st.success("Achievement added successfully!")
                         st.rerun()
                     except Exception as e:
@@ -387,7 +416,13 @@ def show_edit_achievement_dialog(achievement_id: int, current_title: str, curren
                     st.error("Achievement description is required.")
                 else:
                     try:
-                        ExperienceService.update_achievement(achievement_id, title.strip(), content.strip())
+                        asyncio.run(
+                            ExperiencesAPI.update_achievement(
+                                achievement_id=achievement_id,
+                                title=title.strip(),
+                                content=content.strip(),
+                            )
+                        )
                         st.success("Achievement updated successfully!")
                         st.rerun()
                     except Exception as e:

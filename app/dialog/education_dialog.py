@@ -1,11 +1,12 @@
 """Education dialog components for adding and editing education entries."""
 
+import asyncio
 from datetime import date
 
 import streamlit as st
 
+from app.api_client.endpoints.education import EducationAPI
 from app.constants import MIN_DATE
-from app.services.education_service import EducationService
 from src.logging_config import logger
 
 
@@ -43,7 +44,15 @@ def show_add_education_dialog(user_id):
                             "grad_date": grad_date.isoformat(),
                         }
 
-                        EducationService.create_education(user_id, **education_data)
+                        asyncio.run(
+                            EducationAPI.create_education(
+                                user_id=user_id,
+                                institution=education_data["institution"],
+                                degree=education_data["degree"],
+                                major=education_data["major"],
+                                grad_date=education_data["grad_date"],
+                            )
+                        )
                         st.success("Education added successfully!")
                         st.rerun()
                     except Exception as e:
@@ -91,7 +100,15 @@ def show_edit_education_dialog(education, user_id):
                             "grad_date": grad_date.isoformat(),
                         }
 
-                        EducationService.update_education(education.id, **update_data)
+                        asyncio.run(
+                            EducationAPI.update_education(
+                                education_id=education.id,
+                                institution=update_data["institution"],
+                                degree=update_data["degree"],
+                                major=update_data["major"],
+                                grad_date=update_data["grad_date"],
+                            )
+                        )
                         st.success("Education updated successfully!")
                         st.rerun()
                     except Exception as e:

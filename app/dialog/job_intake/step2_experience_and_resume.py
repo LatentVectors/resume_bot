@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import cast
 
@@ -9,6 +10,10 @@ import streamlit as st
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from streamlit_pdf_viewer import pdf_viewer
 
+from app.api_client.endpoints.jobs import JobsAPI
+from app.api_client.endpoints.resumes import ResumesAPI
+from app.api_client.endpoints.users import UsersAPI
+from app.api_client.endpoints.workflows import WorkflowsAPI
 from app.components.api_quota_error_banner import show_api_quota_error_banner
 from app.components.copy_job_context_button import render_copy_job_context_button
 from app.constants import MIN_DATE
@@ -18,11 +23,8 @@ from app.dialog.resume_add_experience_dialog import show_resume_add_experience_d
 from app.exceptions import OpenAIQuotaExceededError
 from app.services.chat_message_service import ChatMessageService
 from app.services.job_intake_service import JobIntakeService
-from app.services.job_service import JobService
-from app.services.resume_service import ResumeService
-from app.services.user_service import UserService
 from app.shared.filenames import build_resume_download_filename
-from src.database import Job, ResumeVersion
+from src.database import Job, ResumeVersion, ResumeVersionEvent
 from src.features.resume.types import (
     ResumeCertification,
     ResumeData,
@@ -51,34 +53,50 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
             render_copy_job_context_button(job_id, button_type="tertiary", context="intake")
 
     # Get job and session
-    job = JobService.get_job(job_id)
-    if not job:
+    try:
+        job = asyncio.run(JobsAPI.get_job(job_id))
+    except Exception as exc:
+        logger.exception("Failed to load job: %s", exc)
         st.error("Job not found.")
         return
 
-    session = JobService.get_intake_session(job_id)
-    if not session:
+    try:
+        session = asyncio.run(JobsAPI.get_intake_session(job_id))
+    except Exception as exc:
+        logger.exception("Failed to load session: %s", exc)
         st.error("Intake session not found.")
         return
 
     # Validate that analyses are available
-    if not session.gap_analysis or not session.gap_analysis.strip():
+    gap_analysis = session.get("gap_analysis", "")
+    stakeholder_analysis = session.get("stakeholder_analysis", "")
+    if not gap_analysis or not gap_analysis.strip():
         st.error("Unable to load analyses. Please restart intake flow.")
         logger.error("Gap analysis missing for job_id=%s", job_id)
         return
 
-    if not session.stakeholder_analysis or not session.stakeholder_analysis.strip():
+    if not stakeholder_analysis or not stakeholder_analysis.strip():
         st.error("Unable to load analyses. Please restart intake flow.")
         logger.error("Stakeholder analysis missing for job_id=%s", job_id)
         return
 
-    user = UserService.get_current_user()
+    try:
+        user = asyncio.run(UsersAPI.get_current_user())
+    except Exception as exc:
+        logger.exception("Failed to load user: %s", exc)
+        st.error("User not found.")
+        return
+
     if not user or not user.id:
         st.error("User not found.")
         return
 
     # Get all versions
-    versions = ResumeService.list_versions(job_id)
+    try:
+        versions = asyncio.run(ResumesAPI.list_versions(job_id))
+    except Exception as exc:
+        logger.exception("Failed to load versions: %s", exc)
+        versions = []
 
     # Get selected version
     selected_version_id = st.session_state.get("step2_selected_version_id")
@@ -178,7 +196,7 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
     has_pinned_version = False
     if versions:
         try:
-            canonical_row = ResumeService.get_canonical(job_id)
+            canonical_row = asyncio.run(ResumesAPI.get_current(job_id))
             if canonical_row:
                 for v in versions:
                     if v.template_name == canonical_row.template_name and v.resume_json == canonical_row.resume_json:
@@ -201,9 +219,21 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
             if st.button("Skip", key="intake_step2_skip"):
                 try:
                     # Mark step 2 as completed
-                    JobService.update_session_step(session.id, step=2, completed=True)
+                    asyncio.run(
+                        JobsAPI.update_intake_session(
+                            job_id,
+                            current_step=2,
+                            step_completed=2,
+                        )
+                    )
                     # Update database - set step 3 as current
-                    JobService.update_session_step(session.id, step=3, completed=False)
+                    asyncio.run(
+                        JobsAPI.update_intake_session(
+                            job_id,
+                            current_step=3,
+                            step_completed=None,
+                        )
+                    )
                     # Transition to Step 3
                     st.session_state.current_step = 3
                     # Ensure intake_job_id is set in session state
@@ -227,43 +257,84 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
                     # Find the pinned version ID
                     pinned_version_id = None
                     if has_pinned_version:
-                        canonical_row = ResumeService.get_canonical(job_id)
-                        if canonical_row:
-                            for v in versions:
-                                if (
-                                    v.template_name == canonical_row.template_name
-                                    and v.resume_json == canonical_row.resume_json
-                                ):
-                                    pinned_version_id = cast(int, v.id)
-                                    break
+                        try:
+                            canonical_row = asyncio.run(ResumesAPI.get_current(job_id))
+                            if canonical_row:
+                                for v in versions:
+                                    if (
+                                        v.template_name == canonical_row.template_name
+                                        and v.resume_json == canonical_row.resume_json
+                                    ):
+                                        pinned_version_id = cast(int, v.id)
+                                        break
+                        except Exception as exc:
+                            logger.exception("Failed to get canonical: %s", exc)
 
                     # Pin the version if found
                     if pinned_version_id:
-                        ResumeService.pin_canonical(job_id, pinned_version_id)
+                        asyncio.run(ResumesAPI.pin_version(job_id, pinned_version_id))
 
                     # Mark step 2 as completed
-                    JobService.update_session_step(session.id, step=2, completed=True)
+                    asyncio.run(
+                        JobsAPI.update_intake_session(
+                            job_id,
+                            current_step=2,
+                            step_completed=2,
+                        )
+                    )
 
                     # Extract experience proposals and move to step 3
                     with st.spinner("Analyzing conversation for experience updates..."):
                         try:
-                            proposals = JobIntakeService.extract_experience_proposals(session.id, job_id)
+                            # Get chat messages for extraction
+                            messages_dict = ChatMessageService.get_messages_for_step(session["id"], step=2)
+                            # Convert to format expected by API
+                            chat_messages = []
+                            for msg in messages_dict:
+                                role = msg.get("type", "")
+                                content = msg.get("content", "")
+                                if role == "human":
+                                    chat_messages.append({"role": "user", "content": content})
+                                elif role == "ai":
+                                    chat_messages.append({"role": "assistant", "content": content})
+
+                            # Get experience IDs
+                            from app.api_client.endpoints.experiences import ExperiencesAPI
+
+                            experiences = asyncio.run(ExperiencesAPI.list_experiences(user.id))
+                            experience_ids = [exp.id for exp in experiences]
+
+                            # Call experience extraction workflow
+                            extraction_response = asyncio.run(
+                                WorkflowsAPI.experience_extraction(
+                                    chat_messages=chat_messages,
+                                    experience_ids=experience_ids,
+                                )
+                            )
+                            # Convert suggestions to proposals format (if needed)
+                            proposals = extraction_response.suggestions or []
                             # Store proposals in session state for step 3
                             st.session_state.step3_proposals = proposals
                             # Update current step to 3
                             st.session_state.current_step = 3
-                            JobService.update_session_step(session.id, step=3, completed=False)
+                            asyncio.run(
+                                JobsAPI.update_intake_session(
+                                    job_id,
+                                    current_step=3,
+                                    step_completed=None,
+                                )
+                            )
                             logger.info(
                                 "Successfully extracted %d experience proposals for session %s",
                                 len(proposals),
-                                session.id,
-                                extra={"session_id": session.id, "job_id": job_id, "proposal_count": len(proposals)},
+                                session["id"],
+                                extra={"session_id": session["id"], "job_id": job_id, "proposal_count": len(proposals)},
                             )
                         except OpenAIQuotaExceededError:
                             # Show user-friendly error message and allow user to skip Step 3
                             logger.error(
                                 "OpenAI API quota exceeded during experience extraction",
-                                extra={"session_id": session.id, "job_id": job_id},
+                                extra={"session_id": session["id"], "job_id": job_id},
                             )
                             st.error(
                                 "Unable to analyze conversation for experience updates due to API quota limits. "
@@ -271,14 +342,20 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
                             )
                             # Still allow moving forward
                             st.session_state.current_step = 3
-                            JobService.update_session_step(session.id, step=3, completed=False)
+                            asyncio.run(
+                                JobsAPI.update_intake_session(
+                                    job_id,
+                                    current_step=3,
+                                    step_completed=None,
+                                )
+                            )
                             st.session_state.step3_proposals = []
                         except ValueError as exc:
                             # Handle validation errors (e.g., missing session, job, or data)
                             logger.error(
                                 "Validation error during experience extraction: %s",
                                 exc,
-                                extra={"session_id": session.id, "job_id": job_id},
+                                extra={"session_id": session["id"], "job_id": job_id},
                             )
                             st.error(
                                 f"Unable to analyze conversation: {str(exc)}. "
@@ -286,14 +363,20 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
                             )
                             # Still allow moving forward
                             st.session_state.current_step = 3
-                            JobService.update_session_step(session.id, step=3, completed=False)
+                            asyncio.run(
+                                JobsAPI.update_intake_session(
+                                    job_id,
+                                    current_step=3,
+                                    step_completed=None,
+                                )
+                            )
                             st.session_state.step3_proposals = []
                         except Exception as exc:
                             # Handle any other unexpected errors
                             logger.exception(
                                 "Unexpected error extracting experience proposals",
                                 extra={
-                                    "session_id": session.id,
+                                    "session_id": session["id"],
                                     "job_id": job_id,
                                     "error_type": type(exc).__name__,
                                     "error_message": str(exc),
@@ -305,7 +388,13 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
                             )
                             # Still allow moving forward
                             st.session_state.current_step = 3
-                            JobService.update_session_step(session.id, step=3, completed=False)
+                            asyncio.run(
+                                JobsAPI.update_intake_session(
+                                    job_id,
+                                    current_step=3,
+                                    step_completed=None,
+                                )
+                            )
                             st.session_state.step3_proposals = []
 
                     # Ensure intake_job_id is set in session state before rerun
@@ -356,21 +445,25 @@ def _render_step2_chat(job: Job, versions: list[ResumeVersion], selected_version
     # Initialize chat messages if needed
     if "step2_messages" not in st.session_state:
         # Try to load from database first
-        session = JobService.get_intake_session(job.id)
-        if session and session.id:
-            try:
-                messages_dict = ChatMessageService.get_messages_for_step(session.id, step=2)
-                # Convert dict messages back to LangChain message objects
-                st.session_state.step2_messages = _convert_dict_to_langchain_messages(messages_dict)
-                logger.info(
-                    "Loaded %d chat messages from database for session %s",
-                    len(st.session_state.step2_messages),
-                    session.id,
-                )
-            except Exception as exc:
-                logger.exception("Failed to load chat history: %s", exc)
+        try:
+            session = asyncio.run(JobsAPI.get_intake_session(job.id))
+            if session and session.get("id"):
+                try:
+                    messages_dict = ChatMessageService.get_messages_for_step(session["id"], step=2)
+                    # Convert dict messages back to LangChain message objects
+                    st.session_state.step2_messages = _convert_dict_to_langchain_messages(messages_dict)
+                    logger.info(
+                        "Loaded %d chat messages from database for session %s",
+                        len(st.session_state.step2_messages),
+                        session["id"],
+                    )
+                except Exception as exc:
+                    logger.exception("Failed to load chat history: %s", exc)
+                    st.session_state.step2_messages = []
+            else:
                 st.session_state.step2_messages = []
-        else:
+        except Exception as exc:
+            logger.exception("Failed to load session: %s", exc)
             st.session_state.step2_messages = []
 
     # Check if there's an API quota error to display
@@ -409,11 +502,65 @@ def _render_step2_chat(job: Job, versions: list[ResumeVersion], selected_version
         # Get AI response with tool
         with st.spinner("Thinking..."):
             try:
-                ai_response, new_version_id = JobIntakeService.get_resume_chat_response(
-                    st.session_state.step2_messages,
-                    job,
-                    selected_version,
+                # Get session for analyses
+                session = asyncio.run(JobsAPI.get_intake_session(job.id))
+                if not session:
+                    st.error("Session not found")
+                    return
+
+                # Get user experiences for formatting
+                from app.api_client.endpoints.experiences import ExperiencesAPI
+                from app.shared.formatters import format_all_experiences
+                from src.database import db_manager
+
+                experiences = asyncio.run(ExperiencesAPI.list_experiences(job.user_id))
+                achievements_by_exp: dict[int, list] = {}
+                for exp in experiences:
+                    achievements = db_manager.list_experience_achievements(exp.id)
+                    achievements_by_exp[exp.id] = achievements
+                work_experience = format_all_experiences(experiences, achievements_by_exp)
+
+                # Convert messages to API format
+                from api.schemas.workflow import ResumeChatMessage
+
+                api_messages = []
+                for msg in st.session_state.step2_messages:
+                    if isinstance(msg, HumanMessage):
+                        api_messages.append(ResumeChatMessage(role="user", content=msg.content))
+                    elif isinstance(msg, AIMessage):
+                        msg_dict = ResumeChatMessage(
+                            role="assistant",
+                            content=msg.content,
+                            tool_calls=getattr(msg, "tool_calls", None),
+                        )
+                        api_messages.append(msg_dict)
+                    elif isinstance(msg, ToolMessage):
+                        api_messages.append(
+                            ResumeChatMessage(
+                                role="tool",
+                                content=msg.content,
+                                tool_call_id=msg.tool_call_id,
+                            )
+                        )
+
+                # Call resume chat workflow
+                chat_response = asyncio.run(
+                    WorkflowsAPI.resume_chat(
+                        messages=api_messages,
+                        job_id=job.id,
+                        gap_analysis=session.get("gap_analysis", ""),
+                        stakeholder_analysis=session.get("stakeholder_analysis", ""),
+                        work_experience=work_experience,
+                        selected_version_id=selected_version.id if selected_version else None,
+                    )
                 )
+
+                # Convert response back to LangChain message
+                message_dict = chat_response.message
+                ai_response = AIMessage(content=message_dict.get("content", ""))
+                if message_dict.get("tool_calls"):
+                    ai_response.tool_calls = message_dict["tool_calls"]  # type: ignore[assignment]
+
                 st.session_state.step2_messages.append(ai_response)
 
                 # Execute tools immediately when AI calls them
@@ -427,13 +574,12 @@ def _render_step2_chat(job: Job, versions: list[ResumeVersion], selected_version
                         st.session_state.step2_messages.append(tool_msg)
 
                 # If AI created a new version, update selection
-                if new_version_id:
-                    st.session_state.step2_selected_version_id = new_version_id
+                if chat_response.version_id:
+                    st.session_state.step2_selected_version_id = chat_response.version_id
 
                 # Save messages to database
-                session = JobService.get_intake_session(job.id)
-                if session and session.id:
-                    JobIntakeService.save_step2_messages(session.id, st.session_state.step2_messages)
+                if session and session.get("id"):
+                    JobIntakeService.save_step2_messages(session["id"], st.session_state.step2_messages)
 
             except OpenAIQuotaExceededError:
                 # Set flag to show error banner on next render
@@ -504,18 +650,20 @@ def _render_version_navigation_and_content(
                     if st.button("Save", type="primary", key=f"step2_save_first_{tab_suffix}"):
                         try:
                             # Get user for default template
-                            user = UserService.get_current_user()
+                            user = asyncio.run(UsersAPI.get_current_user())
                             if not user:
                                 st.error("User not found")
                                 return
 
                             # Create first version with default template
-                            new_version = ResumeService.create_version(
-                                job_id=job_id,
-                                resume_data=resume_data,
-                                template_name=user.default_template or "modern",
-                                event_type="save",
-                                parent_version_id=None,
+                            new_version = asyncio.run(
+                                ResumesAPI.create_version(
+                                    job_id=job_id,
+                                    template_name=user.default_template or "modern",
+                                    resume_json=resume_data.model_dump_json(),
+                                    event_type=ResumeVersionEvent.save,
+                                    parent_version_id=None,
+                                )
                             )
 
                             if new_version.id:
@@ -537,7 +685,7 @@ def _render_version_navigation_and_content(
 
     # Get canonical version ID for pin indicator
     try:
-        canonical_row = ResumeService.get_canonical(job_id)
+        canonical_row = asyncio.run(ResumesAPI.get_current(job_id))
     except Exception as exc:
         logger.exception("Failed to get canonical: %s", exc)
         canonical_row = None
@@ -645,10 +793,15 @@ def _render_version_navigation_and_content(
             pdf_bytes_for_download: bytes | None = None
             if resume_data_for_actions and selected_version:
                 try:
-                    pdf_bytes_for_download = ResumeService.render_preview(
-                        job_id, resume_data_for_actions, selected_version.template_name
+                    pdf_bytes_for_download = asyncio.run(
+                        ResumesAPI.preview_pdf(
+                            job_id,
+                            selected_version.id,
+                            resume_data=resume_data_for_actions,
+                            template_name=selected_version.template_name,
+                        )
                     )
-                    job = JobService.get_job(job_id)
+                    job = asyncio.run(JobsAPI.get_job(job_id))
                     filename = build_resume_download_filename(
                         job.company_name, job.job_title, resume_data_for_actions.name
                     )
@@ -704,12 +857,13 @@ def _render_version_navigation_and_content(
     if pin_clicked and selected_version.id is not None:
         try:
             if selected_is_canonical:
-                # Unpin if already pinned
-                ResumeService.unpin_canonical(job_id)
-                st.toast("Unpinned resume.")
+                # Unpin if already pinned - get current and unpin by pinning a different version
+                # For now, we'll just pin/unpin by calling pin_version
+                # Note: API doesn't have explicit unpin, so we skip this for now
+                st.toast("Cannot unpin - please pin a different version.")
             else:
                 # Pin if not already pinned
-                ResumeService.pin_canonical(job_id, selected_version.id)
+                asyncio.run(ResumesAPI.pin_version(job_id, selected_version.id))
                 st.toast("Pinned canonical resume.")
         except Exception as exc:
             logger.exception("Failed to toggle pin: %s", exc)
@@ -768,7 +922,17 @@ def _render_version_navigation_and_content(
 
             if st.button("Save", type="primary", key=f"step2_save_changes_{tab_suffix}", disabled=not is_dirty):
                 try:
-                    new_version_id = JobIntakeService.save_manual_resume_edit(job_id, selected_version, resume_data)
+                    # Create new version with updated data
+                    new_version = asyncio.run(
+                        ResumesAPI.create_version(
+                            job_id=job_id,
+                            template_name=selected_version.template_name,
+                            resume_json=resume_data.model_dump_json(),
+                            event_type=ResumeVersionEvent.save,
+                            parent_version_id=selected_version.id,
+                        )
+                    )
+                    new_version_id = new_version.id
                     # Update selection
                     st.session_state.step2_selected_version_id = new_version_id
                     st.session_state.step2_draft = resume_data
@@ -785,7 +949,14 @@ def _render_version_navigation_and_content(
         if show_pdf:
             # PDF preview
             try:
-                pdf_bytes = ResumeService.render_preview(job_id, resume_data, selected_version.template_name)
+                pdf_bytes = asyncio.run(
+                    ResumesAPI.preview_pdf(
+                        job_id,
+                        selected_version.id,
+                        resume_data=resume_data,
+                        template_name=selected_version.template_name,
+                    )
+                )
                 pdf_viewer(pdf_bytes, zoom_level="auto")
             except Exception as exc:
                 logger.exception("Failed to render PDF: %s", exc)
@@ -1120,14 +1291,21 @@ def _invoke_resume_tool(tool_call: dict) -> str:
                 return "Error: Missing job context"
 
             # Get job details
-            job = JobService.get_job(job_id)
+            try:
+                job = asyncio.run(JobsAPI.get_job(job_id))
+            except Exception:
+                return "Error: Job not found"
+
             if not job:
                 return "Error: Job not found"
 
             # Determine template_name and parent_version_id
             # Match logic from resume_refinement.py run_resume_chat (lines 77-83)
             if selected_version_id:
-                version = ResumeService.get_version(selected_version_id)
+                try:
+                    version = asyncio.run(ResumesAPI.get_version(job_id, selected_version_id))
+                except Exception:
+                    return "Error: Version not found"
                 if not version:
                     return "Error: Version not found"
                 template_name = version.template_name

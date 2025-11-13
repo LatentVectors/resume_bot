@@ -43,6 +43,12 @@ class Settings(BaseSettings):
     debug: bool = Field(default=False)
     app_base_url: str = Field(default="http://localhost:8501")
 
+    # API Configuration
+    api_host: str = Field(default="0.0.0.0")
+    api_port: int = Field(default=8000)
+    api_reload: bool = Field(default=True)
+    cors_origins: list[str] = Field(default=["http://localhost:8501"])
+
     # Paths
     data_dir: Path = Field(default=Path("data"))
 

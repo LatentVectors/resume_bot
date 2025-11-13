@@ -1,7 +1,13 @@
 """User profile page for managing single user in the Resume Bot application."""
 
+import asyncio
+
 import streamlit as st
 
+from app.api_client.endpoints.certificates import CertificatesAPI
+from app.api_client.endpoints.education import EducationAPI
+from app.api_client.endpoints.experiences import ExperiencesAPI
+from app.api_client.endpoints.users import UsersAPI
 from app.components.confirm_delete import confirm_delete
 from app.dialog.certificate_dialog import show_add_certificate_dialog, show_edit_certificate_dialog
 from app.dialog.education_dialog import show_add_education_dialog, show_edit_education_dialog
@@ -9,10 +15,6 @@ from app.dialog.experience_dialog import (
     show_add_experience_dialog,
     show_edit_experience_dialog,
 )
-from app.services.certificate_service import CertificateService
-from app.services.education_service import EducationService
-from app.services.experience_service import ExperienceService
-from app.services.user_service import UserService
 from app.shared.formatters import format_all_experiences
 from src.database import db_manager
 from src.logging_config import logger
@@ -23,7 +25,13 @@ def display_user_profile():
     st.title("User Profile")
 
     # Get current user
-    user = UserService.get_current_user()
+    try:
+        user = asyncio.run(UsersAPI.get_current_user())
+    except Exception as e:
+        st.error(f"Error loading user: {str(e)}")
+        logger.error(f"Error loading current user: {e}")
+        return
+
     if not user:
         st.error("No user found. Please complete onboarding first.")
         return
@@ -238,9 +246,11 @@ def display_edit_form(user):
             else:
                 try:
                     # Update user data
-                    UserService.update_user(user.id, **current_data)
+                    updated_user = asyncio.run(UsersAPI.update_user(user.id, **current_data))
                     # Keep session state in sync so future edits reflect saved values
                     st.session_state.user_data = current_data
+                    # Update user object in session state if needed
+                    user = updated_user
                     st.success("Profile updated successfully!")
                     st.session_state.edit_mode = False
                     st.rerun()
@@ -253,7 +263,7 @@ def display_experience_section(user_id):
     """Display and manage work experience section."""
     # Fetch experiences first to determine if copy button should be shown
     try:
-        experiences = ExperienceService.list_user_experiences(user_id)
+        experiences = asyncio.run(ExperiencesAPI.list_experiences(user_id))
     except Exception as e:
         st.error(f"Error loading experiences: {str(e)}")
         logger.error(f"Error loading experiences: {e}")
@@ -347,13 +357,10 @@ def display_experience_section(user_id):
 
                     def _on_confirm(exp_id: int = exp.id):
                         try:
-                            success = ExperienceService.delete_experience(exp_id)
-                            if success:
-                                st.session_state[f"confirm_delete_exp_{exp_id}"] = False
-                                st.success("Experience deleted successfully!")
-                                st.rerun()
-                            else:
-                                st.error("Failed to delete experience.")
+                            asyncio.run(ExperiencesAPI.delete_experience(exp_id))
+                            st.session_state[f"confirm_delete_exp_{exp_id}"] = False
+                            st.success("Experience deleted successfully!")
+                            st.rerun()
                         except Exception as e:
                             st.error(f"Error deleting experience: {e}")
                             logger.error(f"Error deleting experience {exp_id}: {e}")
@@ -371,7 +378,7 @@ def display_achievements_section(experience_id: int) -> None:
     """Display achievements for a specific experience (read-only)."""
     # Fetch achievements for this experience
     try:
-        _, achievements = ExperienceService.get_experience_with_achievements(experience_id)
+        achievements = asyncio.run(ExperiencesAPI.list_achievements(experience_id))
     except Exception as e:
         st.error(f"Error loading achievements: {str(e)}")
         logger.exception(f"Error loading achievements for experience {experience_id}: {e}")
@@ -399,7 +406,7 @@ def display_education_section(user_id):
 
     # Display existing educations
     try:
-        educations = EducationService.list_user_educations(user_id)
+        educations = asyncio.run(EducationAPI.list_education(user_id))
 
         if educations:
             for edu in educations:
@@ -424,11 +431,11 @@ def display_education_section(user_id):
 
                         def _on_confirm(edu_id: int = edu.id) -> None:
                             try:
-                                success = EducationService.delete_education(edu_id)
-                                if success:
-                                    st.success("Education deleted successfully!")
-                                else:
-                                    st.error("Failed to delete education.")
+                                asyncio.run(EducationAPI.delete_education(edu_id))
+                                st.success("Education deleted successfully!")
+                            except Exception as e:
+                                st.error(f"Error deleting education: {str(e)}")
+                                logger.error(f"Error deleting education {edu_id}: {e}")
                             finally:
                                 st.session_state[f"confirm_delete_edu_{edu_id}"] = False
                                 st.rerun()
@@ -453,19 +460,16 @@ def display_delete_confirmation(item_type: str, item_id: int, item_name: str) ->
     def _on_confirm(it: str = item_type, iid: int = item_id) -> None:
         try:
             if it == "experience":
-                success = ExperienceService.delete_experience(iid)
+                asyncio.run(ExperiencesAPI.delete_experience(iid))
             elif it == "education":
-                success = EducationService.delete_education(iid)
+                asyncio.run(EducationAPI.delete_education(iid))
             elif it == "certificate":
-                success = CertificateService.delete_certification(iid)
+                asyncio.run(CertificatesAPI.delete_certificate(iid))
             else:
-                success = False
                 st.error(f"Unsupported item type: {it}")
+                return
 
-            if success:
-                st.success(f"{it.title()} deleted successfully!")
-            else:
-                st.error(f"Failed to delete {it}.")
+            st.success(f"{it.title()} deleted successfully!")
         except Exception as e:
             st.error(f"Error deleting {it}: {str(e)}")
             logger.error(f"Error deleting {it}: {e}")
@@ -488,7 +492,7 @@ def display_certificates_section(user_id):
         show_add_certificate_dialog(user_id)
 
     try:
-        certifications = CertificateService.list_user_certifications(user_id)
+        certifications = asyncio.run(CertificatesAPI.list_certificates(user_id))
 
         if certifications:
             for cert in certifications:
@@ -521,13 +525,15 @@ def display_certificates_section(user_id):
                     cert_id = cert.id
 
                     def _on_confirm(cert_id: int = cert_id) -> None:  # bind current id
-                        success = CertificateService.delete_certification(cert_id)
-                        if success:
+                        try:
+                            asyncio.run(CertificatesAPI.delete_certificate(cert_id))
                             st.success("Certificate deleted successfully!")
-                        else:
-                            st.error("Failed to delete certificate.")
-                        st.session_state[f"confirm_delete_cert_{cert_id}"] = False
-                        st.rerun()
+                        except Exception as e:
+                            st.error(f"Error deleting certificate: {str(e)}")
+                            logger.error(f"Error deleting certificate {cert_id}: {e}")
+                        finally:
+                            st.session_state[f"confirm_delete_cert_{cert_id}"] = False
+                            st.rerun()
 
                     def _on_cancel(cert_id: int = cert_id) -> None:  # bind current id
                         st.session_state[f"confirm_delete_cert_{cert_id}"] = False

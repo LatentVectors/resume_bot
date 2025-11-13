@@ -1,13 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 
 import streamlit as st
 
+from app.api_client.endpoints.responses import ResponsesAPI
+from app.api_client.endpoints.users import UsersAPI
 from app.pages.job_tabs.utils import navigate_to_job
-from app.services.user_service import UserService
-from src.database import Response as DbResponse
-from src.database import db_manager
+from api.schemas.response import ResponseResponse
 from src.logging_config import logger
 
 
@@ -23,9 +24,11 @@ def _fmt_dt(dt: datetime | None) -> str:
 def main() -> None:
     st.title("Responses")
 
-    user = UserService.get_current_user()
-    if not user:
+    try:
+        user = asyncio.run(UsersAPI.get_current_user())
+    except Exception as e:  # noqa: BLE001
         st.error("No user found. Please complete onboarding first.")
+        logger.error(f"Error getting current user: {e}")
         return
 
     # Filters
@@ -57,7 +60,9 @@ def main() -> None:
         ignore_value = None
 
     try:
-        responses: list[DbResponse] = db_manager.list_responses(sources=selected_sources, ignore=ignore_value)
+        responses: list[ResponseResponse] = asyncio.run(
+            ResponsesAPI.list_responses(sources=selected_sources if selected_sources else None, ignore=ignore_value)
+        )
     except Exception as e:  # noqa: BLE001
         st.error("Failed to load responses. Please try again later.")
         logger.error(f"Error listing responses: {e}")
@@ -91,7 +96,7 @@ def main() -> None:
         with row[0]:
             st.write(str(r.id))
         with row[1]:
-            st.write(r.source)
+            st.write(r.source.value if hasattr(r.source, "value") else str(r.source))
         with row[2]:
             st.write((r.prompt[:120] + "…") if len(r.prompt) > 120 else r.prompt)
         with row[3]:
