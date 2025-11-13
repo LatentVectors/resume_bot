@@ -92,16 +92,27 @@ def render_step3_experience_proposals(job_id: int | None) -> None:
     # Empty state: No proposals detected
     if not proposals:
         st.info("No experience updates detected from your conversation.")
-        with st.container(horizontal=True, horizontal_alignment="right"):
-            if st.button("Next", type="primary", key="step3_empty_next"):
-                try:
-                    JobService.complete_session(session.id)
-                    _clear_step3_state()
-                    navigate_to_job(job_id)
-                except Exception as exc:
-                    logger.exception("Error completing step 3: %s", exc)
-                    st.error("Failed to complete step. Please try again.")
+
+        # Action buttons with two-column layout
+        back_col, action_col = st.columns([1, 1])
+
+        with back_col:
+            if st.button("Back", key="step3_empty_back"):
+                # Go back to Step 2 without clearing state or updating database
+                st.session_state.current_step = 2
                 st.rerun()
+
+        with action_col:
+            with st.container(horizontal=True, horizontal_alignment="right"):
+                if st.button("Next", type="primary", key="step3_empty_next"):
+                    try:
+                        JobService.complete_session(session.id)
+                        _clear_step3_state()
+                        navigate_to_job(job_id)
+                    except Exception as exc:
+                        logger.exception("Error completing step 3: %s", exc)
+                        st.error("Failed to complete step. Please try again.")
+                    st.rerun()
         return
 
     # Group proposals by experience
@@ -155,17 +166,26 @@ def render_step3_experience_proposals(job_id: int | None) -> None:
         # Divider between experiences
         st.divider()
 
-    # Action buttons at bottom
-    with st.container(horizontal=True, horizontal_alignment="right"):
-        if st.button("Next", type="primary", key="step3_next"):
-            try:
-                JobService.complete_session(session.id)
-                _clear_step3_state()
-                navigate_to_job(job_id)
-            except Exception as exc:
-                logger.exception("Error completing step 3: %s", exc)
-                st.error("Failed to complete step. Please try again.")
+    # Action buttons at bottom with two-column layout
+    back_col, action_col = st.columns([1, 1])
+
+    with back_col:
+        if st.button("Back", key="step3_back"):
+            # Go back to Step 2 without clearing state or updating database
+            st.session_state.current_step = 2
             st.rerun()
+
+    with action_col:
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if st.button("Next", type="primary", key="step3_next"):
+                try:
+                    JobService.complete_session(session.id)
+                    _clear_step3_state()
+                    navigate_to_job(job_id)
+                except Exception as exc:
+                    logger.exception("Error completing step 3: %s", exc)
+                    st.error("Failed to complete step. Please try again.")
+                st.rerun()
 
 
 def _group_proposals_by_experience(proposals: list) -> dict[int, list]:

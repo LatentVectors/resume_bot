@@ -16,7 +16,6 @@ from app.dialog.resume_add_certificate_dialog import show_resume_add_certificate
 from app.dialog.resume_add_education_dialog import show_resume_add_education_dialog
 from app.dialog.resume_add_experience_dialog import show_resume_add_experience_dialog
 from app.exceptions import OpenAIQuotaExceededError
-from app.pages.job_tabs.utils import navigate_to_job
 from app.services.job_intake_service import JobIntakeService
 from app.services.job_service import JobService
 from app.services.resume_service import ResumeService
@@ -187,125 +186,135 @@ def render_step2_experience_and_resume(job_id: int | None) -> None:
         except Exception:
             pass
 
-    with st.container(horizontal=True, horizontal_alignment="right"):
-        if st.button("Skip", key="intake_step2_skip"):
-            try:
-                # Mark step 2 as completed
-                JobService.update_session_step(session.id, step=2, completed=True)
-                # Update database - set step 3 as current
-                JobService.update_session_step(session.id, step=3, completed=False)
-                # Transition to Step 3
-                st.session_state.current_step = 3
-                # Ensure intake_job_id is set in session state
-                if "intake_job_id" not in st.session_state:
-                    st.session_state.intake_job_id = job_id
-                # Skip extraction - set empty proposals
-                st.session_state.step3_proposals = []
-                # Clear step2 UI state (but not intake flow state)
-                for key in list(st.session_state.keys()):
-                    if key.startswith("step2_"):
-                        st.session_state.pop(key, None)
-                _clear_resume_tab_state(job_id)
-            except Exception as exc:
-                logger.exception("Error completing step 2 (skip): %s", exc)
-                st.error("Failed to complete step. Please try again.")
+    # Action buttons with two-column layout
+    back_col, action_col = st.columns([1, 1])
+
+    with back_col:
+        if st.button("Back", key="intake_step2_back"):
+            # Go back to Step 1 without clearing state or updating database
+            st.session_state.current_step = 1
             st.rerun()
 
-        # Next enabled only when there's a pinned version
-        if st.button("Next", type="primary", disabled=not has_pinned_version, key="intake_step2_next"):
-            try:
-                # Find the pinned version ID
-                pinned_version_id = None
-                if has_pinned_version:
-                    canonical_row = ResumeService.get_canonical(job_id)
-                    if canonical_row:
-                        for v in versions:
-                            if (
-                                v.template_name == canonical_row.template_name
-                                and v.resume_json == canonical_row.resume_json
-                            ):
-                                pinned_version_id = cast(int, v.id)
-                                break
-
-                # Pin the version if found
-                if pinned_version_id:
-                    ResumeService.pin_canonical(job_id, pinned_version_id)
-
-                # Mark step 2 as completed
-                JobService.update_session_step(session.id, step=2, completed=True)
-
-                # Extract experience proposals and move to step 3
-                with st.spinner("Analyzing conversation for experience updates..."):
-                    try:
-                        proposals = JobIntakeService.extract_experience_proposals(session.id, job_id)
-                        # Store proposals in session state for step 3
-                        st.session_state.step3_proposals = proposals
-                        # Update current step to 3
-                        st.session_state.current_step = 3
-                        JobService.update_session_step(session.id, step=3, completed=False)
-                        logger.info(
-                            "Successfully extracted %d experience proposals for session %s",
-                            len(proposals),
-                            session.id,
-                            extra={"session_id": session.id, "job_id": job_id, "proposal_count": len(proposals)},
-                        )
-                    except OpenAIQuotaExceededError:
-                        # Show user-friendly error message and allow user to skip Step 3
-                        logger.error(
-                            "OpenAI API quota exceeded during experience extraction",
-                            extra={"session_id": session.id, "job_id": job_id},
-                        )
-                        st.error(
-                            "Unable to analyze conversation for experience updates due to API quota limits. "
-                            "You can continue to the next step and review proposals later."
-                        )
-                        # Still allow moving forward
-                        st.session_state.current_step = 3
-                        JobService.update_session_step(session.id, step=3, completed=False)
-                        st.session_state.step3_proposals = []
-                    except ValueError as exc:
-                        # Handle validation errors (e.g., missing session, job, or data)
-                        logger.error(
-                            "Validation error during experience extraction: %s",
-                            exc,
-                            extra={"session_id": session.id, "job_id": job_id},
-                        )
-                        st.error(
-                            f"Unable to analyze conversation: {str(exc)}. "
-                            "Please ensure all required data is available and try again."
-                        )
-                        # Still allow moving forward
-                        st.session_state.current_step = 3
-                        JobService.update_session_step(session.id, step=3, completed=False)
-                        st.session_state.step3_proposals = []
-                    except Exception as exc:
-                        # Handle any other unexpected errors
-                        logger.exception(
-                            "Unexpected error extracting experience proposals",
-                            extra={
-                                "session_id": session.id,
-                                "job_id": job_id,
-                                "error_type": type(exc).__name__,
-                                "error_message": str(exc),
-                            },
-                        )
-                        st.error(
-                            "Unable to analyze conversation for experience updates due to an unexpected error. "
-                            "You can continue to the next step and review proposals later."
-                        )
-                        # Still allow moving forward
-                        st.session_state.current_step = 3
-                        JobService.update_session_step(session.id, step=3, completed=False)
-                        st.session_state.step3_proposals = []
-
-                # Ensure intake_job_id is set in session state before rerun
-                if "intake_job_id" not in st.session_state:
-                    st.session_state.intake_job_id = job_id
-
+    with action_col:
+        with st.container(horizontal=True, horizontal_alignment="right"):
+            if st.button("Skip", key="intake_step2_skip"):
+                try:
+                    # Mark step 2 as completed
+                    JobService.update_session_step(session.id, step=2, completed=True)
+                    # Update database - set step 3 as current
+                    JobService.update_session_step(session.id, step=3, completed=False)
+                    # Transition to Step 3
+                    st.session_state.current_step = 3
+                    # Ensure intake_job_id is set in session state
+                    if "intake_job_id" not in st.session_state:
+                        st.session_state.intake_job_id = job_id
+                    # Skip extraction - set empty proposals
+                    st.session_state.step3_proposals = []
+                    # Clear step2 UI state (but not intake flow state)
+                    for key in list(st.session_state.keys()):
+                        if key.startswith("step2_"):
+                            st.session_state.pop(key, None)
+                    _clear_resume_tab_state(job_id)
+                except Exception as exc:
+                    logger.exception("Error completing step 2 (skip): %s", exc)
+                    st.error("Failed to complete step. Please try again.")
                 st.rerun()
-            except Exception as exc:
-                logger.exception("Error completing step 2: %s", exc)
-                st.error("Failed to complete step. Please try again.")
+
+            # Next enabled only when there's a pinned version
+            if st.button("Next", type="primary", disabled=not has_pinned_version, key="intake_step2_next"):
+                try:
+                    # Find the pinned version ID
+                    pinned_version_id = None
+                    if has_pinned_version:
+                        canonical_row = ResumeService.get_canonical(job_id)
+                        if canonical_row:
+                            for v in versions:
+                                if (
+                                    v.template_name == canonical_row.template_name
+                                    and v.resume_json == canonical_row.resume_json
+                                ):
+                                    pinned_version_id = cast(int, v.id)
+                                    break
+
+                    # Pin the version if found
+                    if pinned_version_id:
+                        ResumeService.pin_canonical(job_id, pinned_version_id)
+
+                    # Mark step 2 as completed
+                    JobService.update_session_step(session.id, step=2, completed=True)
+
+                    # Extract experience proposals and move to step 3
+                    with st.spinner("Analyzing conversation for experience updates..."):
+                        try:
+                            proposals = JobIntakeService.extract_experience_proposals(session.id, job_id)
+                            # Store proposals in session state for step 3
+                            st.session_state.step3_proposals = proposals
+                            # Update current step to 3
+                            st.session_state.current_step = 3
+                            JobService.update_session_step(session.id, step=3, completed=False)
+                            logger.info(
+                                "Successfully extracted %d experience proposals for session %s",
+                                len(proposals),
+                                session.id,
+                                extra={"session_id": session.id, "job_id": job_id, "proposal_count": len(proposals)},
+                            )
+                        except OpenAIQuotaExceededError:
+                            # Show user-friendly error message and allow user to skip Step 3
+                            logger.error(
+                                "OpenAI API quota exceeded during experience extraction",
+                                extra={"session_id": session.id, "job_id": job_id},
+                            )
+                            st.error(
+                                "Unable to analyze conversation for experience updates due to API quota limits. "
+                                "You can continue to the next step and review proposals later."
+                            )
+                            # Still allow moving forward
+                            st.session_state.current_step = 3
+                            JobService.update_session_step(session.id, step=3, completed=False)
+                            st.session_state.step3_proposals = []
+                        except ValueError as exc:
+                            # Handle validation errors (e.g., missing session, job, or data)
+                            logger.error(
+                                "Validation error during experience extraction: %s",
+                                exc,
+                                extra={"session_id": session.id, "job_id": job_id},
+                            )
+                            st.error(
+                                f"Unable to analyze conversation: {str(exc)}. "
+                                "Please ensure all required data is available and try again."
+                            )
+                            # Still allow moving forward
+                            st.session_state.current_step = 3
+                            JobService.update_session_step(session.id, step=3, completed=False)
+                            st.session_state.step3_proposals = []
+                        except Exception as exc:
+                            # Handle any other unexpected errors
+                            logger.exception(
+                                "Unexpected error extracting experience proposals",
+                                extra={
+                                    "session_id": session.id,
+                                    "job_id": job_id,
+                                    "error_type": type(exc).__name__,
+                                    "error_message": str(exc),
+                                },
+                            )
+                            st.error(
+                                "Unable to analyze conversation for experience updates due to an unexpected error. "
+                                "You can continue to the next step and review proposals later."
+                            )
+                            # Still allow moving forward
+                            st.session_state.current_step = 3
+                            JobService.update_session_step(session.id, step=3, completed=False)
+                            st.session_state.step3_proposals = []
+
+                    # Ensure intake_job_id is set in session state before rerun
+                    if "intake_job_id" not in st.session_state:
+                        st.session_state.intake_job_id = job_id
+
+                    st.rerun()
+                except Exception as exc:
+                    logger.exception("Error completing step 2: %s", exc)
+                    st.error("Failed to complete step. Please try again.")
 
 
 # ==================== Chat Section ====================

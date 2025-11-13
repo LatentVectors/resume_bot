@@ -35,6 +35,20 @@ def render_step1_details(
         # Clear the error flag after displaying
         st.session_state.step1_api_quota_error = False
 
+    # Check if we're returning from a later step and load existing values
+    existing_job_id = st.session_state.get("intake_job_id")
+    if existing_job_id:
+        existing_job = JobService.get_job(existing_job_id)
+        if existing_job:
+            initial_title = existing_job.job_title or initial_title
+            initial_company = existing_job.company_name or initial_company
+            initial_description = existing_job.job_description or initial_description
+            favorite_value = existing_job.is_favorite or False
+        else:
+            favorite_value = False
+    else:
+        favorite_value = False
+
     # Form fields
     col1, col2 = st.columns(2)
     with col1:
@@ -60,7 +74,7 @@ def render_step1_details(
         key="intake_step1_description",
     )
 
-    favorite = st.toggle("Favorite", value=False, key="intake_step1_favorite")
+    favorite = st.toggle("Favorite", value=favorite_value, key="intake_step1_favorite")
 
     # Next button (enabled only when required fields filled)
     next_disabled = not (title.strip() and company.strip() and description.strip())
@@ -68,19 +82,69 @@ def render_step1_details(
     with st.container(horizontal=True, horizontal_alignment="right"):
         if st.button("Next", type="primary", disabled=next_disabled, key="intake_step1_next"):
             try:
-                # Save job with user-provided details (no extraction needed)
-                job = JobService.save_job(
-                    title=title.strip(),
-                    company=company.strip(),
-                    description=description.strip(),
-                    favorite=favorite,
-                )
-
-                # Create intake session
-                session = JobService.create_intake_session(job.id)
-
-                # Store job_id for subsequent steps
-                st.session_state.intake_job_id = job.id
+                # Check if we're returning from a later step (job already exists)
+                existing_job_id = st.session_state.get("intake_job_id")
+                
+                if existing_job_id:
+                    # Returning from later step - check if job details changed
+                    existing_job = JobService.get_job(existing_job_id)
+                    if existing_job:
+                        # Check if any details changed
+                        details_changed = (
+                            existing_job.job_title != title.strip()
+                            or existing_job.company_name != company.strip()
+                            or existing_job.job_description != description.strip()
+                        )
+                        
+                        if details_changed:
+                            # Update job details
+                            JobService.update_job_fields(
+                                existing_job_id,
+                                title=title.strip(),
+                                company=company.strip(),
+                                job_description=description.strip(),
+                                is_favorite=favorite,
+                            )
+                            
+                            # Clear analyses to force regeneration
+                            session = JobService.get_intake_session(existing_job_id)
+                            if session:
+                                JobService.save_gap_analysis(session.id, "")
+                                JobService.save_stakeholder_analysis(session.id, "")
+                                logger.info(
+                                    "Cleared analyses due to job detail changes for job_id=%s",
+                                    existing_job_id
+                                )
+                        
+                        # Use existing job
+                        job = JobService.get_job(existing_job_id)
+                        if not job:
+                            st.error("Failed to load job. Please try again.")
+                            return
+                        session = JobService.get_intake_session(existing_job_id)
+                        if not session:
+                            st.error("Failed to load session. Please try again.")
+                            return
+                    else:
+                        # Job not found, create new one
+                        job = JobService.save_job(
+                            title=title.strip(),
+                            company=company.strip(),
+                            description=description.strip(),
+                            favorite=favorite,
+                        )
+                        session = JobService.create_intake_session(job.id)
+                        st.session_state.intake_job_id = job.id
+                else:
+                    # First time through - create new job
+                    job = JobService.save_job(
+                        title=title.strip(),
+                        company=company.strip(),
+                        description=description.strip(),
+                        favorite=favorite,
+                    )
+                    session = JobService.create_intake_session(job.id)
+                    st.session_state.intake_job_id = job.id
 
                 # Get user experiences for analysis
                 current_user = UserService.get_current_user()
