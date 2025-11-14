@@ -1,0 +1,26 @@
+{
+  "name": "resume-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "npm@10.2.4",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "setup": "npm install && npm run setup:api",
+    "setup:api": "cd apps/api && python3 -m venv .venv && .venv/bin/pip install --upgrade pip && .venv/bin/pip install -e '.[dev]'",
+    "dev": "turbo run dev",
+    "dev:web": "cd apps/web && npm run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "clean": "rm -rf node_modules apps/*/node_modules apps/*/.next apps/*/.turbo .turbo .pytest_cache .mypy_cache .ruff_cache apps/api/.pytest_cache apps/api/.mypy_cache apps/api/.ruff_cache apps/api/**/__pycache__ apps/api/**/*.pyc apps/api/*.egg-info apps/api/dist apps/api/build package-lock.json && echo 'Cleaned all generated files (kept .venv)'",
+    "clean:all": "npm run clean && rm -rf .venv apps/api/.venv && echo 'Full clean completed - removed .venv too'"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+

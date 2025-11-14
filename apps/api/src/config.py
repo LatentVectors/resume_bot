@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from dotenv import load_dotenv
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from src.logging_config import logger
@@ -47,7 +47,22 @@ class Settings(BaseSettings):
     api_host: str = Field(default="0.0.0.0")
     api_port: int = Field(default=8000)
     api_reload: bool = Field(default=True)
-    cors_origins: list[str] = Field(default=["http://localhost:8501"])
+    cors_origins: list[str] = Field(
+        default=["http://localhost:3000", "http://localhost:8501"]
+    )
+    cors_origin_regex: str | None = Field(
+        default=r"https://.*\.vercel\.app",
+        description="Regex pattern for matching CORS origins (e.g., Vercel preview deployments)",
+    )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: str | list[str]) -> list[str]:
+        """Parse CORS origins from environment variable (comma-separated string) or list."""
+        if isinstance(v, str):
+            # Split comma-separated string and strip whitespace
+            return [origin.strip() for origin in v.split(",") if origin.strip()]
+        return v
 
     # Paths
     data_dir: Path = Field(default=Path("data"))

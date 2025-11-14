@@ -11,7 +11,6 @@
         "**/downloads": true,
         "**/eggs": true,
         "**/.eggs": true,
-        "**/lib": true,
         "**/lib64": true,
         "**/parts": true,
         "**/sdist": true,
@@ -45,7 +44,10 @@
         "**/Thumbs.db": true,
         "**/.ipynb_checkpoints": true,
         "**/profile_default": true,
-        "**/ipython_config.py": true
+        "**/ipython_config.py": true,
+        "**/.next": true,
+        "**/next-env.d.ts": true,
+        "**/out": true
     },
     "search.exclude": {
         "**/__pycache__": true,
@@ -94,7 +96,10 @@
         "**/.ipynb_checkpoints": true,
         "**/profile_default": true,
         "**/ipython_config.py": true,
-        "**/data": true
+        "**/data": true,
+        "**/.next": true,
+        "**/next-env.d.ts": true,
+        "**/out": true
     },
     "files.watcherExclude": {
         "**/__pycache__/**": true,
@@ -143,7 +148,10 @@
         "**/.ipynb_checkpoints/**": true,
         "**/profile_default/**": true,
         "**/ipython_config.py": true,
-        "**/data/**": true
+        "**/data/**": true,
+        "**/.next/**": true,
+        "**/next-env.d.ts": true,
+        "**/out/**": true
     },
     "editor.rulers": [
         100

@@ -1,3 +1,29 @@
+# Python API app
+apps/api/data/
+apps/api/log/
+apps/api/.venv/
+apps/api/.env
+
+# Next.js frontend app
+apps/web/.next/
+apps/web/out/
+apps/web/node_modules/
+apps/web/.env.local
+apps/web/.env.development.local
+apps/web/.env.test.local
+apps/web/.env.production.local
+apps/web/next-env.d.ts
+
+# Node.js / Next.js
+node_modules/
+.next/
+next-env.d.ts
+out/
+.turbo/
+.vercel/
+
+# Legacy paths (keep for backward compatibility during migration)
+packages/
 data/
 log/
 
@@ -140,8 +166,13 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# PyCharm
+# IDEs
 .idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 
 # Streamlit
 .streamlit/
