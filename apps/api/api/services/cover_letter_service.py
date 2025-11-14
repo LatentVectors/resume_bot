@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+
 from sqlmodel import select
 
 from src.database import CoverLetter as DbCoverLetter

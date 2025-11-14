@@ -1,93 +1,55 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import * as z from "zod";
+import { Plus } from "lucide-react";
+import { useMemo } from "react";
 
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from "@/components/ui/form";
-import { Textarea } from "@/components/ui/textarea";
-import { useCreateJob } from "@/lib/hooks/useJobMutations";
+import { ActivityHeatMap } from "@/components/dashboard/ActivityHeatMap";
 import { useCurrentUser } from "@/lib/hooks/useUser";
-import { useExperiences } from "@/lib/hooks/useExperiences";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-
-const jobDescriptionSchema = z.object({
-  description: z.string().min(1, "Job description is required"),
-});
-
-type JobDescriptionFormData = z.infer<typeof jobDescriptionSchema>;
+import { useUserStats } from "@/lib/hooks/useUserStats";
+import { useJobs } from "@/lib/hooks/useJobs";
 
 export default function Home() {
-  const router = useRouter();
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  // Fetch current user
   const { data: user, isLoading: isLoadingUser } = useCurrentUser();
+  const { data: stats, isLoading: isLoadingStats } = useUserStats(user?.id);
 
-  // Fetch experiences to check if user has any
-  const { data: experiences, isLoading: isLoadingExperiences } = useExperiences(
-    user?.id ?? 0
-  );
-
-  // Create job mutation
-  const createJob = useCreateJob();
-
-  const form = useForm<JobDescriptionFormData>({
-    resolver: zodResolver(jobDescriptionSchema),
-    defaultValues: {
-      description: "",
-    },
+  // Fetch all jobs for the heat map and calculating days since last application
+  const { data: jobsData } = useJobs({
+    userId: user?.id ?? 0,
+    limit: 1000, // Large limit to get all jobs
   });
+  const jobs = jobsData?.items ?? [];
 
-  const onSubmit = async (data: JobDescriptionFormData) => {
-    if (!user?.id) {
-      return;
+  // Calculate days since last application
+  const daysSinceLastApplication = useMemo(() => {
+    const appliedJobs = jobs.filter((job) => job.applied_at);
+    if (appliedJobs.length === 0) {
+      return "N/A";
     }
 
-    setIsSubmitting(true);
-    try {
-      // Create job with just description (title/company will be filled in Step 1)
-      const newJob = await createJob.mutateAsync({
-        user_id: user.id,
-        data: {
-          description: data.description.trim(),
-          title: null,
-          company: null,
-          favorite: false,
-        },
-      });
+    // Find the most recent applied_at date
+    const dates = appliedJobs
+      .map((job) => job.applied_at!)
+      .map((dateStr) => new Date(dateStr))
+      .sort((a, b) => b.getTime() - a.getTime());
 
-      // Navigate to intake flow Step 1
-      router.push(`/intake/${newJob.id}/details`);
-    } catch (error) {
-      console.error("Failed to create job:", error);
-      // Error will be handled by TanStack Query
-    } finally {
-      setIsSubmitting(false);
+    const mostRecentDate = dates[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    mostRecentDate.setHours(0, 0, 0, 0);
+
+    const diffTime = today.getTime() - mostRecentDate.getTime();
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays === 0) {
+      return "Today";
+    } else if (diffDays === 1) {
+      return "1 day";
+    } else {
+      return `${diffDays} days`;
     }
-  };
-
-  const hasNoExperiences =
-    !isLoadingExperiences && (!experiences || experiences.length === 0);
+  }, [jobs]);
 
   if (isLoadingUser) {
     return (
@@ -108,67 +70,89 @@ export default function Home() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl">
-      <Card>
-        <CardHeader>
-          <CardTitle>Save Job</CardTitle>
-          <CardDescription>
-            Enter a job description to start the intake workflow. You&apos;ll be
-            able to add title and company details in the next step.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          {hasNoExperiences && (
-            <Alert className="mb-6">
-              <AlertDescription>
-                You don&apos;t have any experiences yet. Consider adding
-                experiences in your{" "}
-                <Link href="/profile" className="underline">
-                  profile
-                </Link>{" "}
-                before starting the intake workflow.
-              </AlertDescription>
-            </Alert>
-          )}
+    <div className="space-y-4">
+      {/* Header with Add Job Button */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground">
+            Overview of your job application activity
+          </p>
+        </div>
+        <Button asChild size="lg">
+          <Link href="/intake/new/details">
+            <Plus className="mr-2 size-4" />
+            Add Job
+          </Link>
+        </Button>
+      </div>
 
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              <FormField
-                control={form.control}
-                name="description"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Job Description</FormLabel>
-                    <FormControl>
-                      <Textarea
-                        {...field}
-                        placeholder="Enter your job description, skills, or any other requirements..."
-                        className="min-h-[400px] resize-y"
-                      />
-                    </FormControl>
-                    <FormDescription>
-                      Paste the full job description, requirements, or any
-                      relevant details about the position.
-                    </FormDescription>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+      {/* Primary Stats Row */}
+      {isLoadingStats ? (
+        <div className="text-muted-foreground">Loading statistics...</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            <div className="flex flex-col items-center text-center">
+              <p className="text-3xl font-bold">
+                {stats?.jobs_applied_7_days ?? 0}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Jobs Applied (Last 7 Days)
+              </p>
+            </div>
+            <div className="flex flex-col items-center text-center">
+              <p className="text-3xl font-bold">
+                {stats?.jobs_applied_30_days ?? 0}
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Jobs Applied (Last 30 Days)
+              </p>
+            </div>
+            <div className="flex flex-col items-center text-center">
+              <p className="text-3xl font-bold">{daysSinceLastApplication}</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Days Since Last Application
+              </p>
+            </div>
+          </div>
 
-              <div className="flex justify-end">
-                <Button
-                  type="submit"
-                  disabled={isSubmitting || createJob.isPending}
-                >
-                  {isSubmitting || createJob.isPending
-                    ? "Saving..."
-                    : "Save Job"}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
+          {/* Secondary Stats Row */}
+          <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+            <div className="text-center">
+              <p className="text-base font-medium">
+                {stats?.total_jobs_applied ?? 0}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Total Jobs Applied
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-base font-medium">
+                {stats?.total_jobs_saved ?? 0}
+              </p>
+              <p className="text-sm text-muted-foreground">Total Jobs Saved</p>
+            </div>
+            <div className="text-center">
+              <p className="text-base font-medium">
+                {stats?.total_interviews ?? 0}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Interviews Scheduled
+              </p>
+            </div>
+            <div className="text-center">
+              <p className="text-base font-medium">
+                {stats?.total_offers ?? 0}
+              </p>
+              <p className="text-sm text-muted-foreground">Offers Received</p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Activity Heat Map */}
+      {user && <ActivityHeatMap jobs={jobs} />}
     </div>
   );
 }

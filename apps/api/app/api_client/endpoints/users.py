@@ -1,7 +1,7 @@
 """API client for user endpoints with typed responses."""
 
-from app.api_client.client import api_client
 from api.schemas.user import UserCreate, UserResponse, UserUpdate
+from app.api_client.client import api_client
 
 
 class UsersAPI:

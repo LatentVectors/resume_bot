@@ -6,8 +6,9 @@ from collections.abc import Iterable
 from datetime import datetime
 from typing import Literal
 
-from sqlmodel import select
+from sqlmodel import func, select
 
+from api.utils.errors import BadRequestError
 from src.database import (
     CoverLetter as DbCoverLetter,
 )
@@ -66,7 +67,7 @@ class JobService:
         """
         # Validate inputs
         if not user_id or not isinstance(user_id, int) or user_id <= 0:
-            raise ValueError("user_id is required")
+            raise BadRequestError("user_id is required")
         if not title or not title.strip():
             raise ValueError("title is required")
         if not company or not company.strip():
@@ -99,27 +100,49 @@ class JobService:
         user_id: int,
         statuses: Iterable[AllowedStatus] | None = None,
         favorites_only: bool = False,
-    ) -> list[DbJob]:
-        """List jobs for a user with optional filters.
+        skip: int = 0,
+        limit: int = 50,
+    ) -> tuple[list[DbJob], int]:
+        """List jobs for a user with optional filters and pagination.
 
         Default sort: created_at desc.
+
+        Returns:
+            Tuple of (list of jobs, total count).
         """
         if not isinstance(user_id, int) or user_id <= 0:
-            raise ValueError("Invalid user_id")
+            raise BadRequestError("Invalid user_id")
+        if skip < 0:
+            raise BadRequestError("skip must be >= 0")
+        if limit < 1:
+            raise BadRequestError("limit must be >= 1")
 
         try:
             with db_manager.get_session() as session:
-                stmt = select(DbJob).where(DbJob.user_id == user_id)
+                # Build base query for filtering
+                base_stmt = select(DbJob).where(DbJob.user_id == user_id)
 
                 if statuses:
                     status_values = list(statuses)
                     if status_values:
-                        stmt = stmt.where(DbJob.status.in_(status_values))
+                        base_stmt = base_stmt.where(DbJob.status.in_(status_values))
 
                 if favorites_only:
-                    stmt = stmt.where(DbJob.is_favorite.is_(True))
+                    base_stmt = base_stmt.where(DbJob.is_favorite.is_(True))
 
-                stmt = stmt.order_by(DbJob.created_at.desc())
+                # Get total count - build count query with same filters
+                count_stmt = select(func.count(DbJob.id))
+                if statuses:
+                    status_values = list(statuses)
+                    if status_values:
+                        count_stmt = count_stmt.where(DbJob.status.in_(status_values))
+                if favorites_only:
+                    count_stmt = count_stmt.where(DbJob.is_favorite.is_(True))
+                count_stmt = count_stmt.where(DbJob.user_id == user_id)
+                total = session.exec(count_stmt).one()
+
+                # Apply pagination and ordering
+                stmt = base_stmt.order_by(DbJob.created_at.desc()).offset(skip).limit(limit)
                 jobs = list(session.exec(stmt))
 
                 # Keep denormalized flags reasonably fresh for UI rendering
@@ -130,10 +153,10 @@ class JobService:
                         refreshed.append(updated or job)
                     except Exception:  # noqa: BLE001
                         refreshed.append(job)
-                return refreshed
+                return (refreshed, total)
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to list jobs for user %s: %s", user_id, exc)
-            return []
+            return ([], 0)
 
     @staticmethod
     def get_job(job_id: int) -> DbJob | None:
@@ -417,6 +440,51 @@ class JobService:
         except Exception as exc:  # noqa: BLE001
             logger.exception("Failed to add note for job %s: %s", job_id, exc)
             raise
+
+    @staticmethod
+    def update_note(note_id: int, content: str) -> DbNote | None:
+        """Update a note's content."""
+        if not isinstance(note_id, int) or note_id <= 0:
+            raise ValueError("Invalid note_id")
+        if not content or not content.strip():
+            raise ValueError("content is required")
+
+        try:
+            with db_manager.get_session() as session:
+                note = session.get(DbNote, note_id)
+                if not note:
+                    return None
+
+                note.content = content.strip()
+                note.updated_at = datetime.now()
+                session.add(note)
+                session.commit()
+                session.refresh(note)
+                logger.info("Updated note %s", note_id)
+                return note
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to update note %s: %s", note_id, exc)
+            raise
+
+    @staticmethod
+    def delete_note(note_id: int) -> bool:
+        """Delete a note."""
+        if not isinstance(note_id, int) or note_id <= 0:
+            return False
+
+        try:
+            with db_manager.get_session() as session:
+                note = session.get(DbNote, note_id)
+                if not note:
+                    return False
+
+                session.delete(note)
+                session.commit()
+                logger.info("Deleted note %s", note_id)
+                return True
+        except Exception as exc:  # noqa: BLE001
+            logger.exception("Failed to delete note %s: %s", note_id, exc)
+            return False
 
     # ---------- Denormalized flags helpers ----------
     @staticmethod
@@ -803,4 +871,3 @@ class JobService:
 
         logger.info("Bulk delete completed: %s successful, %s failed", successful, failed)
         return (successful, failed)
-

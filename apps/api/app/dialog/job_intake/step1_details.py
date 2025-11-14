@@ -89,7 +89,7 @@ def render_step1_details(
             try:
                 # Check if we're returning from a later step (job already exists)
                 existing_job_id = st.session_state.get("intake_job_id")
-                
+
                 # Get current user first (needed for job creation)
                 current_user = asyncio.run(UsersAPI.get_current_user())
                 if not current_user or not current_user.id:
@@ -107,7 +107,7 @@ def render_step1_details(
                             or existing_job.company_name != company.strip()
                             or existing_job.job_description != description.strip()
                         )
-                        
+
                         if details_changed:
                             # Update job details
                             asyncio.run(
@@ -119,7 +119,7 @@ def render_step1_details(
                                     favorite=favorite,
                                 )
                             )
-                            
+
                             # Clear analyses to force regeneration
                             session = asyncio.run(JobsAPI.get_intake_session(existing_job_id))
                             if session:
@@ -137,7 +137,7 @@ def render_step1_details(
                                     "Cleared analyses due to job detail changes for job_id=%s",
                                     existing_job_id
                                 )
-                        
+
                         # Use existing job
                         job = asyncio.run(JobsAPI.get_job(existing_job_id))
                         if not job:

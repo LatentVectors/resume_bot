@@ -86,12 +86,12 @@ def fetch_models() -> list[dict[str, str]]:
     for model in models:
         if not isinstance(model, dict):
             continue
-        
+
         model_id = model.get("id")
         if not model_id:
             logger.warning(f"Skipping model without id: {model}")
             continue
-        
+
         normalized_models.append({
             "id": model_id,
             "name": model.get("name", "Unknown"),
@@ -111,7 +111,7 @@ def generate_models_file(models: list[dict[str, str]]) -> None:
         models: List of model dictionaries with id, name, and description.
     """
     output_path = Path("src/core/models.py")
-    
+
     lines = [
         "# " + "=" * 78,
         "# AUTO-GENERATED FILE - DO NOT MANUALLY EDIT",
@@ -135,37 +135,37 @@ def generate_models_file(models: list[dict[str, str]]) -> None:
         '    """Available models from OpenRouter."""',
         "",
     ]
-    
+
     # Sort models by their sanitized enum key for easy lookup
     models_with_keys = []
     for model in models:
         enum_key = sanitize_enum_key(model["id"])
         models_with_keys.append((enum_key, model))
-    
+
     models_with_keys.sort(key=lambda x: x[0])
-    
+
     # Generate enum members in alphabetical order
     for enum_key, model in models_with_keys:
         model_id = model["id"]
         name = model["name"].strip()
         description = model["description"].strip()
-        
+
         # Add enum member
         lines.append(f'    {enum_key} = "{model_id}"')
-        
+
         # Add docstring with proper line handling
         docstring = f'    """{name} - {description}"""'
         # Strip trailing whitespace from each line in case description has newlines
         docstring_lines = [line.rstrip() for line in docstring.split("\n")]
         lines.extend(docstring_lines)
-        
+
         lines.append("")
-    
+
     # Add type alias
     lines.append("")
     lines.append("ModelName = Models")
     lines.append("")
-    
+
     # Write to file
     output_path.write_text("\n".join(lines))
 
@@ -181,23 +181,23 @@ def sanitize_enum_key(model_id: str) -> str:
     """
     # Convert to uppercase
     key = model_id.upper()
-    
+
     # Replace forward slash with double underscore
     key = key.replace("/", "__")
-    
+
     # Replace hyphens, spaces, and other special characters with single underscores
     key = re.sub(r"[^A-Z0-9_]", "_", key)
-    
+
     # Remove consecutive duplicate underscores (3+ in a row), preserving double underscores from slashes
     key = re.sub(r"_{3,}", "_", key)
-    
+
     # Remove leading/trailing underscores
     key = key.strip("_")
-    
+
     # Prefix with m_ if starts with digit
     if key and key[0].isdigit():
         key = f"m_{key}"
-    
+
     return key
 
 

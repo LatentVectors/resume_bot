@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, status
-from sqlmodel import select
 
 from api.dependencies import DBSession
 from api.schemas.response import ResponseCreate, ResponseResponse, ResponseUpdate
 from api.utils.errors import NotFoundError
-from src.database import Response as DbResponse, ResponseSource, db_manager
+from src.database import Response as DbResponse
+from src.database import db_manager
 
 router = APIRouter()
 

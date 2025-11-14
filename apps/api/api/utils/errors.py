@@ -38,6 +38,21 @@ class ValidationError(HTTPException):
         self.field_errors = field_errors
 
 
+class BadRequestError(HTTPException):
+    """Raised when a request has invalid parameters."""
+
+    def __init__(self, detail: str) -> None:
+        """Initialize the exception.
+
+        Args:
+            detail: Error message describing what was invalid.
+        """
+        super().__init__(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=detail,
+        )
+
+
 class QuotaExceededError(HTTPException):
     """Raised when OpenAI API quota is exceeded."""
 
@@ -47,4 +62,3 @@ class QuotaExceededError(HTTPException):
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="OpenAI API quota exceeded",
         )
-

@@ -98,8 +98,8 @@ def test_reorder_achievements(experience_id):
 def test_add_achievement_with_order(experience_id):
     """Test adding achievements with explicit order."""
     # Add achievements with specific order
-    ach1_id = ExperienceService.add_achievement(experience_id, "First", "First achievement", order=0)
-    ach2_id = ExperienceService.add_achievement(experience_id, "Second", "Second achievement", order=1)
+    ExperienceService.add_achievement(experience_id, "First", "First achievement", order=0)
+    ExperienceService.add_achievement(experience_id, "Second", "Second achievement", order=1)
 
     _, achievements = ExperienceService.get_experience_with_achievements(experience_id)
     assert len(achievements) == 2
@@ -131,7 +131,7 @@ def test_achievement_validation(experience_id):
 def test_reorder_validation(experience_id):
     """Test reorder achievements validation."""
     ach1_id = ExperienceService.add_achievement(experience_id, "First", "First achievement")
-    ach2_id = ExperienceService.add_achievement(experience_id, "Second", "Second achievement")
+    ExperienceService.add_achievement(experience_id, "Second", "Second achievement")
 
     # Test with missing IDs
     with pytest.raises(ValueError, match="do not match existing achievements"):

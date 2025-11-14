@@ -11,7 +11,7 @@ from src.database import JobIntakeSession as DbJobIntakeSession
 def test_resume_step_determination_incomplete_session() -> None:
     """Test that incomplete session resumes from current_step."""
     # Simulate job and incomplete session at step 2
-    job = DbJob(
+    DbJob(
         id=1,
         user_id=1,
         job_title="Software Engineer",
@@ -47,7 +47,7 @@ def test_resume_step_determination_incomplete_session() -> None:
 
 def test_resume_step_determination_completed_session() -> None:
     """Test that completed session restarts from step 1."""
-    job = DbJob(
+    DbJob(
         id=1,
         user_id=1,
         job_title="Software Engineer",
@@ -83,7 +83,7 @@ def test_resume_step_determination_completed_session() -> None:
 
 def test_resume_step_determination_no_session() -> None:
     """Test that missing session starts from step 1."""
-    job = DbJob(
+    DbJob(
         id=1,
         user_id=1,
         job_title="Software Engineer",

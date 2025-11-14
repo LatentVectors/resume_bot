@@ -3,7 +3,6 @@ from enum import StrEnum
 
 import streamlit as st
 
-from api.schemas.job import JobResponse
 from app.api_client.endpoints.jobs import JobsAPI
 from app.api_client.endpoints.messages import MessagesAPI
 from app.api_client.endpoints.responses import ResponsesAPI

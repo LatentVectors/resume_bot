@@ -36,11 +36,11 @@ def load_prompt(name: PromptName, *, include_model: bool = False) -> Any:
         from langchain_core.prompts import BasePromptTemplate
         from langchain_core.prompts.structured import StructuredPrompt
         from langchain_core.runnables.base import RunnableBinding, RunnableSequence
-    except ImportError:
+    except ImportError as err:
         raise ImportError(
             "The load_prompt function requires the langchain-core "
             "package to run.\nInstall with `pip install langchain-core`"
-        )
+        ) from err
 
     # Import warning suppressor (same as pull_prompt)
     try:

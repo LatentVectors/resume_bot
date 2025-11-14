@@ -12,7 +12,6 @@ from openai import RateLimitError
 from pydantic import BaseModel, Field
 
 from src.constants import LLMTag
-from src.shared.formatters import format_all_experiences
 from src.core import ModelName, get_model
 from src.database import (
     AchievementAdd,
@@ -25,6 +24,7 @@ from src.database import (
 )
 from src.exceptions import OpenAIQuotaExceededError
 from src.logging_config import logger
+from src.shared.formatters import format_all_experiences
 
 # ==================== Main Workflow Function ====================
 

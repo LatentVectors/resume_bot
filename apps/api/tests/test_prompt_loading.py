@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.core.prompts import PromptName, get_prompt
+from src.core.prompts import PromptName
 from src.core.prompts.loader import load_prompt
 
 

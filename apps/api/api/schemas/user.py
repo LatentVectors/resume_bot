@@ -58,3 +58,16 @@ class UserResponse(BaseModel):
     class Config:
         from_attributes = True  # Allows conversion from SQLModel
 
+
+class UserStatsResponse(BaseModel):
+    """Schema for user statistics response."""
+
+    jobs_applied_7_days: int = Field(default=0, description="Jobs applied in last 7 days")
+    jobs_applied_30_days: int = Field(default=0, description="Jobs applied in last 30 days")
+    total_jobs_saved: int = Field(default=0, description="Total jobs with status 'Saved'")
+    total_jobs_applied: int = Field(default=0, description="Total jobs with status 'Applied' (all time)")
+    total_interviews: int = Field(default=0, description="Total jobs with status 'Interviewing'")
+    total_offers: int = Field(default=0, description="Total jobs with status 'Hired'")
+    total_favorites: int = Field(default=0, description="Total favorite jobs")
+    success_rate: float | None = Field(default=None, description="Success rate (offers / applications) as percentage")
+

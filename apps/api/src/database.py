@@ -1061,12 +1061,12 @@ class DatabaseManager:
         try:
             json.loads(proposal.proposed_content)
         except json.JSONDecodeError as e:
-            raise ValueError(f"proposed_content must be valid JSON: {e}")
+            raise ValueError(f"proposed_content must be valid JSON: {e}") from e
 
         try:
             json.loads(proposal.original_proposed_content)
         except json.JSONDecodeError as e:
-            raise ValueError(f"original_proposed_content must be valid JSON: {e}")
+            raise ValueError(f"original_proposed_content must be valid JSON: {e}") from e
 
         # Validate foreign key references exist (read-only check)
         with self.get_session() as session:
@@ -1161,7 +1161,7 @@ class DatabaseManager:
                     try:
                         json.loads(value)
                     except json.JSONDecodeError as e:
-                        raise ValueError(f"{key} must be valid JSON: {e}")
+                        raise ValueError(f"{key} must be valid JSON: {e}") from e
 
                 # Validate foreign key references if updated
                 if key == "session_id":

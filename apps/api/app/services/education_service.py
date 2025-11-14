@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from src.database import Education, User, db_manager
+from src.database import Education, db_manager
 from src.logging_config import logger
 
 

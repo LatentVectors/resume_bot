@@ -1,7 +1,7 @@
 """API client for education endpoints with typed responses."""
 
-from app.api_client.client import api_client
 from api.schemas.education import EducationCreate, EducationResponse, EducationUpdate
+from app.api_client.client import api_client
 
 
 class EducationAPI:

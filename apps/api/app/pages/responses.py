@@ -5,10 +5,10 @@ from datetime import datetime
 
 import streamlit as st
 
+from api.schemas.response import ResponseResponse
 from app.api_client.endpoints.responses import ResponsesAPI
 from app.api_client.endpoints.users import UsersAPI
 from app.pages.job_tabs.utils import navigate_to_job
-from api.schemas.response import ResponseResponse
 from src.logging_config import logger
 
 
@@ -25,7 +25,7 @@ def main() -> None:
     st.title("Responses")
 
     try:
-        user = asyncio.run(UsersAPI.get_current_user())
+        asyncio.run(UsersAPI.get_current_user())
     except Exception as e:  # noqa: BLE001
         st.error("No user found. Please complete onboarding first.")
         logger.error(f"Error getting current user: {e}")

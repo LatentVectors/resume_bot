@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { Download, Pin, FileText } from "lucide-react";
 
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -31,7 +30,18 @@ import type { components } from "@/types/api";
 
 type CoverLetterVersionResponse =
   components["schemas"]["CoverLetterVersionResponse"];
-type CoverLetterData = components["schemas"]["CoverLetterData"];
+// CoverLetterData is parsed from cover_letter_json string
+type CoverLetterData = {
+  name: string;
+  title?: string;
+  email: string;
+  phone?: string;
+  linkedin_url?: string;
+  date?: string;
+  company?: string;
+  job_title?: string;
+  body_paragraphs: string[];
+};
 
 interface CoverLetterTabProps {
   jobId: number;
@@ -53,7 +63,6 @@ export function CoverLetterTab({ jobId }: CoverLetterTabProps) {
   );
 
   // Mutations
-  const createVersion = useCreateCoverLetterVersion();
   const pinVersion = usePinCoverLetterVersion();
 
   // Determine which cover letter to display

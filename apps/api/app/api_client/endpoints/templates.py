@@ -1,7 +1,7 @@
 """API client for template endpoints with typed responses."""
 
-from app.api_client.client import api_client
 from api.schemas.template import TemplateDetail, TemplateListResponse
+from app.api_client.client import api_client
 
 
 class TemplatesAPI:

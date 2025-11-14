@@ -13,11 +13,11 @@ from langchain_core.tools import InjectedToolArg, tool
 from openai import RateLimitError
 from pydantic import BaseModel, Field
 
-from src.constants import LLMTag
 from api.services.certificate_service import CertificateService
 from api.services.education_service import EducationService
 from api.services.experience_service import ExperienceService
 from api.services.resume_service import ResumeService
+from src.constants import LLMTag
 from src.core import ModelName, get_model
 from src.core.prompts import PromptName, get_prompt
 from src.database import Job, ResumeVersion

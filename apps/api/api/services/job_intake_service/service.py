@@ -17,7 +17,6 @@ from api.services.experience_service import ExperienceService
 from api.services.job_intake_service.workflows import extract_experience_updates, run_resume_chat
 from api.services.job_service import JobService
 from api.services.resume_service import ResumeService
-from src.shared.formatters import format_all_experiences
 from src.database import (
     AchievementAdd,
     AchievementDelete,
@@ -34,6 +33,7 @@ from src.database import (
 )
 from src.features.resume.types import ResumeData
 from src.logging_config import logger
+from src.shared.formatters import format_all_experiences
 
 
 class JobIntakeService:

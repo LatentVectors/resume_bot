@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Edit, Trash2 } from "lucide-react";
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -124,17 +125,21 @@ export function CertificateCard({
     });
   };
 
+  // Auto-open dialog when component mounts in add mode
+  useEffect(() => {
+    if (!certificate && onAdd && !showDialog) {
+      // Use setTimeout to avoid synchronous setState in effect
+      const timeoutId = setTimeout(() => {
+        setShowDialog(true);
+      }, 0);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [certificate, onAdd, showDialog]);
+
   // If no certificate and no onAdd callback, don't render anything
   if (!certificate && !onAdd) {
     return null;
   }
-
-  // Auto-open dialog when component mounts in add mode
-  useEffect(() => {
-    if (!certificate && onAdd && !showDialog) {
-      setShowDialog(true);
-    }
-  }, [certificate, onAdd, showDialog]);
 
   // If onAdd is provided but no certificate, render only the dialog (for add mode)
   if (!certificate && onAdd) {
@@ -379,33 +384,14 @@ export function CertificateCard({
 
       {/* Delete Dialog */}
       {certificate && (
-        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete Certificate</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to delete this certificate? This action
-                cannot be undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowDeleteDialog(false)}
-                disabled={deleteCertificate.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={onDelete}
-                disabled={deleteCertificate.isPending}
-              >
-                {deleteCertificate.isPending ? "Deleting..." : "Delete"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <DeleteConfirmationDialog
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+          onConfirm={onDelete}
+          itemName={certificate.title}
+          itemType="Certificate"
+          isDeleting={deleteCertificate.isPending}
+        />
       )}
     </>
   );

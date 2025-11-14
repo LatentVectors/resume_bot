@@ -1,6 +1,10 @@
 """Service for user operations."""
 
-from src.database import User, db_manager
+from datetime import datetime, timedelta
+
+from sqlmodel import func, select
+
+from src.database import Job, User, db_manager
 from src.logging_config import logger
 
 
@@ -95,5 +99,106 @@ class UserService:
             return db_manager.update_user(user_id, **updates)
         except Exception as e:
             logger.error(f"Error updating user {user_id}: {e}")
+            raise
+
+    @staticmethod
+    def get_user_stats(user_id: int) -> dict:
+        """Get statistics for a user's job applications.
+
+        Returns:
+            Dictionary with statistics including:
+            - jobs_applied_7_days: Count of jobs applied in last 7 days
+            - jobs_applied_30_days: Count of jobs applied in last 30 days
+            - total_jobs_saved: Total jobs with status 'Saved'
+            - total_jobs_applied: Total jobs with status 'Applied' (all time)
+            - total_interviews: Total jobs with status 'Interviewing'
+            - total_offers: Total jobs with status 'Hired'
+            - total_favorites: Total favorite jobs
+            - success_rate: Success rate (offers / applications) as percentage
+        """
+        if not isinstance(user_id, int) or user_id <= 0:
+            raise ValueError("Invalid user ID")
+
+        try:
+            with db_manager.get_session() as session:
+                now = datetime.now()
+                seven_days_ago = now - timedelta(days=7)
+                thirty_days_ago = now - timedelta(days=30)
+
+                # Jobs applied in last 7 days
+                stmt_7d = (
+                    select(func.count(Job.id))
+                    .where(Job.user_id == user_id)
+                    .where(Job.status == "Applied")
+                    .where(Job.applied_at >= seven_days_ago)
+                )
+                jobs_applied_7_days = session.exec(stmt_7d).one() or 0
+
+                # Jobs applied in last 30 days
+                stmt_30d = (
+                    select(func.count(Job.id))
+                    .where(Job.user_id == user_id)
+                    .where(Job.status == "Applied")
+                    .where(Job.applied_at >= thirty_days_ago)
+                )
+                jobs_applied_30_days = session.exec(stmt_30d).one() or 0
+
+                # Total jobs saved
+                stmt_saved = (
+                    select(func.count(Job.id))
+                    .where(Job.user_id == user_id)
+                    .where(Job.status == "Saved")
+                )
+                total_jobs_saved = session.exec(stmt_saved).one() or 0
+
+                # Total jobs applied (all time)
+                stmt_applied = (
+                    select(func.count(Job.id))
+                    .where(Job.user_id == user_id)
+                    .where(Job.status == "Applied")
+                )
+                total_jobs_applied = session.exec(stmt_applied).one() or 0
+
+                # Total interviews
+                stmt_interviews = (
+                    select(func.count(Job.id))
+                    .where(Job.user_id == user_id)
+                    .where(Job.status == "Interviewing")
+                )
+                total_interviews = session.exec(stmt_interviews).one() or 0
+
+                # Total offers
+                stmt_offers = (
+                    select(func.count(Job.id))
+                    .where(Job.user_id == user_id)
+                    .where(Job.status == "Hired")
+                )
+                total_offers = session.exec(stmt_offers).one() or 0
+
+                # Total favorites
+                stmt_favorites = (
+                    select(func.count(Job.id))
+                    .where(Job.user_id == user_id)
+                    .where(Job.is_favorite.is_(True))
+                )
+                total_favorites = session.exec(stmt_favorites).one() or 0
+
+                # Success rate (offers / applications) as percentage
+                success_rate = None
+                if total_jobs_applied > 0:
+                    success_rate = round((total_offers / total_jobs_applied) * 100, 2)
+
+                return {
+                    "jobs_applied_7_days": jobs_applied_7_days,
+                    "jobs_applied_30_days": jobs_applied_30_days,
+                    "total_jobs_saved": total_jobs_saved,
+                    "total_jobs_applied": total_jobs_applied,
+                    "total_interviews": total_interviews,
+                    "total_offers": total_offers,
+                    "total_favorites": total_favorites,
+                    "success_rate": success_rate,
+                }
+        except Exception as e:
+            logger.error(f"Error getting stats for user {user_id}: {e}")
             raise
 

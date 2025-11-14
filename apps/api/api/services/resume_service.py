@@ -8,7 +8,6 @@ from sqlmodel import select
 # Note: These imports from app/ are temporary - they don't have Streamlit dependencies
 # TODO: Consider moving LLMTag to src/config or src/core
 from src.constants import LLMTag
-from src.shared.formatters import format_experience_with_achievements
 from src.database import Resume as DbResume
 from src.database import ResumeVersion as DbResumeVersion
 from src.database import ResumeVersionEvent, db_manager
@@ -19,8 +18,8 @@ from src.features.resume.data_adapter import (
     transform_user_to_resume_data,
 )
 from src.features.resume.types import ResumeData
-from src.features.resume.utils import render_template_to_html
 from src.logging_config import logger
+from src.shared.formatters import format_experience_with_achievements
 
 from .job_service import JobService
 from .pdf_service import PDFService

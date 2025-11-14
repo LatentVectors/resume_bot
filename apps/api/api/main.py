@@ -4,10 +4,25 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+# Import routers (after app initialization to avoid circular imports)
+from api.routes import (
+    certificates,
+    cover_letters,
+    education,
+    experiences,
+    jobs,
+    messages,
+    notes,
+    responses,
+    resumes,
+    templates,
+    users,
+    workflows,
+)
 from src.config import settings
 from src.logging_config import logger
 
@@ -41,7 +56,19 @@ app.add_middleware(CORSMiddleware, **cors_kwargs)
 # Global exception handler
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):
-    """Handle unhandled exceptions globally."""
+    """Handle unhandled exceptions globally.
+
+    Note: HTTPException is handled by returning its response directly,
+    allowing FastAPI's standard error handling to work properly.
+    """
+    # Handle HTTPException by returning its response
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=exc.headers,
+        )
+
     logger.exception("Unhandled exception", exc_info=exc)
     return JSONResponse(
         status_code=500,
@@ -50,20 +77,6 @@ async def global_exception_handler(request, exc):
 
 
 # Include routers
-from api.routes import (
-    certificates,
-    cover_letters,
-    education,
-    experiences,
-    jobs,
-    messages,
-    responses,
-    resumes,
-    templates,
-    users,
-    workflows,
-)
-
 app.include_router(users.router, prefix="/api/v1", tags=["users"])
 app.include_router(jobs.router, prefix="/api/v1", tags=["jobs"])
 app.include_router(experiences.router, prefix="/api/v1", tags=["experiences"])
@@ -75,6 +88,7 @@ app.include_router(templates.router, prefix="/api/v1", tags=["templates"])
 app.include_router(messages.router, prefix="/api/v1", tags=["messages"])
 app.include_router(responses.router, prefix="/api/v1", tags=["responses"])
 app.include_router(workflows.router, prefix="/api/v1", tags=["workflows"])
+app.include_router(notes.router, prefix="/api/v1", tags=["notes"])
 
 
 # Health check endpoint

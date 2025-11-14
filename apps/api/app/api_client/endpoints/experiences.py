@@ -1,6 +1,5 @@
 """API client for experience endpoints with typed responses."""
 
-from app.api_client.client import api_client
 from api.schemas.experience import (
     AchievementCreate,
     AchievementResponse,
@@ -11,6 +10,7 @@ from api.schemas.experience import (
     ProposalCreate,
     ProposalResponse,
 )
+from app.api_client.client import api_client
 from src.database import ProposalStatus, ProposalType
 
 

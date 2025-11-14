@@ -1,7 +1,7 @@
 """API client for message endpoints with typed responses."""
 
-from app.api_client.client import api_client
 from api.schemas.message import MessageCreate, MessageResponse
+from app.api_client.client import api_client
 from src.database import MessageChannel
 
 

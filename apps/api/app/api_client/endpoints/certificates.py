@@ -1,7 +1,7 @@
 """API client for certificate endpoints with typed responses."""
 
-from app.api_client.client import api_client
 from api.schemas.certificate import CertificateCreate, CertificateResponse, CertificateUpdate
+from app.api_client.client import api_client
 
 
 class CertificatesAPI:

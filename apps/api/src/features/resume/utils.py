@@ -212,7 +212,7 @@ def compute_pdf_metrics(pdf_path: str | Path) -> PDFMetrics:
     percentages = _compute_page_fill_percentages(extents, margin)
 
     page_metrics: list[PageMetric] = []
-    for i, (ext, pct) in enumerate(zip(extents, percentages), start=1):
+    for i, (ext, pct) in enumerate(zip(extents, percentages, strict=True), start=1):
         page_metrics.append(
             PageMetric(
                 page_number=i,

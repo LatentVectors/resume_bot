@@ -1,7 +1,14 @@
 """API client for cover letter endpoints with typed responses."""
 
-from app.api_client.client import api_client
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from api.schemas.cover_letter import CoverLetterCreate, CoverLetterResponse, CoverLetterVersionResponse
+from app.api_client.client import api_client
+
+if TYPE_CHECKING:
+    from src.features.cover_letter.types import CoverLetterData
 
 
 class CoverLettersAPI:
@@ -58,11 +65,10 @@ class CoverLettersAPI:
     @staticmethod
     async def preview_pdf_draft(
         job_id: int,
-        cover_letter_data: "CoverLetterData",  # type: ignore[name-defined]
+        cover_letter_data: CoverLetterData,
         template_name: str,
     ) -> bytes:
         """Preview cover letter PDF from draft data (no version required). Returns PDF bytes."""
-        from src.features.cover_letter.types import CoverLetterData
 
         response = await api_client.post(
             f"/api/v1/jobs/{job_id}/cover-letters/preview",

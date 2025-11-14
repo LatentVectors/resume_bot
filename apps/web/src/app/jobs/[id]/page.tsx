@@ -12,23 +12,30 @@ import { useJob } from "@/lib/hooks/useJobs";
 
 type TabValue = "overview" | "resume" | "cover" | "notes";
 
-export default function JobDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default function JobDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resolvedParams = use(params);
   const jobId = parseInt(resolvedParams.id, 10);
 
+  // Fetch job data
+  const { data: job, isLoading, error } = useJob(jobId);
+
   // Get tab from URL query param, default to "overview"
   const tabFromUrl = (searchParams.get("tab") as TabValue) || "overview";
   const [activeTab, setActiveTab] = useState<TabValue>(tabFromUrl);
 
-  // Fetch job data
-  const { data: job, isLoading, error } = useJob(jobId);
-
   // Update tab state when URL changes
   useEffect(() => {
     const tab = (searchParams.get("tab") as TabValue) || "overview";
-    setActiveTab(tab);
+    if (tab !== activeTab) {
+      setActiveTab(tab);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
   // Handle tab change - update URL query param
@@ -77,7 +84,11 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
         </TabsContent>
 
         <TabsContent value="resume" className="mt-6">
-          <ResumeTab jobId={jobId} jobDescription={job.job_description || ""} />
+          <ResumeTab
+            jobId={jobId}
+            jobDescription={job.job_description || ""}
+            jobStatus={job.status}
+          />
         </TabsContent>
 
         <TabsContent value="cover" className="mt-6">
@@ -91,4 +102,3 @@ export default function JobDetailPage({ params }: { params: Promise<{ id: string
     </div>
   );
 }
-

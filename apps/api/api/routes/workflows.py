@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from api.dependencies import DBSession
 from api.schemas.workflow import (
@@ -10,6 +10,8 @@ from api.schemas.workflow import (
     ExperienceExtractionResponse,
     GapAnalysisRequest,
     GapAnalysisResponse,
+    JobDetailsExtractionRequest,
+    JobDetailsExtractionResponse,
     ResumeChatRequest,
     ResumeChatResponse,
     ResumeGenerationRequest,
@@ -26,8 +28,9 @@ from api.services.job_intake_service.workflows import (
 from api.services.job_service import JobService
 from api.services.resume_service import ResumeService
 from api.utils.errors import QuotaExceededError
-from src.database import Experience, db_manager
+from src.database import db_manager
 from src.exceptions import OpenAIQuotaExceededError
+from src.features.jobs.extraction import extract_title_company
 
 router = APIRouter()
 
@@ -35,8 +38,6 @@ router = APIRouter()
 @router.post("/workflows/gap-analysis", response_model=GapAnalysisResponse)
 async def gap_analysis(request: GapAnalysisRequest, session: DBSession = None) -> GapAnalysisResponse:  # noqa: ARG001
     """Run gap analysis workflow."""
-    from fastapi import HTTPException, status
-
     # Fetch experiences
     experiences = [db_manager.get_experience(exp_id) for exp_id in request.experience_ids]
     experiences = [e for e in experiences if e is not None]
@@ -49,8 +50,8 @@ async def gap_analysis(request: GapAnalysisRequest, session: DBSession = None) -
     try:
         analysis = analyze_job_experience_fit(job_description=request.job_description, experiences=experiences)
         return GapAnalysisResponse(analysis=analysis)
-    except OpenAIQuotaExceededError:
-        raise QuotaExceededError()
+    except OpenAIQuotaExceededError as err:
+        raise QuotaExceededError() from err
 
 
 @router.post("/workflows/stakeholder-analysis", response_model=StakeholderAnalysisResponse)
@@ -66,8 +67,8 @@ async def stakeholder_analysis(request: StakeholderAnalysisRequest, session: DBS
     try:
         analysis = analyze_stakeholders(job_description=request.job_description, experiences=experiences)
         return StakeholderAnalysisResponse(analysis=analysis)
-    except OpenAIQuotaExceededError:
-        raise QuotaExceededError()
+    except OpenAIQuotaExceededError as err:
+        raise QuotaExceededError() from err
 
 
 @router.post("/workflows/experience-extraction", response_model=ExperienceExtractionResponse)
@@ -96,8 +97,8 @@ async def experience_extraction(request: ExperienceExtractionRequest, session: D
     try:
         suggestions = extract_experience_updates(chat_messages=chat_messages, experiences=experiences)
         return ExperienceExtractionResponse(suggestions=suggestions)
-    except OpenAIQuotaExceededError:
-        raise QuotaExceededError()
+    except OpenAIQuotaExceededError as err:
+        raise QuotaExceededError() from err
 
 
 @router.post("/workflows/resume-chat", response_model=ResumeChatResponse)
@@ -149,8 +150,8 @@ async def resume_chat(request: ResumeChatRequest, session: DBSession = None) -> 
             message_dict["tool_calls"] = ai_message.tool_calls
 
         return ResumeChatResponse(message=message_dict, version_id=version_id)
-    except OpenAIQuotaExceededError:
-        raise QuotaExceededError()
+    except OpenAIQuotaExceededError as err:
+        raise QuotaExceededError() from err
 
 
 @router.post("/workflows/resume-generation", response_model=ResumeGenerationResponse)
@@ -171,6 +172,23 @@ async def resume_generation(
             existing_draft=request.resume_draft,
         )
         return ResumeGenerationResponse(resume_data=resume_data)
-    except OpenAIQuotaExceededError:
-        raise QuotaExceededError()
+    except OpenAIQuotaExceededError as err:
+        raise QuotaExceededError() from err
+
+
+@router.post("/workflows/extract-job-details", response_model=JobDetailsExtractionResponse)
+async def extract_job_details(
+    request: JobDetailsExtractionRequest, session: DBSession = None  # noqa: ARG001
+) -> JobDetailsExtractionResponse:
+    """Extract job title and company name from job description."""
+    try:
+        result = extract_title_company(request.job_description)
+        # Calculate confidence based on whether both fields were extracted
+        confidence = 1.0 if result.title and result.company else (0.5 if result.title or result.company else 0.0)
+        return JobDetailsExtractionResponse(title=result.title, company=result.company, confidence=confidence)
+    except Exception as exc:  # noqa: BLE001
+        # Handle extraction failures gracefully - return null values with low confidence
+        # Suppress the exception since we're handling it gracefully
+        _ = exc  # Mark as used to avoid unused variable warning
+        return JobDetailsExtractionResponse(title=None, company=None, confidence=0.0)
 

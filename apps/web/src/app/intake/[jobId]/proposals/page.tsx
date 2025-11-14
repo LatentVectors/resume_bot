@@ -67,10 +67,15 @@ export default function IntakeProposalsPage() {
     enabled: !!intakeSession?.id && !!experiences && experiences.length > 0,
   });
 
-  // Update local proposals state when fetched
+  // Sync proposals state with fetched data
+  // Note: This is a valid use case for syncing server state to local state for optimistic updates
   useEffect(() => {
     if (allProposals) {
-      setProposals(allProposals);
+      // Use setTimeout to avoid synchronous setState in effect
+      const timeoutId = setTimeout(() => {
+        setProposals(allProposals);
+      }, 0);
+      return () => clearTimeout(timeoutId);
     }
   }, [allProposals]);
 
@@ -111,9 +116,7 @@ export default function IntakeProposalsPage() {
   };
 
   const handleAcceptAll = () => {
-    const pendingProposals = proposals.filter(
-      (p) => p.status === "pending"
-    );
+    const pendingProposals = proposals.filter((p) => p.status === "pending");
     pendingProposals.forEach((p) => {
       acceptProposalMutation.mutate(p.id);
     });
@@ -210,15 +213,20 @@ export default function IntakeProposalsPage() {
                         <div className="flex items-start justify-between">
                           <div className="space-y-1">
                             <CardTitle className="text-lg">
-                              {proposal.proposal_type === "role_overview"
+                              {proposal.proposal_type === "role_overview_update"
                                 ? "Role Overview Update"
-                                : proposal.proposal_type === "achievement"
+                                : proposal.proposal_type ===
+                                    "achievement_add" ||
+                                  proposal.proposal_type ===
+                                    "achievement_update" ||
+                                  proposal.proposal_type ===
+                                    "achievement_delete"
                                 ? "Achievement Proposal"
                                 : "Other Update"}
                             </CardTitle>
                             {experience && (
                               <CardDescription>
-                                For: {experience.role_title} at{" "}
+                                For: {experience.job_title} at{" "}
                                 {experience.company_name}
                               </CardDescription>
                             )}
@@ -307,4 +315,3 @@ export default function IntakeProposalsPage() {
     </div>
   );
 }
-

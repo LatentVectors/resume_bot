@@ -5,7 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 
 from api.dependencies import DBSession
-from api.schemas.user import UserCreate, UserResponse, UserUpdate
+from api.schemas.user import UserCreate, UserResponse, UserStatsResponse, UserUpdate
 from api.services.user_service import UserService
 from api.utils.errors import NotFoundError
 
@@ -80,11 +80,14 @@ async def delete_user(user_id: int, session: DBSession) -> None:
     raise NotImplementedError("User deletion not implemented")
 
 
-@router.get("/users/current", response_model=UserResponse)
-async def get_current_user() -> UserResponse:
-    """Get current user (for single-user mode)."""
-    user = UserService.get_current_user()
+@router.get("/users/{user_id}/stats", response_model=UserStatsResponse)
+async def get_user_stats(user_id: int, session: DBSession) -> UserStatsResponse:
+    """Get statistics for a user's job applications."""
+    # Verify user exists
+    user = UserService.get_user(user_id)
     if not user:
-        raise NotFoundError("User", "current")
-    return UserResponse.model_validate(user)
+        raise NotFoundError("User", user_id)
+
+    stats = UserService.get_user_stats(user_id)
+    return UserStatsResponse(**stats)
 

@@ -74,14 +74,14 @@ def override_db_manager(test_db_manager, monkeypatch):
     # Also override db_manager in services that import it directly
     # This ensures services use the test database
     # Only patch services that actually import db_manager
-    import api.services.experience_service
-    import api.services.user_service
-    import api.services.job_service
-    import api.services.resume_service
-    import api.services.cover_letter_service
-    import api.services.education_service
     import api.services.certificate_service
     import api.services.chat_message_service
+    import api.services.cover_letter_service
+    import api.services.education_service
+    import api.services.experience_service
+    import api.services.job_service
+    import api.services.resume_service
+    import api.services.user_service
 
     monkeypatch.setattr(api.services.experience_service, "db_manager", test_db_manager)
     monkeypatch.setattr(api.services.user_service, "db_manager", test_db_manager)
@@ -93,9 +93,9 @@ def override_db_manager(test_db_manager, monkeypatch):
     monkeypatch.setattr(api.services.chat_message_service, "db_manager", test_db_manager)
 
     # Also patch workflow modules that use db_manager
+    import api.routes.workflows
     import api.services.job_intake_service.workflows.gap_analysis
     import api.services.job_intake_service.workflows.stakeholder_analysis
-    import api.routes.workflows
 
     monkeypatch.setattr(
         api.services.job_intake_service.workflows.gap_analysis, "db_manager", test_db_manager

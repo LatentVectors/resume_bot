@@ -1,6 +1,5 @@
 """API client for workflow endpoints with typed responses."""
 
-from app.api_client.client import api_client
 from api.schemas.workflow import (
     ExperienceExtractionRequest,
     ExperienceExtractionResponse,
@@ -14,6 +13,7 @@ from api.schemas.workflow import (
     StakeholderAnalysisRequest,
     StakeholderAnalysisResponse,
 )
+from app.api_client.client import api_client
 from src.features.resume.types import ResumeData
 
 

@@ -1,7 +1,7 @@
 """API client for job endpoints with typed responses."""
 
-from app.api_client.client import api_client
 from api.schemas.job import JobCreate, JobResponse, JobUpdate
+from app.api_client.client import api_client
 from src.database import JobStatus
 
 

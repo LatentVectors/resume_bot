@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 
 from api.main import app
 from src.database import Experience, User
-from tests.conftest import override_db_manager
 
 
 @pytest.fixture

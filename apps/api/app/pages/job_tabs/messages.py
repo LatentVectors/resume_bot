@@ -4,9 +4,9 @@ import asyncio
 
 import streamlit as st
 
-from app.api_client.endpoints.messages import MessagesAPI
 from api.schemas.job import JobResponse
 from api.schemas.message import MessageResponse
+from app.api_client.endpoints.messages import MessagesAPI
 from src.logging_config import logger
 
 

@@ -17,7 +17,6 @@ from app.dialog.resume_add_education_dialog import show_resume_add_education_dia
 from app.dialog.resume_add_experience_dialog import show_resume_add_experience_dialog
 from app.dialog.resume_reset_dialog import show_resume_reset_dialog
 from app.services.experience_service import ExperienceService
-from app.services.job_service import JobService
 from app.services.user_service import UserService
 from app.shared.filenames import build_resume_download_filename
 from src.database import Job as DbJob
@@ -837,23 +836,21 @@ def render_resume(job: DbJob) -> None:
                     show_resume_reset_dialog(int(job.id))
 
             # Render bytes only when allowed to show a preview
-            pdf_bytes: bytes | None = None
             try:
                 if is_read_only:
                     # Applied: show canonical only
                     if canonical_row is not None:
                         can_draft = ResumeData.model_validate_json(canonical_row.resume_json)  # type: ignore[arg-type]
-                        pdf_bytes = asyncio.run(
+                        asyncio.run(
                             ResumesAPI.preview_pdf_draft(job.id, can_draft, canonical_row.template_name)
                         )
                 else:
                     if not missing:
-                        pdf_bytes = asyncio.run(
+                        asyncio.run(
                             ResumesAPI.preview_pdf_draft(job.id, current_draft, current_template)
                         )
             except Exception as exc:  # noqa: BLE001
                 logger.exception(exc)
-                pdf_bytes = None
 
             # Download button rules
             selected_is_canonical = (

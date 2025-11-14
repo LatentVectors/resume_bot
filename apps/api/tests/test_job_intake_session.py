@@ -189,7 +189,7 @@ class TestJobIntakeSession:
 
             # Create a user (simulating existing user)
             user = User(first_name="Step1", last_name="Tester")
-            user_id = db_manager.add_user(user)
+            db_manager.add_user(user)
 
             # Simulate Step 1: Save job with provided details
             description = "We are looking for a Senior Python Developer with 5+ years experience."

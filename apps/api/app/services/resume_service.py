@@ -159,19 +159,19 @@ class ResumeService:
     @staticmethod
     def unpin_canonical(job_id: int) -> None:
         """Clear the canonical Resume row for a job (unpin).
-        
+
         Args:
             job_id: The job ID to unpin the resume for.
         """
         if not isinstance(job_id, int) or job_id <= 0:
             raise ValueError("Invalid job_id")
-        
+
         with db_manager.get_session() as session:
             existing = session.exec(select(DbResume).where(DbResume.job_id == job_id)).first()
             if existing:
                 session.delete(existing)
                 session.commit()
-        
+
         # Update job flags
         try:
             JobService.refresh_denorm_flags(job_id)

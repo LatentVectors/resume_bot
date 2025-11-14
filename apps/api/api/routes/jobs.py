@@ -5,25 +5,34 @@ from __future__ import annotations
 from fastapi import APIRouter, Query, status
 
 from api.dependencies import DBSession
-from api.schemas.job import JobCreate, JobResponse, JobUpdate
+from api.schemas.job import BulkDeleteRequest, BulkDeleteResponse, JobCreate, JobResponse, JobsListResponse, JobUpdate
 from api.services.job_service import JobService
 from api.utils.errors import NotFoundError
-from src.database import JobIntakeSession, JobStatus
+from src.database import JobStatus
 
 router = APIRouter()
 
 
-@router.get("/jobs", response_model=list[JobResponse])
+@router.get("/jobs", response_model=JobsListResponse)
 async def list_jobs(
     user_id: int = Query(..., description="User ID"),
     status_filter: JobStatus | None = Query(None, description="Filter by status"),
     favorite_only: bool = Query(False, description="Show only favorites"),
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(50, ge=1, le=1000, description="Maximum number of records to return"),
     session: DBSession = None,  # noqa: ARG001
-) -> list[JobResponse]:
-    """List all jobs for a user."""
+) -> JobsListResponse:
+    """List jobs for a user with pagination."""
     statuses = [status_filter] if status_filter else None
-    jobs = JobService.list_jobs(user_id=user_id, statuses=statuses, favorites_only=favorite_only)
-    return [JobResponse.model_validate(job) for job in jobs]
+    jobs, total = JobService.list_jobs(
+        user_id=user_id, statuses=statuses, favorites_only=favorite_only, skip=skip, limit=limit
+    )
+    return JobsListResponse(
+        items=[JobResponse.model_validate(job) for job in jobs],
+        total=total,
+        skip=skip,
+        limit=limit,
+    )
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
@@ -198,4 +207,11 @@ async def update_intake_session(
         "updated_at": intake_session.updated_at.isoformat() if intake_session.updated_at else None,
         "completed_at": intake_session.completed_at.isoformat() if intake_session.completed_at else None,
     }
+
+
+@router.delete("/jobs/bulk-delete", response_model=BulkDeleteResponse)
+async def bulk_delete_jobs(request: BulkDeleteRequest, session: DBSession = None) -> BulkDeleteResponse:  # noqa: ARG001
+    """Delete multiple jobs in a single transaction."""
+    successful, failed = JobService.delete_jobs(request.job_ids)
+    return BulkDeleteResponse(successful=successful, failed=failed)
 

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Edit, Trash2 } from "lucide-react";
+import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -118,17 +119,21 @@ export function EducationCard({
     });
   };
 
+  // Auto-open dialog when component mounts in add mode
+  useEffect(() => {
+    if (!education && onAdd && !showDialog) {
+      // Use setTimeout to avoid synchronous setState in effect
+      const timeoutId = setTimeout(() => {
+        setShowDialog(true);
+      }, 0);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [education, onAdd, showDialog]);
+
   // If no education and no onAdd callback, don't render anything
   if (!education && !onAdd) {
     return null;
   }
-
-  // Auto-open dialog when component mounts in add mode
-  useEffect(() => {
-    if (!education && onAdd && !showDialog) {
-      setShowDialog(true);
-    }
-  }, [education, onAdd, showDialog]);
 
   // If onAdd is provided but no education, render only the dialog (for add mode)
   if (!education && onAdd) {
@@ -375,33 +380,14 @@ export function EducationCard({
 
       {/* Delete Dialog */}
       {education && (
-        <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Delete Education</DialogTitle>
-              <DialogDescription>
-                Are you sure you want to delete this education entry? This action cannot be
-                undone.
-              </DialogDescription>
-            </DialogHeader>
-            <DialogFooter>
-              <Button
-                variant="outline"
-                onClick={() => setShowDeleteDialog(false)}
-                disabled={deleteEducation.isPending}
-              >
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={onDelete}
-                disabled={deleteEducation.isPending}
-              >
-                {deleteEducation.isPending ? "Deleting..." : "Delete"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        <DeleteConfirmationDialog
+          open={showDeleteDialog}
+          onOpenChange={setShowDeleteDialog}
+          onConfirm={onDelete}
+          itemName={`${education.degree} from ${education.institution}`}
+          itemType="Education"
+          isDeleting={deleteEducation.isPending}
+        />
       )}
     </>
   );

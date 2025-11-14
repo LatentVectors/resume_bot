@@ -1,7 +1,7 @@
 """API client for resume endpoints with typed responses."""
 
-from app.api_client.client import api_client
 from api.schemas.resume import ResumeCreate, ResumeResponse, ResumeVersionResponse
+from app.api_client.client import api_client
 from src.database import ResumeVersionEvent
 from src.features.resume.types import ResumeData
 

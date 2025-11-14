@@ -46,3 +46,25 @@ class JobResponse(BaseModel):
     class Config:
         from_attributes = True  # Allows conversion from SQLModel
 
+
+class BulkDeleteRequest(BaseModel):
+    """Schema for bulk delete request."""
+
+    job_ids: list[int] = Field(..., min_length=1, description="List of job IDs to delete")
+
+
+class BulkDeleteResponse(BaseModel):
+    """Schema for bulk delete response."""
+
+    successful: int = Field(..., description="Number of successfully deleted jobs")
+    failed: int = Field(..., description="Number of failed deletions")
+
+
+class JobsListResponse(BaseModel):
+    """Schema for paginated jobs list response."""
+
+    items: list[JobResponse]
+    total: int
+    skip: int
+    limit: int
+

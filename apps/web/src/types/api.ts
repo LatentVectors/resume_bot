@@ -76,6 +76,26 @@ export interface paths {
         patch: operations["update_user_api_v1_users__user_id__patch"];
         trace?: never;
     };
+    "/api/v1/users/{user_id}/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get User Stats
+         * @description Get statistics for a user's job applications.
+         */
+        get: operations["get_user_stats_api_v1_users__user_id__stats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs": {
         parameters: {
             query?: never;
@@ -85,7 +105,7 @@ export interface paths {
         };
         /**
          * List Jobs
-         * @description List all jobs for a user.
+         * @description List jobs for a user with pagination.
          */
         get: operations["list_jobs_api_v1_jobs_get"];
         put?: never;
@@ -214,6 +234,26 @@ export interface paths {
          * @description Update intake session for a job.
          */
         patch: operations["update_intake_session_api_v1_jobs__job_id__intake_session_patch"];
+        trace?: never;
+    };
+    "/api/v1/jobs/bulk-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Bulk Delete Jobs
+         * @description Delete multiple jobs in a single transaction.
+         */
+        delete: operations["bulk_delete_jobs_api_v1_jobs_bulk_delete_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/experiences": {
@@ -545,7 +585,7 @@ export interface paths {
         };
         /**
          * Get Current Resume
-         * @description Get current resume for a job.
+         * @description Get current resume for a job. Returns null if no canonical resume exists.
          */
         get: operations["get_current_resume_api_v1_jobs__job_id__resumes_current_get"];
         put?: never;
@@ -594,6 +634,26 @@ export interface paths {
          * @description Pin a resume version as the current resume.
          */
         patch: operations["pin_resume_version_api_v1_jobs__job_id__resumes__version_id__pin_patch"];
+        trace?: never;
+    };
+    "/api/v1/jobs/{job_id}/resumes/unpin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Unpin Resume
+         * @description Unpin the canonical resume for a job.
+         */
+        delete: operations["unpin_resume_api_v1_jobs__job_id__resumes_unpin_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/jobs/{job_id}/resumes/{version_id}/pdf": {
@@ -709,7 +769,7 @@ export interface paths {
         };
         /**
          * Get Current Cover Letter
-         * @description Get current cover letter for a job.
+         * @description Get current cover letter for a job. Returns null if no canonical cover letter exists.
          */
         get: operations["get_current_cover_letter_api_v1_jobs__job_id__cover_letters_current_get"];
         put?: never;
@@ -1076,6 +1136,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/workflows/extract-job-details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Job Details
+         * @description Extract job title and company name from job description.
+         */
+        post: operations["extract_job_details_api_v1_workflows_extract_job_details_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{job_id}/notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Notes
+         * @description List all notes for a job.
+         */
+        get: operations["list_notes_api_v1_jobs__job_id__notes_get"];
+        put?: never;
+        /**
+         * Create Note
+         * @description Create a new note for a job.
+         */
+        post: operations["create_note_api_v1_jobs__job_id__notes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/jobs/{job_id}/notes/{note_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Note
+         * @description Delete a note.
+         */
+        delete: operations["delete_note_api_v1_jobs__job_id__notes__note_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Note
+         * @description Update a note.
+         */
+        patch: operations["update_note_api_v1_jobs__job_id__notes__note_id__patch"];
+        trace?: never;
+    };
     "/api/health": {
         parameters: {
             query?: never;
@@ -1175,6 +1303,33 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /**
+         * BulkDeleteRequest
+         * @description Schema for bulk delete request.
+         */
+        BulkDeleteRequest: {
+            /**
+             * Job Ids
+             * @description List of job IDs to delete
+             */
+            job_ids: number[];
+        };
+        /**
+         * BulkDeleteResponse
+         * @description Schema for bulk delete response.
+         */
+        BulkDeleteResponse: {
+            /**
+             * Successful
+             * @description Number of successfully deleted jobs
+             */
+            successful: number;
+            /**
+             * Failed
+             * @description Number of failed deletions
+             */
+            failed: number;
         };
         /**
          * CertificateCreate
@@ -1661,6 +1816,38 @@ export interface components {
             status?: components["schemas"]["JobStatus"] | null;
         };
         /**
+         * JobDetailsExtractionRequest
+         * @description Schema for job details extraction request.
+         */
+        JobDetailsExtractionRequest: {
+            /**
+             * Job Description
+             * @description Job description text
+             */
+            job_description: string;
+        };
+        /**
+         * JobDetailsExtractionResponse
+         * @description Schema for job details extraction response.
+         */
+        JobDetailsExtractionResponse: {
+            /**
+             * Title
+             * @description Extracted job title
+             */
+            title?: string | null;
+            /**
+             * Company
+             * @description Extracted company name
+             */
+            company?: string | null;
+            /**
+             * Confidence
+             * @description Extraction confidence score (0.0-1.0)
+             */
+            confidence?: number | null;
+        };
+        /**
          * JobResponse
          * @description Schema for job response - used by both API and frontend.
          */
@@ -1729,6 +1916,20 @@ export interface components {
             status?: components["schemas"]["JobStatus"] | null;
         };
         /**
+         * JobsListResponse
+         * @description Schema for paginated jobs list response.
+         */
+        JobsListResponse: {
+            /** Items */
+            items: components["schemas"]["JobResponse"][];
+            /** Total */
+            total: number;
+            /** Skip */
+            skip: number;
+            /** Limit */
+            limit: number;
+        };
+        /**
          * MessageChannel
          * @enum {string}
          */
@@ -1772,6 +1973,50 @@ export interface components {
             updated_at: string;
             /** Locked */
             locked: boolean;
+        };
+        /**
+         * NoteCreate
+         * @description Schema for creating a note.
+         */
+        NoteCreate: {
+            /**
+             * Content
+             * @description Note content
+             */
+            content: string;
+        };
+        /**
+         * NoteResponse
+         * @description Schema for note response.
+         */
+        NoteResponse: {
+            /** Id */
+            id: number;
+            /** Job Id */
+            job_id: number;
+            /** Content */
+            content: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * NoteUpdate
+         * @description Schema for updating a note.
+         */
+        NoteUpdate: {
+            /**
+             * Content
+             * @description Note content
+             */
+            content: string;
         };
         /**
          * ProposalCreate
@@ -2573,6 +2818,59 @@ export interface components {
             updated_at: string;
         };
         /**
+         * UserStatsResponse
+         * @description Schema for user statistics response.
+         */
+        UserStatsResponse: {
+            /**
+             * Jobs Applied 7 Days
+             * @description Jobs applied in last 7 days
+             * @default 0
+             */
+            jobs_applied_7_days: number;
+            /**
+             * Jobs Applied 30 Days
+             * @description Jobs applied in last 30 days
+             * @default 0
+             */
+            jobs_applied_30_days: number;
+            /**
+             * Total Jobs Saved
+             * @description Total jobs with status 'Saved'
+             * @default 0
+             */
+            total_jobs_saved: number;
+            /**
+             * Total Jobs Applied
+             * @description Total jobs with status 'Applied' (all time)
+             * @default 0
+             */
+            total_jobs_applied: number;
+            /**
+             * Total Interviews
+             * @description Total jobs with status 'Interviewing'
+             * @default 0
+             */
+            total_interviews: number;
+            /**
+             * Total Offers
+             * @description Total jobs with status 'Hired'
+             * @default 0
+             */
+            total_offers: number;
+            /**
+             * Total Favorites
+             * @description Total favorite jobs
+             * @default 0
+             */
+            total_favorites: number;
+            /**
+             * Success Rate
+             * @description Success rate (offers / applications) as percentage
+             */
+            success_rate?: number | null;
+        };
+        /**
          * UserUpdate
          * @description Schema for updating a user.
          */
@@ -2899,6 +3197,37 @@ export interface operations {
             };
         };
     };
+    get_user_stats_api_v1_users__user_id__stats_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserStatsResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_jobs_api_v1_jobs_get: {
         parameters: {
             query: {
@@ -2908,6 +3237,10 @@ export interface operations {
                 status_filter?: components["schemas"]["JobStatus"] | null;
                 /** @description Show only favorites */
                 favorite_only?: boolean;
+                /** @description Number of records to skip */
+                skip?: number;
+                /** @description Maximum number of records to return */
+                limit?: number;
             };
             header?: never;
             path?: never;
@@ -2921,7 +3254,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["JobResponse"][];
+                    "application/json": components["schemas"]["JobsListResponse"];
                 };
             };
             /** @description Validation Error */
@@ -3260,6 +3593,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    bulk_delete_jobs_api_v1_jobs_bulk_delete_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BulkDeleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BulkDeleteResponse"];
                 };
             };
             /** @description Validation Error */
@@ -4071,7 +4437,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ResumeResponse"];
+                    "application/json": components["schemas"]["ResumeResponse"] | null;
                 };
             };
             /** @description Validation Error */
@@ -4137,6 +4503,35 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ResumeResponse"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unpin_resume_api_v1_jobs__job_id__resumes_unpin_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -4369,7 +4764,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["CoverLetterResponse"];
+                    "application/json": components["schemas"]["CoverLetterResponse"] | null;
                 };
             };
             /** @description Validation Error */
@@ -5025,6 +5420,171 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ResumeGenerationResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    extract_job_details_api_v1_workflows_extract_job_details_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JobDetailsExtractionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobDetailsExtractionResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_notes_api_v1_jobs__job_id__notes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_note_api_v1_jobs__job_id__notes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_note_api_v1_jobs__job_id__notes__note_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+                note_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_note_api_v1_jobs__job_id__notes__note_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: number;
+                note_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NoteUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NoteResponse"];
                 };
             };
             /** @description Validation Error */

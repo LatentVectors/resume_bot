@@ -14,7 +14,6 @@ from api.schemas.experience import (
     ExperienceUpdate,
     ProposalCreate,
     ProposalResponse,
-    ProposalUpdate,
 )
 from api.services.experience_service import ExperienceService
 from api.services.job_intake_service.service import JobIntakeService

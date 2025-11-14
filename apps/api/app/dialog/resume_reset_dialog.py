@@ -3,7 +3,6 @@ from __future__ import annotations
 import streamlit as st
 
 from app.services.job_service import JobService
-from src.config import settings
 from src.logging_config import logger
 
 

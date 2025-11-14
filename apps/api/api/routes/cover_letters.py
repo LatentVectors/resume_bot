@@ -13,6 +13,7 @@ from api.schemas.cover_letter import (
     CoverLetterVersionResponse,
 )
 from api.services.cover_letter_service import CoverLetterService
+from api.services.job_service import JobService
 from api.utils.errors import NotFoundError
 from src.features.cover_letter.types import CoverLetterData
 
@@ -26,12 +27,17 @@ async def list_cover_letter_versions(job_id: int, session: DBSession) -> list[Co
     return [CoverLetterVersionResponse.model_validate(v) for v in versions]
 
 
-@router.get("/jobs/{job_id}/cover-letters/current", response_model=CoverLetterResponse)
-async def get_current_cover_letter(job_id: int, session: DBSession) -> CoverLetterResponse:
-    """Get current cover letter for a job."""
+@router.get("/jobs/{job_id}/cover-letters/current", response_model=CoverLetterResponse | None)
+async def get_current_cover_letter(job_id: int, session: DBSession) -> CoverLetterResponse | None:
+    """Get current cover letter for a job. Returns null if no canonical cover letter exists."""
+    # Verify job exists first
+    job = JobService.get_job(job_id)
+    if not job:
+        raise NotFoundError("Job", job_id)
+
     cover_letter = CoverLetterService.get_canonical(job_id)
     if not cover_letter:
-        raise NotFoundError("CoverLetter", job_id)
+        return None
     return CoverLetterResponse.model_validate(cover_letter)
 
 

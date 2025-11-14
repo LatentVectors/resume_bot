@@ -14,7 +14,6 @@ from src.database import (
 )
 from src.features.resume.types import ResumeData
 
-
 # ==================== Gap Analysis ====================
 
 
@@ -142,4 +141,21 @@ class ResumeGenerationResponse(BaseModel):
     """Schema for resume generation response."""
 
     resume_data: ResumeData = Field(..., description="Generated resume data")
+
+
+# ==================== Job Details Extraction ====================
+
+
+class JobDetailsExtractionRequest(BaseModel):
+    """Schema for job details extraction request."""
+
+    job_description: str = Field(..., min_length=1, description="Job description text")
+
+
+class JobDetailsExtractionResponse(BaseModel):
+    """Schema for job details extraction response."""
+
+    title: str | None = Field(default=None, description="Extracted job title")
+    company: str | None = Field(default=None, description="Extracted company name")
+    confidence: float | None = Field(default=None, description="Extraction confidence score (0.0-1.0)")
 

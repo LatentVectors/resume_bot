@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Star, Trash2, Edit2, Save, X } from "lucide-react";
+import { Star, Trash2, Edit2, Save, X, MoreVertical, Download, Copy } from "lucide-react";
+import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -31,6 +39,13 @@ import {
   useUpdateJob,
   useUpdateJobStatus,
 } from "@/lib/hooks/useJobMutations";
+import { useCurrentResume, useResumeVersions } from "@/lib/hooks/useResumes";
+import { useCurrentUser } from "@/lib/hooks/useUser";
+import { useExperiences } from "@/lib/hooks/useExperiences";
+import { resumesAPI } from "@/lib/api/resumes";
+import { jobsAPI } from "@/lib/api/jobs";
+import { experiencesAPI } from "@/lib/api/experiences";
+import { formatAllExperiences } from "@/lib/utils/formatExperiences";
 import type { components } from "@/types/api";
 
 type JobResponse = components["schemas"]["JobResponse"];
@@ -59,20 +74,37 @@ export function OverviewTab({ job }: OverviewTabProps) {
     job_description: job.job_description || "",
     status: job.status,
   });
+  const [hasCanonicalResume, setHasCanonicalResume] = useState(false);
+  const [isDownloadingResume, setIsDownloadingResume] = useState(false);
+  const [isCopyingContext, setIsCopyingContext] = useState(false);
+
+  const { data: user } = useCurrentUser();
+  const { data: currentResume } = useCurrentResume(job.id);
+  const { data: versions } = useResumeVersions(job.id);
+  const { data: experiences } = useExperiences(user?.id ?? 0);
 
   const updateJob = useUpdateJob();
   const deleteJob = useDeleteJob();
   const toggleFavorite = useToggleFavorite();
   const updateStatus = useUpdateJobStatus();
 
+  // Check if canonical resume exists and find matching version
+  useEffect(() => {
+    if (currentResume && versions) {
+      setHasCanonicalResume(true);
+    } else {
+      setHasCanonicalResume(false);
+    }
+  }, [currentResume, versions]);
+
   const handleSave = async () => {
     try {
       await updateJob.mutateAsync({
         jobId: job.id,
         data: {
-          job_title: formData.job_title || null,
-          company_name: formData.company_name || null,
-          job_description: formData.job_description || null,
+          title: formData.job_title || null,
+          company: formData.company_name || null,
+          description: formData.job_description || "",
         },
       });
       setIsEditing(false);
@@ -121,6 +153,136 @@ export function OverviewTab({ job }: OverviewTabProps) {
       setFormData((prev) => ({ ...prev, status: newStatus }));
     } catch (error) {
       console.error("Failed to update status:", error);
+    }
+  };
+
+  const handleDownloadResume = async () => {
+    if (!currentResume) {
+      toast.error("No resume available to download");
+      return;
+    }
+
+    // Find the matching version by comparing resume_json and template_name
+    let matchingVersionId: number | null = null;
+    if (versions) {
+      const matchingVersion = versions.find(
+        (v) =>
+          v.resume_json === currentResume.resume_json &&
+          v.template_name === currentResume.template_name
+      );
+      matchingVersionId = matchingVersion?.id ?? null;
+    }
+
+    if (!matchingVersionId) {
+      toast.error("Unable to find resume version to download");
+      return;
+    }
+
+    setIsDownloadingResume(true);
+    try {
+      const blob = await resumesAPI.downloadPDF(job.id, matchingVersionId);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      
+      // Build filename similar to Streamlit app
+      const companyName = job.company_name || "company";
+      const jobTitle = job.job_title || "position";
+      
+      // Parse resume_json to get name
+      let fullName = "resume";
+      try {
+        const resumeData = JSON.parse(currentResume.resume_json);
+        fullName = resumeData.name || "resume";
+      } catch {
+        // Use default if parsing fails
+      }
+      
+      const filename = `${companyName}_${jobTitle}_${fullName}_resume.pdf`
+        .replace(/[^a-zA-Z0-9_-]/g, "_")
+        .toLowerCase();
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("Resume downloaded successfully");
+    } catch (error) {
+      console.error("Failed to download resume:", error);
+      toast.error("Failed to download resume. Please try again.");
+    } finally {
+      setIsDownloadingResume(false);
+    }
+  };
+
+  const handleCopyJobContext = async () => {
+    if (!user?.id) {
+      toast.error("User information not available");
+      return;
+    }
+
+    setIsCopyingContext(true);
+    try {
+      // Fetch all required data
+      const [intakeSession, userExperiences] = await Promise.all([
+        jobsAPI.getIntakeSession(job.id).catch(() => null),
+        experiencesAPI.list(user.id),
+      ]);
+
+      // Fetch achievements for each experience
+      const achievementsByExp = new Map<number, components["schemas"]["AchievementResponse"][]>();
+      if (userExperiences) {
+        await Promise.all(
+          userExperiences.map(async (exp) => {
+            try {
+              const achievements = await experiencesAPI.listAchievements(exp.id);
+              achievementsByExp.set(exp.id, achievements);
+            } catch (error) {
+              console.error(`Failed to fetch achievements for experience ${exp.id}:`, error);
+            }
+          })
+        );
+      }
+
+      // Format work experience
+      const workExperience = userExperiences
+        ? formatAllExperiences(userExperiences, achievementsByExp)
+        : "No work experience available.";
+
+      // Get job description
+      const jobDescription = job.job_description || "";
+
+      // Get analyses from intake session
+      const gapAnalysis = intakeSession?.gap_analysis || "";
+      const stakeholderAnalysis = intakeSession?.stakeholder_analysis || "";
+
+      // Build the formatted prompt (XML-style tags as in Streamlit app)
+      const prompt = `<work_experience>
+${workExperience}
+</work_experience>
+
+<job_description>
+${jobDescription}
+</job_description>
+
+<gap_analysis>
+${gapAnalysis}
+</gap_analysis>
+
+<stakeholder_analysis>
+${stakeholderAnalysis}
+</stakeholder_analysis>
+`;
+
+      // Copy to clipboard
+      await navigator.clipboard.writeText(prompt);
+      toast.success("Job context copied to clipboard!");
+    } catch (error) {
+      console.error("Failed to copy job context:", error);
+      toast.error("Failed to copy job context. Please try again.");
+    } finally {
+      setIsCopyingContext(false);
     }
   };
 
@@ -177,6 +339,38 @@ export function OverviewTab({ job }: OverviewTabProps) {
               <Trash2 className="mr-2 size-4" />
               Delete
             </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <MoreVertical className="size-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={handleDownloadResume}
+                  disabled={!hasCanonicalResume || isDownloadingResume}
+                >
+                  <Download className="mr-2 size-4" />
+                  Download Resume
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <Download className="mr-2 size-4" />
+                  Download Cover Letter
+                </DropdownMenuItem>
+                <DropdownMenuItem disabled>
+                  <Copy className="mr-2 size-4" />
+                  Copy Cover Letter
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={handleCopyJobContext}
+                  disabled={isCopyingContext}
+                >
+                  <Copy className="mr-2 size-4" />
+                  Copy Job Context
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 

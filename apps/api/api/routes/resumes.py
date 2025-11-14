@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Query, status
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 
 from api.dependencies import DBSession
 from api.schemas.resume import ResumeCreate, ResumePreviewRequest, ResumeResponse, ResumeVersionResponse
+from api.services.job_service import JobService
 from api.services.resume_service import ResumeService
 from api.utils.errors import NotFoundError
 from src.features.resume.types import ResumeData
@@ -21,12 +22,17 @@ async def list_resume_versions(job_id: int, session: DBSession) -> list[ResumeVe
     return [ResumeVersionResponse.model_validate(v) for v in versions]
 
 
-@router.get("/jobs/{job_id}/resumes/current", response_model=ResumeResponse)
-async def get_current_resume(job_id: int, session: DBSession) -> ResumeResponse:
-    """Get current resume for a job."""
+@router.get("/jobs/{job_id}/resumes/current", response_model=ResumeResponse | None)
+async def get_current_resume(job_id: int, session: DBSession) -> ResumeResponse | None:
+    """Get current resume for a job. Returns null if no canonical resume exists."""
+    # Verify job exists first
+    job = JobService.get_job(job_id)
+    if not job:
+        raise NotFoundError("Job", job_id)
+
     resume = ResumeService.get_canonical(job_id)
     if not resume:
-        raise NotFoundError("Resume", job_id)
+        return None
     return ResumeResponse.model_validate(resume)
 
 
@@ -62,6 +68,12 @@ async def pin_resume_version(job_id: int, version_id: int, session: DBSession = 
     """Pin a resume version as the current resume."""
     resume = ResumeService.pin_canonical(job_id, version_id)
     return ResumeResponse.model_validate(resume)
+
+
+@router.delete("/jobs/{job_id}/resumes/unpin", status_code=status.HTTP_204_NO_CONTENT)
+async def unpin_resume(job_id: int, session: DBSession = None) -> None:  # noqa: ARG001
+    """Unpin the canonical resume for a job."""
+    ResumeService.unpin_canonical(job_id)
 
 
 @router.get("/jobs/{job_id}/resumes/{version_id}/pdf", response_class=Response)

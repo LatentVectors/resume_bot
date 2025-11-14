@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, status
 from sqlmodel import select
 
 from api.dependencies import DBSession
-from api.schemas.message import MessageCreate, MessageResponse, MessageUpdate
+from api.schemas.message import MessageCreate, MessageResponse
 from api.services.job_service import JobService
 from api.utils.errors import NotFoundError
-from src.database import Message as DbMessage, db_manager
+from src.database import Message as DbMessage
+from src.database import db_manager
 
 router = APIRouter()
 
