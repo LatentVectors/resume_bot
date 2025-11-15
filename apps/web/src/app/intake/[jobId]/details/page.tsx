@@ -112,6 +112,7 @@ export default function IntakeDetailsPage() {
       jobId={jobId}
       initialData={initialData}
       onComplete={handleComplete}
+      onCancel={() => router.push(`/jobs/${jobId}`)}
     />
   );
 }

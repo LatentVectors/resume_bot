@@ -12,8 +12,12 @@ export default function IntakeNewDetailsPage() {
   const { data: user, isLoading: isLoadingUser } = useCurrentUser();
 
   const handleJobCreated = (jobId: number) => {
-    // Replace URL without adding to history stack
-    router.replace(`/intake/${jobId}/details`);
+    // Navigate directly to experience step
+    router.replace(`/intake/${jobId}/experience`);
+  };
+
+  const handleCancel = () => {
+    router.push("/jobs");
   };
 
   if (isLoadingUser) {
@@ -37,6 +41,12 @@ export default function IntakeNewDetailsPage() {
     );
   }
 
-  return <JobDetailsForm mode="create" onJobCreated={handleJobCreated} />;
+  return (
+    <JobDetailsForm
+      mode="create"
+      onJobCreated={handleJobCreated}
+      onCancel={handleCancel}
+    />
+  );
 }
 

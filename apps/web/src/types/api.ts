@@ -236,6 +236,30 @@ export interface paths {
         patch: operations["update_intake_session_api_v1_jobs__job_id__intake_session_patch"];
         trace?: never;
     };
+    "/api/v1/jobs/{job_id}/intake-session/{session_id}/messages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Intake Session Messages
+         * @description Get chat messages for an intake session step.
+         */
+        get: operations["get_intake_session_messages_api_v1_jobs__job_id__intake_session__session_id__messages_get"];
+        put?: never;
+        /**
+         * Save Intake Session Messages
+         * @description Save chat messages for an intake session step.
+         */
+        post: operations["save_intake_session_messages_api_v1_jobs__job_id__intake_session__session_id__messages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/bulk-delete": {
         parameters: {
             query?: never;
@@ -2516,6 +2540,24 @@ export interface components {
             resume_data: components["schemas"]["ResumeData"];
         };
         /**
+         * ResumePreviewOverrideRequest
+         * @description Schema for resume preview with optional overrides.
+         */
+        ResumePreviewOverrideRequest: {
+            /**
+             * Resume Data
+             * @description Resume data as dict (optional)
+             */
+            resume_data?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Template Name
+             * @description Template name (optional)
+             */
+            template_name?: string | null;
+        };
+        /**
          * ResumePreviewRequest
          * @description Schema for resume preview request.
          */
@@ -3606,6 +3648,82 @@ export interface operations {
             };
         };
     };
+    get_intake_session_messages_api_v1_jobs__job_id__intake_session__session_id__messages_get: {
+        parameters: {
+            query: {
+                /** @description Step number (2 or 3) */
+                step: number;
+            };
+            header?: never;
+            path: {
+                job_id: number;
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    save_intake_session_messages_api_v1_jobs__job_id__intake_session__session_id__messages_post: {
+        parameters: {
+            query: {
+                /** @description Step number (2 or 3) */
+                step: number;
+            };
+            header?: never;
+            path: {
+                job_id: number;
+                session_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     bulk_delete_jobs_api_v1_jobs_bulk_delete_delete: {
         parameters: {
             query?: never;
@@ -4609,9 +4727,7 @@ export interface operations {
     };
     preview_resume_pdf_api_v1_jobs__job_id__resumes__version_id__preview_post: {
         parameters: {
-            query?: {
-                template_name?: string | null;
-            };
+            query?: never;
             header?: never;
             path: {
                 job_id: number;
@@ -4619,9 +4735,9 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: {
+        requestBody: {
             content: {
-                "application/json": components["schemas"]["ResumeData"] | null;
+                "application/json": components["schemas"]["ResumePreviewOverrideRequest"];
             };
         };
         responses: {

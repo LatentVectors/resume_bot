@@ -209,6 +209,50 @@ async def update_intake_session(
     }
 
 
+@router.get("/jobs/{job_id}/intake-session/{session_id}/messages", response_model=list[dict])
+async def get_intake_session_messages(
+    job_id: int,
+    session_id: int,
+    step: int = Query(..., description="Step number (2 or 3)"),
+    session: DBSession = None,  # noqa: ARG001
+) -> list[dict]:
+    """Get chat messages for an intake session step."""
+    from api.services.chat_message_service import ChatMessageService
+    
+    # Verify the intake session exists and belongs to this job
+    intake_session = JobService.get_intake_session(job_id)
+    if not intake_session or intake_session.id != session_id:
+        raise NotFoundError("IntakeSession", session_id)
+    
+    messages = ChatMessageService.get_messages_for_step(session_id, step)
+    return messages
+
+
+@router.post("/jobs/{job_id}/intake-session/{session_id}/messages", status_code=status.HTTP_204_NO_CONTENT)
+async def save_intake_session_messages(
+    job_id: int,
+    session_id: int,
+    step: int = Query(..., description="Step number (2 or 3)"),
+    payload: dict = None,
+    session: DBSession = None,  # noqa: ARG001
+) -> None:
+    """Save chat messages for an intake session step."""
+    import json
+    from api.services.chat_message_service import ChatMessageService
+    
+    # Verify the intake session exists and belongs to this job
+    intake_session = JobService.get_intake_session(job_id)
+    if not intake_session or intake_session.id != session_id:
+        raise NotFoundError("IntakeSession", session_id)
+    
+    # Extract messages from payload
+    messages = payload.get("messages", []) if payload else []
+    messages_json = json.dumps(messages)
+    
+    # Save messages
+    ChatMessageService.append_messages(session_id, step, messages_json)
+
+
 @router.delete("/jobs/bulk-delete", response_model=BulkDeleteResponse)
 async def bulk_delete_jobs(request: BulkDeleteRequest, session: DBSession = None) -> BulkDeleteResponse:  # noqa: ARG001
     """Delete multiple jobs in a single transaction."""

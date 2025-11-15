@@ -6,7 +6,7 @@ from fastapi import APIRouter, Query, status
 from fastapi.responses import Response
 
 from api.dependencies import DBSession
-from api.schemas.resume import ResumeCreate, ResumePreviewRequest, ResumeResponse, ResumeVersionResponse
+from api.schemas.resume import ResumeCreate, ResumePreviewOverrideRequest, ResumePreviewRequest, ResumeResponse, ResumeVersionResponse
 from api.services.job_service import JobService
 from api.services.resume_service import ResumeService
 from api.utils.errors import NotFoundError
@@ -115,8 +115,7 @@ async def preview_resume_pdf_draft(
 async def preview_resume_pdf(
     job_id: int,
     version_id: int,
-    resume_data: ResumeData | None = None,
-    template_name: str | None = None,
+    request: ResumePreviewOverrideRequest,
     session: DBSession = None,  # noqa: ARG001
 ) -> Response:
     """Preview resume PDF (can override data/template)."""
@@ -125,9 +124,14 @@ async def preview_resume_pdf(
         raise NotFoundError("ResumeVersion", version_id)
 
     # Use provided data or version data
-    if resume_data is None:
+    if request.resume_data is not None:
+        resume_data = ResumeData.model_validate(request.resume_data)
+    else:
         resume_data = ResumeData.model_validate_json(version.resume_json)
-    if template_name is None:
+    
+    if request.template_name is not None:
+        template_name = request.template_name
+    else:
         template_name = version.template_name
 
     pdf_bytes = ResumeService.render_preview(job_id, resume_data, template_name)

@@ -57,6 +57,13 @@ class ResumePreviewRequest(BaseModel):
     template_name: str = Field(..., description="Template name")
 
 
+class ResumePreviewOverrideRequest(BaseModel):
+    """Schema for resume preview with optional overrides."""
+
+    resume_data: dict[str, Any] | None = Field(default=None, description="Resume data as dict (optional)")
+    template_name: str | None = Field(default=None, description="Template name (optional)")
+
+
 class ResumeCompareResponse(BaseModel):
     """Schema for resume comparison response."""
 

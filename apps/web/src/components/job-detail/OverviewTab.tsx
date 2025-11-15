@@ -7,7 +7,6 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -301,7 +300,7 @@ ${stakeholderAnalysis}
           </div>
           <div className="flex items-center gap-2">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={handleToggleFavorite}
               disabled={toggleFavorite.isPending}
@@ -311,34 +310,32 @@ ${stakeholderAnalysis}
               />
             </Button>
             {!isEditing ? (
-              <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
-                <Edit2 className="mr-2 size-4" />
-                Edit
-              </Button>
+              <>
+                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                  Edit
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowDeleteDialog(true)}
+                >
+                  Delete
+                </Button>
+              </>
             ) : (
               <>
                 <Button variant="outline" size="sm" onClick={handleCancel}>
-                  <X className="mr-2 size-4" />
-                  Cancel
+                  Discard
                 </Button>
                 <Button
                   size="sm"
                   onClick={handleSave}
                   disabled={updateJob.isPending}
                 >
-                  <Save className="mr-2 size-4" />
                   {updateJob.isPending ? "Saving..." : "Save"}
                 </Button>
               </>
             )}
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => setShowDeleteDialog(true)}
-            >
-              <Trash2 className="mr-2 size-4" />
-              Delete
-            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
@@ -374,24 +371,70 @@ ${stakeholderAnalysis}
           </div>
         </div>
 
-        {/* Job Details Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Job Details</CardTitle>
-            <CardDescription>Basic information about this job</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
+        {/* Job Details */}
+        <div className="space-y-6">
+          {/* Row 1: Title and Company (4 columns, using first 2) */}
+          <div className="grid grid-cols-4 gap-6">
+            {/* Job Title */}
+            <div className="space-y-2">
+              <Label htmlFor="job_title" className="text-sm font-medium">
+                Title
+              </Label>
+              {isEditing ? (
+                <Input
+                  id="job_title"
+                  value={formData.job_title}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, job_title: e.target.value }))
+                  }
+                  placeholder="Job title"
+                />
+              ) : (
+                <div className="text-sm">
+                  {job.job_title || (
+                    <span className="text-muted-foreground">No title</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Company Name */}
+            <div className="space-y-2">
+              <Label htmlFor="company_name" className="text-sm font-medium">
+                Company
+              </Label>
+              {isEditing ? (
+                <Input
+                  id="company_name"
+                  value={formData.company_name}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, company_name: e.target.value }))
+                  }
+                  placeholder="Company name"
+                />
+              ) : (
+                <div className="text-sm">
+                  {job.company_name || (
+                    <span className="text-muted-foreground">No company name</span>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Status, Date Created, Date Updated (4 columns, using first 3) */}
+          <div className="grid grid-cols-4 gap-6">
             {/* Status */}
-            <div className="flex items-center gap-4">
-              <Label htmlFor="status" className="w-24">
-                Status:
+            <div className="space-y-2">
+              <Label htmlFor="status" className="text-sm font-medium">
+                Status
               </Label>
               {isEditing ? (
                 <Select
                   value={formData.status}
                   onValueChange={(value) => handleStatusChange(value as JobStatus)}
                 >
-                  <SelectTrigger id="status" className="w-[200px]">
+                  <SelectTrigger id="status">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -403,102 +446,55 @@ ${stakeholderAnalysis}
                   </SelectContent>
                 </Select>
               ) : (
-                <Badge variant="secondary">{job.status}</Badge>
-              )}
-            </div>
-
-            {/* Job Title */}
-            <div className="flex items-start gap-4">
-              <Label htmlFor="job_title" className="w-24 pt-2">
-                Title:
-              </Label>
-              {isEditing ? (
-                <Input
-                  id="job_title"
-                  value={formData.job_title}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, job_title: e.target.value }))
-                  }
-                  placeholder="Job title"
-                  className="flex-1"
-                />
-              ) : (
-                <div className="flex-1 pt-2">
-                  {job.job_title || (
-                    <span className="text-muted-foreground">No title</span>
-                  )}
+                <div>
+                  <Badge variant="secondary">{job.status}</Badge>
                 </div>
               )}
             </div>
 
-            {/* Company Name */}
-            <div className="flex items-start gap-4">
-              <Label htmlFor="company_name" className="w-24 pt-2">
-                Company:
-              </Label>
-              {isEditing ? (
-                <Input
-                  id="company_name"
-                  value={formData.company_name}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, company_name: e.target.value }))
-                  }
-                  placeholder="Company name"
-                  className="flex-1"
-                />
-              ) : (
-                <div className="flex-1 pt-2">
-                  {job.company_name || (
-                    <span className="text-muted-foreground">No company name</span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Job Description */}
-            <div className="flex items-start gap-4">
-              <Label htmlFor="job_description" className="w-24 pt-2">
-                Description:
-              </Label>
-              {isEditing ? (
-                <Textarea
-                  id="job_description"
-                  value={formData.job_description}
-                  onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, job_description: e.target.value }))
-                  }
-                  placeholder="Job description"
-                  className="flex-1 min-h-[200px]"
-                />
-              ) : (
-                <div className="flex-1 pt-2">
-                  {job.job_description ? (
-                    <p className="whitespace-pre-wrap">{job.job_description}</p>
-                  ) : (
-                    <span className="text-muted-foreground">No description</span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Metadata */}
-            <div className="flex items-center gap-6 pt-4 text-sm text-muted-foreground">
-              <div>
-                Created: {new Date(job.created_at).toLocaleDateString()}
+            {/* Date Created */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Date Created</Label>
+              <div className="text-sm text-muted-foreground">
+                {new Date(job.created_at).toLocaleDateString()}
               </div>
-              {job.applied_at && (
-                <div>
-                  Applied: {new Date(job.applied_at).toLocaleDateString()}
-                </div>
-              )}
-              {job.updated_at && (
-                <div>
-                  Updated: {new Date(job.updated_at).toLocaleDateString()}
-                </div>
-              )}
             </div>
-          </CardContent>
-        </Card>
+
+            {/* Date Updated */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Date Updated</Label>
+              <div className="text-sm text-muted-foreground">
+                {job.updated_at ? new Date(job.updated_at).toLocaleDateString() : '—'}
+              </div>
+            </div>
+          </div>
+
+          {/* Row 3: Description */}
+          <div className="space-y-2">
+            <Label htmlFor="job_description" className="text-sm font-medium">
+              Description
+            </Label>
+            {isEditing ? (
+              <Textarea
+                id="job_description"
+                value={formData.job_description}
+                onChange={(e) =>
+                  setFormData((prev) => ({ ...prev, job_description: e.target.value }))
+                }
+                placeholder="Job description"
+                className="min-h-[200px]"
+              />
+            ) : (
+              <div className="text-sm">
+                {job.job_description ? (
+                  <p className="whitespace-pre-wrap">{job.job_description}</p>
+                ) : (
+                  <span className="text-muted-foreground">No description</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Delete Confirmation Dialog */}

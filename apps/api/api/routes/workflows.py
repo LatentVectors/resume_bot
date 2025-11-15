@@ -62,7 +62,10 @@ async def stakeholder_analysis(request: StakeholderAnalysisRequest, session: DBS
     experiences = [e for e in experiences if e is not None]
 
     if not experiences:
-        raise ValueError("No valid experiences found")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid experiences found"
+        )
 
     try:
         analysis = analyze_stakeholders(job_description=request.job_description, experiences=experiences)
@@ -79,7 +82,10 @@ async def experience_extraction(request: ExperienceExtractionRequest, session: D
     experiences = [e for e in experiences if e is not None]
 
     if not experiences:
-        raise ValueError("No valid experiences found")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="No valid experiences found"
+        )
 
     # Convert chat messages from dict format to LangChain messages
     from langchain_core.messages import AIMessage, HumanMessage
@@ -107,14 +113,20 @@ async def resume_chat(request: ResumeChatRequest, session: DBSession = None) -> 
     # Get job
     job = JobService.get_job(request.job_id)
     if not job:
-        raise ValueError(f"Job {request.job_id} not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Job {request.job_id} not found"
+        )
 
     # Get selected version if provided
     selected_version = None
     if request.selected_version_id:
         selected_version = ResumeService.get_version(request.selected_version_id)
         if not selected_version or selected_version.job_id != request.job_id:
-            raise ValueError(f"Resume version {request.selected_version_id} not found for job {request.job_id}")
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Resume version {request.selected_version_id} not found for job {request.job_id}"
+            )
 
     # Convert messages from schema format to LangChain messages
     from langchain_core.messages import AIMessage, HumanMessage, ToolMessage

@@ -120,13 +120,8 @@ export function ChatInterface({
         </Alert>
       )}
 
-      {/* Chat Title */}
-      <div className="border-b px-4 py-2">
-        <h2 className="font-medium">Resume Agent</h2>
-      </div>
-
       {/* Message Container */}
-      <div className="flex-1 overflow-y-auto p-4" style={{ height: "550px" }}>
+      <div className="flex-1 overflow-y-auto p-4 h-[calc(100vh-400px)]">
         {isEmpty ? (
           <div className="flex h-full items-center justify-center text-muted-foreground">
             <div className="text-center">

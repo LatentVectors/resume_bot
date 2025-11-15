@@ -20,6 +20,7 @@ import { useCurrentUser } from "@/lib/hooks/useUser";
 import { useIntakeStore } from "@/lib/store/intake";
 import { jobsAPI } from "@/lib/api/jobs";
 import { experiencesAPI } from "@/lib/api/experiences";
+import { IntakeStepHeader } from "@/components/intake/IntakeStepHeader";
 import type { components } from "@/types/api";
 
 type ProposalResponse = components["schemas"]["ProposalResponse"];
@@ -166,24 +167,37 @@ export default function IntakeProposalsPage() {
   const pendingProposals = proposals.filter((p) => p.status === "pending");
   const hasProposals = proposals.length > 0;
 
+  const handleBack = () => {
+    router.push(`/intake/${jobId}/experience`);
+  };
+
   return (
     <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Experience Proposals</CardTitle>
-          <CardDescription>
-            Review and accept or reject AI-generated proposals to update your
-            experiences based on the job requirements.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      {/* Page Title */}
+      <IntakeStepHeader
+        step={3}
+        subtitle="Experience Updates"
+        leftButtons={[
+          {
+            label: "Back",
+            variant: "outline",
+            onClick: handleBack,
+          },
+        ]}
+        rightButtons={[
+          {
+            label: "Finish",
+            onClick: handleComplete,
+          },
+        ]}
+      />
+
+      {/* Experience Proposals Section */}
+      <div className="space-y-4">
           {!hasProposals ? (
-            <Alert>
-              <AlertDescription>
-                No proposals found. Proposals are generated during the resume
-                generation process in the previous step.
-              </AlertDescription>
-            </Alert>
+            <div className="flex min-h-[200px] items-center justify-center text-muted-foreground">
+              No updates found.
+            </div>
           ) : (
             <>
               {pendingProposals.length > 0 && (
@@ -295,23 +309,7 @@ export default function IntakeProposalsPage() {
               </div>
             </>
           )}
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Complete Intake</CardTitle>
-          <CardDescription>
-            Once you&apos;ve reviewed all proposals, complete the intake
-            workflow to finish setting up this job application.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button onClick={handleComplete} className="w-full" size="lg">
-            Complete Intake Workflow
-          </Button>
-        </CardContent>
-      </Card>
+        </div>
     </div>
   );
 }

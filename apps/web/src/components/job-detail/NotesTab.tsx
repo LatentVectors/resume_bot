@@ -147,7 +147,7 @@ export function NotesTab({ jobId }: NotesTabProps) {
       {/* Two-Column Layout: 60% left, 40% right */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[60%_40%]">
         {/* Left Column - Notes List (60% width) */}
-        <div className="space-y-4 lg:pr-6 lg:border-r">
+        <div className="space-y-4 lg:pr-6 lg:border-r max-h-[calc(100vh-200px)] overflow-y-auto">
           {isLoading ? (
             <div className="text-muted-foreground">Loading notes...</div>
           ) : sortedNotes.length === 0 ? (

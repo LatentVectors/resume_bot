@@ -8,12 +8,12 @@ import * as z from "zod";
 import { Star, Loader2, Info } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Form,
   FormControl,
   FormField,
   FormItem,
+  FormLabel,
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
@@ -22,13 +22,13 @@ import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-  TooltipProvider,
 } from "@/components/ui/tooltip";
 import { useCurrentUser } from "@/lib/hooks/useUser";
 import { useCreateJob, useUpdateJob } from "@/lib/hooks/useJobMutations";
 import { useIntakeStore } from "@/lib/store/intake";
 import { workflowsAPI } from "@/lib/api/workflows";
 import { toast } from "sonner";
+import { IntakeStepHeader } from "@/components/intake/IntakeStepHeader";
 
 const jobDetailsSchema = z.object({
   title: z.string().min(1, "Job title is required"),
@@ -45,6 +45,7 @@ interface JobDetailsFormProps {
   initialData?: JobDetailsFormData;
   onJobCreated?: (jobId: number) => void;
   onComplete?: () => void;
+  onCancel?: () => void;
 }
 
 export function JobDetailsForm({
@@ -53,6 +54,7 @@ export function JobDetailsForm({
   initialData,
   onJobCreated,
   onComplete,
+  onCancel,
 }: JobDetailsFormProps) {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -187,7 +189,15 @@ export function JobDetailsForm({
     }
   };
 
+  const watchedTitle = form.watch("title");
+  const watchedCompany = form.watch("company");
   const watchedDescription = form.watch("description");
+
+  // Check if form is valid (all required fields have non-empty, non-whitespace values)
+  const isFormValid =
+    watchedTitle?.trim().length > 0 &&
+    watchedCompany?.trim().length > 0 &&
+    watchedDescription?.trim().length > 0;
 
   const handleCancel = () => {
     if (mode === "create") {
@@ -198,180 +208,176 @@ export function JobDetailsForm({
   };
 
   return (
-    <TooltipProvider>
-      <Card>
-        <CardHeader>
-          <CardTitle>Job Intake: Step 1 of 3 - Job Details</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-              {/* Single row with Favorite, Job Title, and Company Name */}
-              <div className="flex items-start gap-4">
-                <FormField
-                  control={form.control}
-                  name="favorite"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center space-x-2 space-y-0 pt-2">
-                      <FormControl>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              onClick={() => field.onChange(!field.value)}
-                              className="focus:outline-none"
-                            >
-                              <Star
-                                className={`size-6 ${
-                                  field.value
-                                    ? "fill-yellow-400 text-yellow-400"
-                                    : "text-muted-foreground"
-                                }`}
-                              />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>Mark this job as favorite for easy access</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="title"
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormControl>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="relative">
-                              <Input
-                                {...field}
-                                placeholder="e.g., Senior Software Engineer"
-                              />
-                              <Info className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>
-                              The title of the position you&apos;re applying for
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="company"
-                  render={({ field }) => (
-                    <FormItem className="flex-1">
-                      <FormControl>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <div className="relative">
-                              <Input
-                                {...field}
-                                placeholder="e.g., Acme Corporation"
-                              />
-                              <Info className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            <p>
-                              The name of the company offering this position
-                            </p>
-                          </TooltipContent>
-                        </Tooltip>
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+    <div className="space-y-6">
+      <IntakeStepHeader
+        step={1}
+        subtitle="Job Details"
+        leftButtons={
+          onCancel
+            ? [
+                {
+                  label: "Cancel",
+                  variant: "outline",
+                  onClick: onCancel,
+                },
+              ]
+            : undefined
+        }
+        rightButtons={[
+          {
+            label: "Next",
+            type: "submit",
+            form: "job-details-form",
+            disabled: isSubmitting || isExtracting || !isFormValid,
+            loading: isSubmitting,
+          },
+        ]}
+      />
+        <Form {...form}>
+          <form
+            id="job-details-form"
+            onSubmit={form.handleSubmit(onSubmit)}
+            className="space-y-6"
+          >
+            {/* Single row with Job Title, Company Name, Favorite, and Parse */}
+            <div className="flex items-start gap-4">
+              <FormField
+                control={form.control}
+                name="title"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel>Job Title</FormLabel>
+                    <FormControl>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="relative">
+                            <Input
+                              {...field}
+                              placeholder="e.g., Senior Software Engineer"
+                            />
+                            <Info className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>
+                            The title of the position you&apos;re applying for
+                          </p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="company"
+                render={({ field }) => (
+                  <FormItem className="flex-1">
+                    <FormLabel>Company Name</FormLabel>
+                    <FormControl>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="relative">
+                            <Input
+                              {...field}
+                              placeholder="e.g., Acme Corporation"
+                            />
+                            <Info className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>The name of the company offering this position</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="favorite"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center space-x-2 space-y-0 self-end pb-2">
+                    <FormControl>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            onClick={() => field.onChange(!field.value)}
+                            className="focus:outline-none"
+                          >
+                            <Star
+                              className={`size-6 ${
+                                field.value
+                                  ? "fill-yellow-400 text-yellow-400"
+                                  : "text-muted-foreground"
+                              }`}
+                            />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Mark this job as favorite for easy access</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              <div className="self-end">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleParseInfo}
+                      disabled={
+                        isExtracting ||
+                        !watchedDescription ||
+                        watchedDescription.trim().length === 0
+                      }
+                    >
+                      {isExtracting ? (
+                        <>
+                          <Loader2 className="mr-2 size-4 animate-spin" />
+                          Parsing...
+                        </>
+                      ) : (
+                        "Parse"
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>
+                      Automatically extract job title and company name from the
+                      job description below
+                    </p>
+                  </TooltipContent>
+                </Tooltip>
               </div>
+            </div>
 
-              {/* Job Description with Parse Info button */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-end">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={handleParseInfo}
-                        disabled={
-                          isExtracting ||
-                          !watchedDescription ||
-                          watchedDescription.trim().length === 0
-                        }
-                      >
-                        {isExtracting ? (
-                          <>
-                            <Loader2 className="mr-2 size-4 animate-spin" />
-                            Parsing...
-                          </>
-                        ) : (
-                          "Parse Info"
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>
-                        Automatically extract job title and company name from
-                        the job description
-                      </p>
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-                <FormField
-                  control={form.control}
-                  name="description"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <Textarea
-                          {...field}
-                          placeholder="Paste the full job description here..."
-                          className="min-h-[400px] resize-y"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-
-              <div className="flex justify-end gap-4">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleCancel}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={
-                    isSubmitting ||
-                    createJob.isPending ||
-                    updateJob.isPending
-                  }
-                >
-                  {isSubmitting || createJob.isPending || updateJob.isPending
-                    ? "Saving..."
-                    : "Next"}
-                </Button>
-              </div>
-            </form>
-          </Form>
-        </CardContent>
-      </Card>
-    </TooltipProvider>
+            {/* Job Description */}
+            <FormField
+              control={form.control}
+              name="description"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Job Description</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      {...field}
+                      placeholder="Paste the full job description here..."
+                      className="h-[250px] resize-none overflow-y-auto"
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </form>
+        </Form>
+    </div>
   );
 }
-
