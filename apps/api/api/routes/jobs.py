@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Body, Query, status
 
 from api.dependencies import DBSession
 from api.schemas.job import BulkDeleteRequest, BulkDeleteResponse, JobCreate, JobResponse, JobsListResponse, JobUpdate
@@ -33,6 +33,13 @@ async def list_jobs(
         skip=skip,
         limit=limit,
     )
+
+
+@router.delete("/jobs/bulk-delete", response_model=BulkDeleteResponse)
+async def bulk_delete_jobs(request: BulkDeleteRequest = Body(...), session: DBSession = None) -> BulkDeleteResponse:  # noqa: ARG001
+    """Delete multiple jobs in a single transaction."""
+    successful, failed = JobService.delete_jobs(request.job_ids)
+    return BulkDeleteResponse(successful=successful, failed=failed)
 
 
 @router.get("/jobs/{job_id}", response_model=JobResponse)
@@ -251,11 +258,4 @@ async def save_intake_session_messages(
     
     # Save messages
     ChatMessageService.append_messages(session_id, step, messages_json)
-
-
-@router.delete("/jobs/bulk-delete", response_model=BulkDeleteResponse)
-async def bulk_delete_jobs(request: BulkDeleteRequest, session: DBSession = None) -> BulkDeleteResponse:  # noqa: ARG001
-    """Delete multiple jobs in a single transaction."""
-    successful, failed = JobService.delete_jobs(request.job_ids)
-    return BulkDeleteResponse(successful=successful, failed=failed)
 

@@ -8,6 +8,9 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+# Import middleware
+from api.middleware import RequestIDMiddleware
+
 # Import routers (after app initialization to avoid circular imports)
 from api.routes import (
     certificates,
@@ -34,6 +37,9 @@ app = FastAPI(
     docs_url="/api/docs",
     redoc_url="/api/redoc",
 )
+
+# Add Request ID middleware (must be added before CORS to ensure all requests get IDs)
+app.add_middleware(RequestIDMiddleware)
 
 # CORS configuration for Next.js frontend and Vercel deployments
 # Configure CORS_ORIGINS environment variable as comma-separated list:
@@ -69,7 +75,12 @@ async def global_exception_handler(request, exc):
             headers=exc.headers,
         )
 
-    logger.exception("Unhandled exception", exc_info=exc)
+    # Log unhandled exception with full context
+    client_host = request.client.host if request.client else "unknown"
+    logger.exception(
+        f"Unhandled exception during {request.method} {request.url.path} from {client_host}",
+    )
+
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error"},
@@ -96,3 +107,10 @@ app.include_router(notes.router, prefix="/api/v1", tags=["notes"])
 async def health_check():
     """Health check endpoint."""
     return {"status": "healthy"}
+
+
+# Test endpoint for error logging (temporary)
+@app.get("/api/test-error")
+async def test_error():
+    """Test endpoint to verify error logging with stack traces."""
+    raise RuntimeError("This is a test error to verify logging and stack traces!")
