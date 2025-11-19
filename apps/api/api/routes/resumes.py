@@ -10,6 +10,7 @@ from api.schemas.resume import ResumeCreate, ResumePreviewOverrideRequest, Resum
 from api.services.job_service import JobService
 from api.services.resume_service import ResumeService
 from api.utils.errors import NotFoundError
+from app.shared.filenames import build_resume_download_filename
 from src.features.resume.types import ResumeData
 
 router = APIRouter()
@@ -83,14 +84,26 @@ async def download_resume_pdf(job_id: int, version_id: int, session: DBSession =
     if not version or version.job_id != job_id:
         raise NotFoundError("ResumeVersion", version_id)
 
+    # Get job details for filename
+    job = JobService.get_job(job_id)
+    if not job:
+        raise NotFoundError("Job", job_id)
+
     # Render PDF bytes
     resume_data = ResumeData.model_validate_json(version.resume_json)
     pdf_bytes = ResumeService.render_preview(job_id, resume_data, version.template_name)
 
+    # Build standardized filename
+    filename = build_resume_download_filename(
+        company_name=job.company_name,
+        job_title=job.job_title,
+        full_name=resume_data.name,
+    )
+
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="resume_{job_id}_v{version.version_index}.pdf"'},
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

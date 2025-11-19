@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Star, Trash2, Edit2, Save, X, MoreVertical, Download, Copy } from "lucide-react";
+import { Star, Trash2, Edit2, Save, X, MoreVertical, Download, Copy, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ import {
   useToggleFavorite,
   useUpdateJob,
   useUpdateJobStatus,
+  useMarkAsApplied,
 } from "@/lib/hooks/useJobMutations";
 import { useCurrentResume, useResumeVersions } from "@/lib/hooks/useResumes";
 import { useCurrentUser } from "@/lib/hooks/useUser";
@@ -86,6 +87,7 @@ export function OverviewTab({ job }: OverviewTabProps) {
   const deleteJob = useDeleteJob();
   const toggleFavorite = useToggleFavorite();
   const updateStatus = useUpdateJobStatus();
+  const markAsApplied = useMarkAsApplied();
 
   // Check if canonical resume exists and find matching version
   useEffect(() => {
@@ -184,22 +186,31 @@ export function OverviewTab({ job }: OverviewTabProps) {
       const a = document.createElement("a");
       a.href = url;
       
-      // Build filename similar to Streamlit app
-      const companyName = job.company_name || "company";
-      const jobTitle = job.job_title || "position";
+      // Build filename matching Streamlit format: Resume - {company} - {title} - {name} - {yyyy_mm_dd}.pdf
+      const sanitize = (value: string) => {
+        return value
+          .trim()
+          .replace(/[/\\:*?"<>|]/g, "-")
+          .replace(/\s+/g, " ");
+      };
+      
+      const companyName = sanitize(job.company_name || "Unknown Company");
+      const jobTitle = sanitize(job.job_title || "Unknown Title");
       
       // Parse resume_json to get name
-      let fullName = "resume";
+      let fullName = "Unknown Name";
       try {
         const resumeData = JSON.parse(currentResume.resume_json);
-        fullName = resumeData.name || "resume";
+        fullName = sanitize(resumeData.name || "Unknown Name");
       } catch {
         // Use default if parsing fails
       }
       
-      const filename = `${companyName}_${jobTitle}_${fullName}_resume.pdf`
-        .replace(/[^a-zA-Z0-9_-]/g, "_")
-        .toLowerCase();
+      // Format date as YYYY_MM_DD
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, "0")}_${String(now.getDate()).padStart(2, "0")}`;
+      
+      const filename = `Resume - ${companyName} - ${jobTitle} - ${fullName} - ${dateStr}.pdf`;
       
       a.download = filename;
       document.body.appendChild(a);
@@ -285,6 +296,16 @@ ${stakeholderAnalysis}
     }
   };
 
+  const handleMarkAsApplied = async () => {
+    try {
+      await markAsApplied.mutateAsync(job.id);
+      toast.success("Job marked as applied!");
+    } catch (error) {
+      console.error("Failed to mark job as applied:", error);
+      toast.error("Failed to mark job as applied. Please try again.");
+    }
+  };
+
   return (
     <>
       <div className="space-y-6">
@@ -343,6 +364,14 @@ ${stakeholderAnalysis}
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
+                <DropdownMenuItem
+                  onClick={handleMarkAsApplied}
+                  disabled={job.status === "Applied" || markAsApplied.isPending}
+                >
+                  <CheckCircle className="mr-2 size-4" />
+                  Mark Applied
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={handleDownloadResume}
                   disabled={!hasCanonicalResume || isDownloadingResume}

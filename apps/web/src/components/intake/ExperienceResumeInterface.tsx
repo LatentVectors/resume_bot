@@ -561,9 +561,34 @@ export function ExperienceResumeInterface({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `resume_${jobId}_v${
-        selectedVersion?.version_index || ""
-      }.pdf`;
+      
+      // Build filename matching Streamlit format: Resume - {company} - {title} - {name} - {yyyy_mm_dd}.pdf
+      const sanitize = (value: string) => {
+        return value
+          .trim()
+          .replace(/[/\\:*?"<>|]/g, "-")
+          .replace(/\s+/g, " ");
+      };
+      
+      const companyName = sanitize(job?.company_name || "Unknown Company");
+      const jobTitle = sanitize(job?.job_title || "Unknown Title");
+      
+      // Parse resume_json to get name
+      let fullName = "Unknown Name";
+      try {
+        const resumeData = selectedVersion?.resume_json ? JSON.parse(selectedVersion.resume_json) : null;
+        fullName = sanitize(resumeData?.name || "Unknown Name");
+      } catch {
+        // Use default if parsing fails
+      }
+      
+      // Format date as YYYY_MM_DD
+      const now = new Date();
+      const dateStr = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, "0")}_${String(now.getDate()).padStart(2, "0")}`;
+      
+      const filename = `Resume - ${companyName} - ${jobTitle} - ${fullName} - ${dateStr}.pdf`;
+      
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
