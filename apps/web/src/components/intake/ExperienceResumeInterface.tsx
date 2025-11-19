@@ -8,12 +8,20 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MoreVertical } from "lucide-react";
 import { useJob } from "@/lib/hooks/useJobs";
 import { useCurrentUser } from "@/lib/hooks/useUser";
 import { useExperiences } from "@/lib/hooks/useExperiences";
 import { useIntakeStore } from "@/lib/store/intake";
 import { jobsAPI } from "@/lib/api/jobs";
 import { experiencesAPI } from "@/lib/api/experiences";
+import { promptsAPI } from "@/lib/api/prompts";
 import { formatAllExperiences } from "@/lib/utils/formatExperiences";
 import {
   useResumeVersions,
@@ -761,6 +769,108 @@ export function ExperienceResumeInterface({
     }
   };
 
+  // Copy prompt handlers
+  const handleCopyGapAnalysisPrompt = async () => {
+    try {
+      // Fetch the system prompt
+      const { prompt: systemPrompt } = await promptsAPI.getPrompt("gap_analysis");
+      
+      // Get job description
+      const jobDescription = job?.job_description || "";
+      
+      // Format work experience
+      const workExperience = await formatWorkExperience();
+      
+      // Build the complete prompt with XML tags
+      const completePrompt = `${systemPrompt}
+
+<job_description>
+${jobDescription}
+</job_description>
+
+<work_experience>
+${workExperience}
+</work_experience>`;
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(completePrompt);
+      toast.success("Gap analysis prompt copied to clipboard!");
+    } catch (error) {
+      console.error("Failed to copy gap analysis prompt:", error);
+      toast.error("Failed to copy prompt. Please try again.");
+    }
+  };
+
+  const handleCopyStakeholderAnalysisPrompt = async () => {
+    try {
+      // Fetch the system prompt
+      const { prompt: systemPrompt } = await promptsAPI.getPrompt("stakeholder_analysis");
+      
+      // Get job description
+      const jobDescription = job?.job_description || "";
+      
+      // Format work experience
+      const workExperience = await formatWorkExperience();
+      
+      // Build the complete prompt with XML tags
+      const completePrompt = `${systemPrompt}
+
+<job_description>
+${jobDescription}
+</job_description>
+
+<work_experience>
+${workExperience}
+</work_experience>`;
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(completePrompt);
+      toast.success("Stakeholder analysis prompt copied to clipboard!");
+    } catch (error) {
+      console.error("Failed to copy stakeholder analysis prompt:", error);
+      toast.error("Failed to copy prompt. Please try again.");
+    }
+  };
+
+  const handleCopyResumeWorkflowPrompt = async () => {
+    try {
+      // Fetch the system prompt
+      const { prompt: systemPrompt } = await promptsAPI.getPrompt("resume_alignment_workflow");
+      
+      // Get job description
+      const jobDescription = job?.job_description || "";
+      
+      // Format work experience
+      const workExperience = await formatWorkExperience();
+      
+      // Build the complete prompt with XML tags (gap_analysis and stakeholder_analysis empty)
+      const completePrompt = `${systemPrompt}
+
+<job_description>
+${jobDescription}
+</job_description>
+
+<work_experience>
+${workExperience}
+</work_experience>
+
+<gap_analysis>
+
+</gap_analysis>
+
+<stakeholder_analysis>
+
+</stakeholder_analysis>`;
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(completePrompt);
+      toast.success("Resume workflow prompt copied to clipboard!");
+    } catch (error) {
+      console.error("Failed to copy resume workflow prompt:", error);
+      toast.error("Failed to copy prompt. Please try again.");
+    }
+  };
+
   // Show loading spinner during initialization
   if (isInitializing) {
     return (
@@ -837,25 +947,50 @@ export function ExperienceResumeInterface({
     <div className="flex h-screen flex-col">
       {/* Header Row */}
       {showStepTitle && (
-        <IntakeStepHeader
-          step={2}
-          subtitle="Experience & Resume Development"
-          leftButtons={[
-            {
-              label: "Back",
-              variant: "outline",
-              onClick: handleBack,
-              disabled: isChatLoading,
-            },
-          ]}
-          rightButtons={[
-            {
-              label: "Next",
-              onClick: handleNext,
-              disabled: isChatLoading,
-            },
-          ]}
-        />
+        <div className="flex items-center justify-between pt-3 pb-2">
+          <div className="flex items-center gap-4">
+            <h1 className="text-xl font-semibold">
+              Job Intake: Step 2 of 3 - Experience & Resume Development
+            </h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={handleBack}
+              disabled={isChatLoading}
+            >
+              Back
+            </Button>
+            <Button
+              onClick={handleNext}
+              disabled={isChatLoading}
+            >
+              Next
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  disabled={isChatLoading}
+                >
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={handleCopyGapAnalysisPrompt}>
+                  Copy Gap Analysis Prompt
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleCopyStakeholderAnalysisPrompt}>
+                  Copy Stakeholder Analysis Prompt
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleCopyResumeWorkflowPrompt}>
+                  Copy Resume Workflow Prompt
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+        </div>
       )}
 
       {/* Two-column grid layout */}

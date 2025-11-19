@@ -20,6 +20,7 @@ from api.routes import (
     jobs,
     messages,
     notes,
+    prompts,
     responses,
     resumes,
     templates,
@@ -100,6 +101,7 @@ app.include_router(messages.router, prefix="/api/v1", tags=["messages"])
 app.include_router(responses.router, prefix="/api/v1", tags=["responses"])
 app.include_router(workflows.router, prefix="/api/v1", tags=["workflows"])
 app.include_router(notes.router, prefix="/api/v1", tags=["notes"])
+app.include_router(prompts.router, prefix="/api/v1", tags=["prompts"])
 
 
 # Health check endpoint
