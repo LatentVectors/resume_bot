@@ -1,0 +1,83 @@
+---
+description: Reference document for LangGraph Deploy and developing and deploying LangChain/LangGraph agents.
+alwaysApply: false
+---
+
+# LangGraph Deploy Documentation Index
+
+Quick reference guide for finding relevant documentation based on your implementation needs.
+The following provides and overview of the contents of the langgraph_deploy directory. To understand a given topic deeper, read the related file for the full documentation of the given topic.
+
+---
+
+## Setup & Configuration
+
+**project_structure_and_setup.md**: File structure requirements, `langgraph.json` basics, and monorepo support for deployable agents.
+**langgraph_json_config.md**: Complete reference for all `langgraph.json` configuration options including dependencies, graphs, auth, store, and HTTP settings.
+**langgraph_cli.md**: CLI commands (`dev`, `build`, `up`, `dockerfile`) with all options for local development and Docker deployments.
+**ci_cd.md**: Defining deployable graphs, dependency management with `pyproject.toml`, and deployment via CLI.
+**deploy_to_cloud.md**: Deploying graphs to LangSmith cloud via GitHub integration, automatic updates, and environment configuration.
+**deployment_components.md**: Architecture overview: Control/Data Planes, Components, Agent Server, and how they interact.
+
+---
+
+## Core API & Client Interaction
+
+**assistants.md**: Managing assistants (graph configurations), threads (persistent state), and runs. Core SDK methods for CRUD operations.
+**runs.md**: Executing runs: stateless, stateful (on threads), background runs, cron jobs, and configurable headers for per-request config.
+**streaming_api.md**: Streaming graph outputs with different modes (`updates`, `values`, `messages-tuple`, `debug`, `custom`, `events`).
+**remote_graph.md**: Using `RemoteGraph` client for invoking deployed graphs, state management, authentication, and subgraph composition.
+
+---
+
+## Handling User Interactions
+
+**double_texting.md**: Managing concurrent requests to the same thread with multitask strategies: `reject`, `enqueue`, `interrupt`, `rollback`.
+**human_in_the_loop.md**: Pausing graph execution at specific nodes, providing human feedback, and resuming from checkpoints.
+**time_travel.md**: Accessing checkpoint history, modifying past states, and resuming execution from any point to fork conversation paths.
+
+---
+
+## Frontend Integration
+
+**react_use_stream.md**: React `useStream` hook for connecting to deployed graphs, managing messages, handling interrupts, and optimistic updates.
+**generative_ui.md**: Backend and frontend setup for dynamic UI component generation, including `push_ui_message`, `LoadExternalComponent`, and local component maps.
+**webhooks.md**: Setting up event-driven callbacks on run completion, securing webhooks with tokens, and disabling webhooks server-side.
+
+---
+
+## Authentication & Security
+
+**auth_and_access_control.md**: Implementing `@auth.authenticate` handlers, resource-level authorization with `@auth.on`, and OpenAPI security schemas.
+
+---
+
+## Advanced Features
+
+**semantic_search.md**: Configuring semantic search over persistent state with embedding models, custom embedders, and `BaseStore.search()` usage.
+**mcp.md**: Model Context Protocol for exposing tools and resources to LLMs, including server setup and configuration.
+**a2a.md**: Agent-to-Agent communication protocol for inter-agent messaging using JSON-RPC methods (`message/send`, `message/stream`).
+**rebuilt_at_runtime.md**: Creating graph-making functions for per-run graph customization based on runtime configuration.
+
+---
+
+## Server Customization & Operations
+
+**server_customization.md**: Adding custom FastAPI routes, middleware (pre/post-auth), and lifespan events for resource management.
+**scaling.md**: Performance tuning: worker jobs, async patterns, durability settings, autoscaling, and self-hosted configuration examples.
+**ttl.md**: Configuring Time-to-Live policies for automatic cleanup of checkpoints and store items in `langgraph.json`.
+
+---
+
+## Quick Selection Guide
+
+**Starting a new project?** → `project_structure_and_setup.md`, `langgraph_json_config.md`
+**Deploying to production?** → `deploy_to_cloud.md`, `ci_cd.md`, `auth_and_access_control.md`
+**Building a chat interface?** → `assistants.md`, `streaming_api.md`, `react_use_stream.md`, `double_texting.md`
+**Need human approval flows?** → `human_in_the_loop.md`, `time_travel.md`
+**Building rich UI experiences?** → `generative_ui.md`, `react_use_stream.md`
+**Connecting multiple agents?** → `remote_graph.md`, `a2a.md`
+**Custom authentication?** → `auth_and_access_control.md`
+**Memory & search features?** → `semantic_search.md`, `ttl.md`
+**Performance issues?** → `scaling.md`, `runs.md` (durability settings)
+**Custom endpoints/logic?** → `server_customization.md`, `webhooks.md`
