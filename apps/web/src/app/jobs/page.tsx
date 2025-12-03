@@ -49,6 +49,7 @@ import { useJobs } from "@/lib/hooks/useJobs";
 import { useCurrentUser } from "@/lib/hooks/useUser";
 import {
   useBulkDeleteJobs,
+  useDeleteJob,
   useToggleFavorite,
 } from "@/lib/hooks/useJobMutations";
 import type { components } from "@/types/api";
@@ -98,6 +99,10 @@ function JobsPageContent() {
   // Selection
   const [selectedJobIds, setSelectedJobIds] = useState<Set<number>>(new Set());
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [jobToDelete, setJobToDelete] = useState<{
+    id: number;
+    title: string;
+  } | null>(null);
 
   // Fetch current user
   const { data: user, isLoading: isLoadingUser } = useCurrentUser();
@@ -130,6 +135,7 @@ function JobsPageContent() {
   });
 
   const bulkDeleteJobs = useBulkDeleteJobs();
+  const deleteJob = useDeleteJob();
   const toggleFavorite = useToggleFavorite();
 
   // Client-side filtering for multiple statuses and sorting
@@ -239,6 +245,16 @@ function JobsPageContent() {
       setShowDeleteDialog(false);
     } catch (error) {
       console.error("Failed to delete jobs:", error);
+    }
+  };
+
+  const handleDeleteJob = async () => {
+    if (!jobToDelete) return;
+    try {
+      await deleteJob.mutateAsync(jobToDelete.id);
+      setJobToDelete(null);
+    } catch (error) {
+      console.error("Failed to delete job:", error);
     }
   };
 
@@ -546,6 +562,19 @@ function JobsPageContent() {
                           >
                             View Details
                           </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setJobToDelete({
+                                id: job.id,
+                                title: job.job_title || "Untitled Position",
+                              });
+                            }}
+                          >
+                            <Trash2 className="mr-2 size-4" />
+                            Delete
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -637,6 +666,34 @@ function JobsPageContent() {
               disabled={bulkDeleteJobs.isPending}
             >
               {bulkDeleteJobs.isPending ? "Deleting..." : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Single Job Delete Confirmation Dialog */}
+      <Dialog open={!!jobToDelete} onOpenChange={(open) => !open && setJobToDelete(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Job</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{jobToDelete?.title}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setJobToDelete(null)}
+              disabled={deleteJob.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteJob}
+              disabled={deleteJob.isPending}
+            >
+              {deleteJob.isPending ? "Deleting..." : "Delete"}
             </Button>
           </DialogFooter>
         </DialogContent>

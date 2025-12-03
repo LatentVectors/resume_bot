@@ -8,8 +8,8 @@ from __future__ import annotations
 from typing import Annotated, TypedDict
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
-from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import InjectedToolArg, tool
+from src.core.runnable_config import create_runnable_config
 from openai import RateLimitError
 from pydantic import BaseModel, Field
 
@@ -85,7 +85,7 @@ def run_resume_chat(
         parent_version_id = None
 
     # Prepare configuration with injected tool arguments
-    config = RunnableConfig(
+    config = create_runnable_config(
         tags=[LLMTag.INTAKE_RESUME_CHAT.value],
         configurable={
             "job_id": job.id,

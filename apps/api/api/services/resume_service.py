@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from langchain_core.runnables import RunnableConfig
 from sqlmodel import select
 
 # Note: These imports from app/ are temporary - they don't have Streamlit dependencies
 # TODO: Consider moving LLMTag to src/config or src/core
 from src.constants import LLMTag
+from src.core.runnable_config import create_runnable_config
 from src.database import Resume as DbResume
 from src.database import ResumeVersion as DbResumeVersion
 from src.database import ResumeVersionEvent, db_manager
@@ -269,7 +269,7 @@ class ResumeService:
                 resume_draft=draft,
             )
 
-            config = RunnableConfig(
+            config = create_runnable_config(
                 tags=[LLMTag.RESUME_GENERATION.value],
                 metadata={"job_id": job_id, "user_id": user_id},
             )

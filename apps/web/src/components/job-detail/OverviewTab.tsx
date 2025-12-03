@@ -39,6 +39,7 @@ import {
   useUpdateJobStatus,
   useMarkAsApplied,
 } from "@/lib/hooks/useJobMutations";
+import { useCreateNote } from "@/lib/hooks/useNoteMutations";
 import { useCurrentResume, useResumeVersions } from "@/lib/hooks/useResumes";
 import { useCurrentUser } from "@/lib/hooks/useUser";
 import { useExperiences } from "@/lib/hooks/useExperiences";
@@ -46,6 +47,7 @@ import { resumesAPI } from "@/lib/api/resumes";
 import { jobsAPI } from "@/lib/api/jobs";
 import { experiencesAPI } from "@/lib/api/experiences";
 import { formatAllExperiences } from "@/lib/utils/formatExperiences";
+import { formatResumeAsText } from "@/lib/utils/formatResume";
 import type { components } from "@/types/api";
 
 type JobResponse = components["schemas"]["JobResponse"];
@@ -76,7 +78,10 @@ export function OverviewTab({ job }: OverviewTabProps) {
   });
   const [hasCanonicalResume, setHasCanonicalResume] = useState(false);
   const [isDownloadingResume, setIsDownloadingResume] = useState(false);
+  const [isCopyingResume, setIsCopyingResume] = useState(false);
   const [isCopyingContext, setIsCopyingContext] = useState(false);
+  const [isCopyingJobDescription, setIsCopyingJobDescription] = useState(false);
+  const [noteInput, setNoteInput] = useState("");
 
   const { data: user } = useCurrentUser();
   const { data: currentResume } = useCurrentResume(job.id);
@@ -88,6 +93,9 @@ export function OverviewTab({ job }: OverviewTabProps) {
   const toggleFavorite = useToggleFavorite();
   const updateStatus = useUpdateJobStatus();
   const markAsApplied = useMarkAsApplied();
+  const createNote = useCreateNote();
+
+  const isNoteDirty = noteInput.trim().length > 0;
 
   // Check if canonical resume exists and find matching version
   useEffect(() => {
@@ -226,6 +234,31 @@ export function OverviewTab({ job }: OverviewTabProps) {
     }
   };
 
+  const handleCopyResume = async () => {
+    if (!currentResume) {
+      toast.error("No resume available to copy");
+      return;
+    }
+
+    setIsCopyingResume(true);
+    try {
+      // Parse resume_json to get ResumeData object
+      const resumeData = JSON.parse(currentResume.resume_json);
+      
+      // Format resume as text
+      const formattedText = formatResumeAsText(resumeData);
+      
+      // Copy to clipboard
+      await navigator.clipboard.writeText(formattedText);
+      toast.success("Resume text copied to clipboard!");
+    } catch (error) {
+      console.error("Failed to copy resume:", error);
+      toast.error("Failed to copy resume. Please try again.");
+    } finally {
+      setIsCopyingResume(false);
+    }
+  };
+
   const handleCopyJobContext = async () => {
     if (!user?.id) {
       toast.error("User information not available");
@@ -296,6 +329,24 @@ ${stakeholderAnalysis}
     }
   };
 
+  const handleCopyJobDescription = async () => {
+    if (!job.job_description) {
+      toast.error("No job description available to copy");
+      return;
+    }
+
+    setIsCopyingJobDescription(true);
+    try {
+      await navigator.clipboard.writeText(job.job_description);
+      toast.success("Job description copied to clipboard!");
+    } catch (error) {
+      console.error("Failed to copy job description:", error);
+      toast.error("Failed to copy job description. Please try again.");
+    } finally {
+      setIsCopyingJobDescription(false);
+    }
+  };
+
   const handleMarkAsApplied = async () => {
     try {
       await markAsApplied.mutateAsync(job.id);
@@ -304,6 +355,26 @@ ${stakeholderAnalysis}
       console.error("Failed to mark job as applied:", error);
       toast.error("Failed to mark job as applied. Please try again.");
     }
+  };
+
+  const handleSaveNote = async () => {
+    if (!noteInput.trim()) return;
+
+    try {
+      await createNote.mutateAsync({
+        jobId: job.id,
+        data: { content: noteInput.trim() },
+      });
+      setNoteInput("");
+      toast.success("Note saved!");
+    } catch (error) {
+      console.error("Failed to create note:", error);
+      toast.error("Failed to save note. Please try again.");
+    }
+  };
+
+  const handleDiscardNote = () => {
+    setNoteInput("");
   };
 
   return (
@@ -379,6 +450,13 @@ ${stakeholderAnalysis}
                   <Download className="mr-2 size-4" />
                   Download Resume
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleCopyResume}
+                  disabled={!hasCanonicalResume || isCopyingResume}
+                >
+                  <Copy className="mr-2 size-4" />
+                  Copy Resume
+                </DropdownMenuItem>
                 <DropdownMenuItem disabled>
                   <Download className="mr-2 size-4" />
                   Download Cover Letter
@@ -386,6 +464,13 @@ ${stakeholderAnalysis}
                 <DropdownMenuItem disabled>
                   <Copy className="mr-2 size-4" />
                   Copy Cover Letter
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={handleCopyJobDescription}
+                  disabled={!job.job_description || isCopyingJobDescription}
+                >
+                  <Copy className="mr-2 size-4" />
+                  Copy Job Description
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -498,30 +583,68 @@ ${stakeholderAnalysis}
             </div>
           </div>
 
-          {/* Row 3: Description */}
-          <div className="space-y-2">
-            <Label htmlFor="job_description" className="text-sm font-medium">
-              Description
-            </Label>
-            {isEditing ? (
-              <Textarea
-                id="job_description"
-                value={formData.job_description}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, job_description: e.target.value }))
-                }
-                placeholder="Job description"
-                className="min-h-[200px]"
-              />
-            ) : (
-              <div className="text-sm">
-                {job.job_description ? (
-                  <p className="whitespace-pre-wrap">{job.job_description}</p>
-                ) : (
-                  <span className="text-muted-foreground">No description</span>
-                )}
+          {/* Row 3: Description and Notes Input */}
+          <div className="grid grid-cols-[1fr_200px] gap-6">
+            {/* Left Column: Job Description */}
+            <div className="space-y-2">
+              <Label htmlFor="job_description" className="text-sm font-medium">
+                Description
+              </Label>
+              {isEditing ? (
+                <Textarea
+                  id="job_description"
+                  value={formData.job_description}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, job_description: e.target.value }))
+                  }
+                  placeholder="Job description"
+                  className="min-h-[200px]"
+                />
+              ) : (
+                <div className="text-sm">
+                  {job.job_description ? (
+                    <p className="whitespace-pre-wrap">{job.job_description}</p>
+                  ) : (
+                    <span className="text-muted-foreground">No description</span>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Right Column: Notes Input */}
+            <div className="space-y-2">
+              <Label htmlFor="note_input" className="text-sm font-medium">
+                Notes
+              </Label>
+              <div className="space-y-2">
+                <Textarea
+                  id="note_input"
+                  value={noteInput}
+                  onChange={(e) => setNoteInput(e.target.value)}
+                  placeholder="Add a note..."
+                  className="min-h-[150px] resize-none"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDiscardNote}
+                    disabled={!isNoteDirty || createNote.isPending}
+                    className="flex-1"
+                  >
+                    Discard
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveNote}
+                    disabled={!isNoteDirty || createNote.isPending}
+                    className="flex-1"
+                  >
+                    {createNote.isPending ? "Saving..." : "Save"}
+                  </Button>
+                </div>
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>

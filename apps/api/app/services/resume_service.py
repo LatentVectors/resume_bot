@@ -6,10 +6,10 @@ import hashlib
 from collections import OrderedDict
 
 import streamlit as st
-from langchain_core.runnables import RunnableConfig
 from sqlmodel import select
 
 from app.constants import LLMTag
+from src.core.runnable_config import create_runnable_config
 from app.services.render_pdf import _resume_templates_dir
 from app.shared.formatters import format_experience_with_achievements
 from src.database import Resume as DbResume
@@ -265,7 +265,7 @@ class ResumeService:
                 resume_draft=draft,
             )
 
-            config = RunnableConfig(
+            config = create_runnable_config(
                 tags=[LLMTag.RESUME_GENERATION.value],
                 metadata={"job_id": job_id, "user_id": user_id},
             )

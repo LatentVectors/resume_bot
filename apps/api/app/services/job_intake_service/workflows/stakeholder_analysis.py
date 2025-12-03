@@ -7,7 +7,6 @@ what they're looking for, and how they may perceive the candidate's background.
 from __future__ import annotations
 
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnableConfig
 from openai import RateLimitError
 
 from app.constants import LLMTag
@@ -16,6 +15,7 @@ from app.shared.formatters import format_experience_with_achievements
 from src.core import ModelName, get_model
 from src.core.prompts import PromptName, get_prompt
 from src.core.prompts.input_types import StakeholderAnalysisInput
+from src.core.runnable_config import create_runnable_config
 from src.database import Experience, db_manager
 from src.logging_config import logger
 
@@ -44,7 +44,7 @@ def analyze_stakeholders(job_description: str, experiences: list[Experience]) ->
 
         experience_summary = _format_experience_for_analysis(experiences)
 
-        config = RunnableConfig(
+        config = create_runnable_config(
             tags=[LLMTag.STAKEHOLDER_ANALYSIS.value],
         )
 

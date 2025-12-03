@@ -177,6 +177,7 @@ class JobService:
         company: str | None = None,
         job_description: str | None = None,
         is_favorite: bool | None = None,
+        resume_chat_thread_id: str | None = None,
     ) -> DbJob | None:
         """Update basic editable fields for a job.
 
@@ -194,6 +195,8 @@ class JobService:
             updates["job_description"] = job_description.strip() or None
         if is_favorite is not None:
             updates["is_favorite"] = bool(is_favorite)
+        if resume_chat_thread_id is not None:
+            updates["resume_chat_thread_id"] = resume_chat_thread_id.strip() or None
 
         if not updates:
             return db_manager.get_job(job_id)

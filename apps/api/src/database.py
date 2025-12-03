@@ -241,6 +241,7 @@ class Job(SQLModel, table=True):
     applied_at: datetime | None = Field(default=None)
     has_resume: bool = Field(default=False)
     has_cover_letter: bool = Field(default=False)
+    resume_chat_thread_id: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
 
@@ -587,6 +588,8 @@ class DatabaseManager:
     def _init_database(self) -> None:
         """Initialize the database and create tables."""
         SQLModel.metadata.create_all(self.engine)
+        # Run migrations to add any missing columns to existing tables
+        self.migrate_schema()
         logger.info("Database initialized successfully")
 
     def reset_database(self) -> None:
@@ -608,6 +611,8 @@ class DatabaseManager:
         - Adds title column to Achievement if missing
         Handles Sprint 014 migrations:
         - Creates ExperienceProposal table if it doesn't exist
+        Handles resume chat migrations:
+        - Adds resume_chat_thread_id column to Job table if missing
 
         For SQLite, we use ALTER TABLE to add columns when safe.
         If migration fails, use reset_database() in development.
@@ -681,6 +686,15 @@ class DatabaseManager:
                     # We'll use a placeholder title for existing records
                     session.exec(text("ALTER TABLE achievement ADD COLUMN title TEXT DEFAULT 'Achievement'"))
                     logger.info("Added title column to achievement table")
+
+                # Check if Job table needs resume_chat_thread_id column
+                result = session.exec(text("PRAGMA table_info(job)"))
+                job_columns = {row[1] for row in result}  # row[1] is the column name
+
+                # Add resume_chat_thread_id if missing
+                if "resume_chat_thread_id" not in job_columns:
+                    session.exec(text("ALTER TABLE job ADD COLUMN resume_chat_thread_id TEXT"))
+                    logger.info("Added resume_chat_thread_id column to job table")
 
                 session.commit()
                 logger.info("Database schema migration completed successfully")

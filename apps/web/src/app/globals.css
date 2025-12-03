@@ -191,3 +191,43 @@
 .dark .react-calendar-heatmap text {
   fill: rgb(156 163 175);
 }
+
+/* Minimal scrollbar - only visible on hover, shows only thumb */
+.scrollbar-minimal {
+  scrollbar-width: thin; /* Firefox - thin scrollbar */
+  scrollbar-color: transparent transparent; /* Firefox - hide by default */
+}
+
+.scrollbar-minimal:hover {
+  scrollbar-color: oklch(0.556 0 0 / 0.4) transparent; /* Firefox - show on hover */
+}
+
+.dark .scrollbar-minimal:hover {
+  scrollbar-color: oklch(0.708 0 0 / 0.4) transparent; /* Firefox dark mode */
+}
+
+.scrollbar-minimal::-webkit-scrollbar {
+  width: 6px;
+}
+
+.scrollbar-minimal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-minimal::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 3px;
+  transition: background-color 0.2s ease;
+}
+
+.scrollbar-minimal:hover::-webkit-scrollbar-thumb {
+  background-color: oklch(0.556 0 0 / 0.4);
+}
+
+.dark .scrollbar-minimal::-webkit-scrollbar-thumb {
+  background-color: transparent;
+}
+
+.dark .scrollbar-minimal:hover::-webkit-scrollbar-thumb {
+  background-color: oklch(0.708 0 0 / 0.4);
+}

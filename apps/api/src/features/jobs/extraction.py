@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from langchain_core.prompts.chat import ChatPromptTemplate
-from langchain_core.runnables import RunnableConfig
 from openai import APIConnectionError
 from pydantic import BaseModel
 
 from app.constants import LLMTag
 from src.core import ModelName, get_model
+from src.core.runnable_config import create_runnable_config
 from src.logging_config import logger
 
 
@@ -49,7 +49,7 @@ def extract_title_company(text: str) -> TitleCompany:
     Returns TitleCompany with fields possibly None on failure or uncertainty.
     """
     try:
-        config = RunnableConfig(
+        config = create_runnable_config(
             tags=[LLMTag.JOB_EXTRACTION.value],
         )
         result = _chain.invoke({"text": text}, config=config)

@@ -4,7 +4,7 @@ export default function IntakeJobLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="mx-auto w-full max-w-6xl px-6 -mt-8">
+    <div className="-mt-8 -mb-8">
       {children}
     </div>
   );

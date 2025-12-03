@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Separator } from "@/components/ui/separator";
+import { ScrollFadeContainer } from "@/components/ui/scroll-fade-container";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +24,7 @@ import { jobsAPI } from "@/lib/api/jobs";
 import { experiencesAPI } from "@/lib/api/experiences";
 import { promptsAPI } from "@/lib/api/prompts";
 import { formatAllExperiences } from "@/lib/utils/formatExperiences";
+import { formatResumeAsText } from "@/lib/utils/formatResume";
 import {
   useResumeVersions,
   useCurrentResume,
@@ -35,19 +37,13 @@ import { resumesAPI } from "@/lib/api/resumes";
 import { VersionNavigation } from "@/components/intake/VersionNavigation";
 import { MarkdownContent } from "@/components/intake/MarkdownContent";
 import { MarkdownRenderer } from "@/components/intake/MarkdownRenderer";
-import { ChatInterface } from "@/components/intake/ChatInterface";
+import { ResumeChat } from "@/components/resume-chat/ResumeChat";
 import { ResumeEditor } from "@/components/resume/ResumeEditor";
 import { PDFPreview } from "@/components/intake/PDFPreview";
 import { IntakeStepHeader } from "@/components/intake/IntakeStepHeader";
 import { toast } from "sonner";
-import { workflowsAPI } from "@/lib/api/workflows";
 import type { components } from "@/types/api";
-import { pdfjs } from "react-pdf";
-import "react-pdf/dist/Page/AnnotationLayer.css";
-import "react-pdf/dist/Page/TextLayer.css";
-
-// Set up PDF.js worker
-pdfjs.GlobalWorkerOptions.workerSrc = `https://cdn.jsdelivr.net/npm/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.mjs`;
+import type { JobResponseExtended } from "@/types";
 
 type ResumeData = components["schemas"]["ResumeData"];
 
@@ -81,22 +77,15 @@ export function ExperienceResumeInterface({
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const [isLoadingPdf, setIsLoadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState<string | null>(null);
-  const [chatMessages, setChatMessages] = useState<
-    Array<{
-      role: "user" | "assistant" | "tool";
-      content: string;
-      tool_calls?: Array<{ [key: string]: unknown }> | null;
-      tool_call_id?: string | null;
-    }>
-  >([]);
-  const [isChatLoading, setIsChatLoading] = useState(false);
-  const [quotaError, setQuotaError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [initializationError, setInitializationError] = useState<string | null>(
     null
   );
   const [gapAnalysis, setGapAnalysis] = useState<string | null>(null);
   const [stakeholderAnalysis, setStakeholderAnalysis] = useState<string | null>(
+    null
+  );
+  const [resumeChatThreadId, setResumeChatThreadId] = useState<string | null>(
     null
   );
 
@@ -289,20 +278,7 @@ export function ExperienceResumeInterface({
           console.error("Failed to load versions:", versionsError);
         }
 
-        // Step 6: Load chat messages
-        try {
-          const messages = await jobsAPI.getIntakeSessionMessages(
-            jobId,
-            intakeSession.id,
-            2
-          );
-          setChatMessages((messages || []) as typeof chatMessages);
-        } catch (error) {
-          console.error("Failed to load chat messages:", error);
-          setChatMessages([]);
-        }
-
-        // Step 7: Set default selected version (latest or null)
+        // Step 6: Set default selected version (latest or null)
         if (versions && versions.length > 0) {
           const latestVersion = [...versions].sort((a, b) => {
             const indexA = a.version_index || 0;
@@ -316,6 +292,11 @@ export function ExperienceResumeInterface({
 
         // Initialize session ID
         setSessionId(intakeSession.id.toString());
+
+        // Initialize resume chat thread ID from job data if available
+        if (job.resume_chat_thread_id) {
+          setResumeChatThreadId(job.resume_chat_thread_id);
+        }
 
         setIsInitializing(false);
       } catch (error) {
@@ -374,113 +355,18 @@ export function ExperienceResumeInterface({
     }
   }, [user?.id]);
 
-  // Handle sending chat message
-  const handleSendMessage = useCallback(
-    async (message: string) => {
-      if (!intakeSession || !user?.id) {
-        toast.error("Session or user information not available");
-        return;
-      }
-
-      setIsChatLoading(true);
-      setQuotaError(null);
-
+  // Handle thread creation callback - persists thread_id to the Job record
+  const handleThreadCreated = useCallback(
+    async (threadId: string) => {
       try {
-        const workExperience = await formatWorkExperience();
-
-        if (!gapAnalysis || !stakeholderAnalysis) {
-          toast.error("Analyses not available. Please refresh the page.");
-          return;
-        }
-
-        const apiMessages: components["schemas"]["ResumeChatMessage"][] =
-          chatMessages.map((msg) => ({
-            role: msg.role,
-            content: msg.content,
-            tool_calls: msg.tool_calls || null,
-            tool_call_id: msg.tool_call_id || null,
-          }));
-
-        apiMessages.push({
-          role: "user",
-          content: message,
-          tool_calls: null,
-          tool_call_id: null,
-        });
-
-        const requestPayload: components["schemas"]["ResumeChatRequest"] = {
-          messages: apiMessages,
-          job_id: jobId,
-          selected_version_id: selectedVersionId || null,
-          gap_analysis: gapAnalysis,
-          stakeholder_analysis: stakeholderAnalysis,
-          work_experience: workExperience,
-        };
-
-        const response = await workflowsAPI.resumeChat(requestPayload);
-
-        const aiMessage = response.message;
-        const newVersionId = response.version_id;
-
-        const assistantMessage: (typeof chatMessages)[0] = {
-          role: "assistant",
-          content:
-            typeof aiMessage.content === "string" ? aiMessage.content : "",
-          tool_calls: Array.isArray(aiMessage.tool_calls)
-            ? aiMessage.tool_calls
-            : null,
-        };
-
-        const updatedMessages = [...chatMessages, assistantMessage];
-        setChatMessages(updatedMessages);
-
-        try {
-          await jobsAPI.saveIntakeSessionMessages(
-            jobId,
-            intakeSession.id,
-            2,
-            updatedMessages
-          );
-        } catch (error) {
-          console.error("Failed to save messages:", error);
-        }
-
-        if (newVersionId) {
-          setSelectedVersionId(newVersionId);
-          window.location.reload();
-        }
-      } catch (error: unknown) {
-        console.error("Failed to send message:", error);
-        const err = error as { status?: number; detail?: string };
-
-        if (err?.status === 429 || err?.detail?.includes("quota")) {
-          setQuotaError("API quota exceeded. Please try again later.");
-          setTimeout(() => {
-            setQuotaError(null);
-          }, 100);
-        } else if (err?.status === 422) {
-          toast.error(
-            err?.detail || "Validation error. Please check your message."
-          );
-        } else {
-          toast.error(
-            err?.detail || "Failed to send message. Please try again."
-          );
-        }
-      } finally {
-        setIsChatLoading(false);
+        await jobsAPI.update(jobId, { resume_chat_thread_id: threadId });
+        setResumeChatThreadId(threadId);
+      } catch (error) {
+        console.error("Failed to persist thread ID:", error);
+        toast.error("Failed to save chat thread. Messages may not persist.");
       }
     },
-    [
-      chatMessages,
-      intakeSession,
-      user?.id,
-      jobId,
-      selectedVersionId,
-      formatWorkExperience,
-      gapAnalysis,
-      stakeholderAnalysis,
-    ]
+    [jobId]
   );
 
   const handleBack = () => {
@@ -561,7 +447,7 @@ export function ExperienceResumeInterface({
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      
+
       // Build filename matching Streamlit format: Resume - {company} - {title} - {name} - {yyyy_mm_dd}.pdf
       const sanitize = (value: string) => {
         return value
@@ -569,25 +455,29 @@ export function ExperienceResumeInterface({
           .replace(/[/\\:*?"<>|]/g, "-")
           .replace(/\s+/g, " ");
       };
-      
+
       const companyName = sanitize(job?.company_name || "Unknown Company");
       const jobTitle = sanitize(job?.job_title || "Unknown Title");
-      
+
       // Parse resume_json to get name
       let fullName = "Unknown Name";
       try {
-        const resumeData = selectedVersion?.resume_json ? JSON.parse(selectedVersion.resume_json) : null;
+        const resumeData = selectedVersion?.resume_json
+          ? JSON.parse(selectedVersion.resume_json)
+          : null;
         fullName = sanitize(resumeData?.name || "Unknown Name");
       } catch {
         // Use default if parsing fails
       }
-      
+
       // Format date as YYYY_MM_DD
       const now = new Date();
-      const dateStr = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, "0")}_${String(now.getDate()).padStart(2, "0")}`;
-      
+      const dateStr = `${now.getFullYear()}_${String(
+        now.getMonth() + 1
+      ).padStart(2, "0")}_${String(now.getDate()).padStart(2, "0")}`;
+
       const filename = `Resume - ${companyName} - ${jobTitle} - ${fullName} - ${dateStr}.pdf`;
-      
+
       a.download = filename;
       document.body.appendChild(a);
       a.click();
@@ -790,7 +680,9 @@ export function ExperienceResumeInterface({
     } catch (error: unknown) {
       console.error("Failed to proceed to next step:", error);
       const err = error as { detail?: string };
-      toast.error(err?.detail || "Failed to proceed to next step. Please try again.");
+      toast.error(
+        err?.detail || "Failed to proceed to next step. Please try again."
+      );
     }
   };
 
@@ -798,14 +690,16 @@ export function ExperienceResumeInterface({
   const handleCopyGapAnalysisPrompt = async () => {
     try {
       // Fetch the system prompt
-      const { prompt: systemPrompt } = await promptsAPI.getPrompt("gap_analysis");
-      
+      const { prompt: systemPrompt } = await promptsAPI.getPrompt(
+        "gap_analysis"
+      );
+
       // Get job description
       const jobDescription = job?.job_description || "";
-      
+
       // Format work experience
       const workExperience = await formatWorkExperience();
-      
+
       // Build the complete prompt with XML tags
       const completePrompt = `${systemPrompt}
 
@@ -816,7 +710,7 @@ ${jobDescription}
 <work_experience>
 ${workExperience}
 </work_experience>`;
-      
+
       // Copy to clipboard
       await navigator.clipboard.writeText(completePrompt);
       toast.success("Gap analysis prompt copied to clipboard!");
@@ -829,14 +723,16 @@ ${workExperience}
   const handleCopyStakeholderAnalysisPrompt = async () => {
     try {
       // Fetch the system prompt
-      const { prompt: systemPrompt } = await promptsAPI.getPrompt("stakeholder_analysis");
-      
+      const { prompt: systemPrompt } = await promptsAPI.getPrompt(
+        "stakeholder_analysis"
+      );
+
       // Get job description
       const jobDescription = job?.job_description || "";
-      
+
       // Format work experience
       const workExperience = await formatWorkExperience();
-      
+
       // Build the complete prompt with XML tags
       const completePrompt = `${systemPrompt}
 
@@ -847,7 +743,7 @@ ${jobDescription}
 <work_experience>
 ${workExperience}
 </work_experience>`;
-      
+
       // Copy to clipboard
       await navigator.clipboard.writeText(completePrompt);
       toast.success("Stakeholder analysis prompt copied to clipboard!");
@@ -860,14 +756,16 @@ ${workExperience}
   const handleCopyResumeWorkflowPrompt = async () => {
     try {
       // Fetch the system prompt
-      const { prompt: systemPrompt } = await promptsAPI.getPrompt("resume_alignment_workflow");
-      
+      const { prompt: systemPrompt } = await promptsAPI.getPrompt(
+        "resume_alignment_workflow"
+      );
+
       // Get job description
       const jobDescription = job?.job_description || "";
-      
+
       // Format work experience
       const workExperience = await formatWorkExperience();
-      
+
       // Build the complete prompt with XML tags (gap_analysis and stakeholder_analysis empty)
       const completePrompt = `${systemPrompt}
 
@@ -886,7 +784,7 @@ ${workExperience}
 <stakeholder_analysis>
 
 </stakeholder_analysis>`;
-      
+
       // Copy to clipboard
       await navigator.clipboard.writeText(completePrompt);
       toast.success("Resume workflow prompt copied to clipboard!");
@@ -966,10 +864,8 @@ ${workExperience}
     );
   }
 
-  const columnHeight = "calc(100vh - 180px)";
-
   return (
-    <div className="flex h-screen flex-col">
+    <div className="flex flex-col h-[calc(100vh-64px)] overflow-hidden">
       {/* Header Row */}
       {showStepTitle && (
         <div className="flex items-center justify-between pt-3 pb-2">
@@ -982,23 +878,15 @@ ${workExperience}
             <Button
               variant="outline"
               onClick={handleBack}
-              disabled={isChatLoading}
             >
               Back
             </Button>
-            <Button
-              onClick={handleNext}
-              disabled={isChatLoading}
-            >
+            <Button onClick={handleNext}>
               Next
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  disabled={isChatLoading}
-                >
+                <Button variant="ghost" size="icon">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -1019,34 +907,39 @@ ${workExperience}
       )}
 
       {/* Two-column grid layout */}
-      <div className="flex-1">
-        <div
-          className="grid gap-6 md:grid-cols-[40%_1px_1fr]"
-          style={{ height: columnHeight }}
-        >
+      <div className="flex-1 min-h-0 pb-6">
+        <div className="grid gap-0 md:grid-cols-[40%_1px_1fr] h-full">
           {/* Left column: Chat interface (40%) */}
-          {intakeSession && (
-            <ChatInterface
-              jobId={jobId}
-              sessionId={intakeSession.id}
-              messages={chatMessages}
-              onMessagesChange={setChatMessages}
-              onSendMessage={handleSendMessage}
-              isLoading={isChatLoading}
-              quotaError={quotaError}
-              onQuotaErrorDismiss={() => setQuotaError(null)}
-            />
-          )}
+          <div className="h-full overflow-hidden">
+            {intakeSession && user && (
+              <ResumeChat
+                jobId={jobId}
+                initialThreadId={resumeChatThreadId}
+                onThreadCreated={handleThreadCreated}
+                context={{
+                  job_id: jobId,
+                  user_id: user.id,
+                  gap_analysis: gapAnalysis || "",
+                  stakeholder_analysis: stakeholderAnalysis || "",
+                  work_experience: "", // Will be populated on first message
+                  selected_version_id: selectedVersionId,
+                  template_name:
+                    selectedVersion?.template_name || "resume_000.html",
+                  parent_version_id: selectedVersionId,
+                }}
+              />
+            )}
+          </div>
 
           {/* Vertical separator */}
           <Separator orientation="vertical" />
 
           {/* Right column: Tabs interface */}
-          <div className="flex flex-col overflow-hidden">
+          <div className="flex flex-col overflow-hidden pl-6 min-h-0">
             <Tabs
               value={selectedTab}
               onValueChange={setSelectedTab}
-              className="flex h-full flex-col"
+              className="flex h-full min-h-0 flex-col"
             >
               <div className="px-4 py-2">
                 <TabsList>
@@ -1060,9 +953,12 @@ ${workExperience}
                 </TabsList>
               </div>
 
-              <div
-                className="flex-1 overflow-y-auto p-4"
-                style={{ height: "600px" }}
+              <ScrollFadeContainer
+                className="flex-1 min-h-0"
+                scrollClassName="p-4"
+                topGradientHeight={48}
+                bottomGradientHeight={96}
+                fadeThreshold={120}
               >
                 <TabsContent value="job" className="h-full">
                   <div className="space-y-4">
@@ -1083,15 +979,11 @@ ${workExperience}
                 </TabsContent>
 
                 <TabsContent value="gap-analysis" className="h-full">
-                  <div className="h-full overflow-y-auto">
-                    <MarkdownRenderer content={gapAnalysis || ""} />
-                  </div>
+                  <MarkdownRenderer content={gapAnalysis || ""} />
                 </TabsContent>
 
                 <TabsContent value="stakeholder-analysis" className="h-full">
-                  <div className="h-full overflow-y-auto">
-                    <MarkdownRenderer content={stakeholderAnalysis || ""} />
-                  </div>
+                  <MarkdownRenderer content={stakeholderAnalysis || ""} />
                 </TabsContent>
 
                 <TabsContent value="content" className="h-full">
@@ -1194,7 +1086,7 @@ ${workExperience}
                     </div>
                   </div>
                 </TabsContent>
-              </div>
+              </ScrollFadeContainer>
             </Tabs>
           </div>
         </div>
@@ -1228,48 +1120,4 @@ ${workExperience}
       )}
     </div>
   );
-}
-
-// Helper function to format resume as text
-function formatResumeAsText(resume: ResumeData): string {
-  let text = `${resume.name}\n${resume.title}\n\n`;
-  text += `Email: ${resume.email}\n`;
-  if (resume.phone) text += `Phone: ${resume.phone}\n`;
-  if (resume.linkedin_url) text += `LinkedIn: ${resume.linkedin_url}\n`;
-  text += `\n${resume.professional_summary}\n\n`;
-
-  if (resume.experience && resume.experience.length > 0) {
-    text += "EXPERIENCE\n";
-    resume.experience.forEach((exp) => {
-      text += `\n${exp.title} at ${exp.company}\n`;
-      text += `${exp.start_date} - ${exp.end_date || "Present"}\n`;
-      if (exp.points) {
-        exp.points.forEach((point) => {
-          text += `• ${point}\n`;
-        });
-      }
-    });
-  }
-
-  if (resume.education && resume.education.length > 0) {
-    text += "\nEDUCATION\n";
-    resume.education.forEach((edu) => {
-      text += `\n${edu.degree} in ${edu.major}\n`;
-      text += `${edu.institution} - ${edu.grad_date}\n`;
-    });
-  }
-
-  if (resume.skills && resume.skills.length > 0) {
-    text += "\nSKILLS\n";
-    text += resume.skills.join(", ") + "\n";
-  }
-
-  if (resume.certifications && resume.certifications.length > 0) {
-    text += "\nCERTIFICATIONS\n";
-    resume.certifications.forEach((cert) => {
-      text += `${cert.title} - ${cert.date}\n`;
-    });
-  }
-
-  return text;
 }

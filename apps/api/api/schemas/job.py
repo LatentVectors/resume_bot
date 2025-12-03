@@ -25,6 +25,7 @@ class JobUpdate(BaseModel):
     description: str | None = Field(default=None, min_length=1, description="Job description")
     favorite: bool | None = Field(default=None, description="Mark as favorite")
     status: JobStatus | None = Field(default=None, description="Job status")
+    resume_chat_thread_id: str | None = Field(default=None, description="LangGraph thread ID for resume chat")
 
 
 class JobResponse(BaseModel):
@@ -39,6 +40,7 @@ class JobResponse(BaseModel):
     status: JobStatus
     has_resume: bool
     has_cover_letter: bool
+    resume_chat_thread_id: str | None = None
     created_at: datetime
     updated_at: datetime
     applied_at: datetime | None = None

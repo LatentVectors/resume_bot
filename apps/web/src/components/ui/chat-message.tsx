@@ -202,21 +202,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
     return parts.map((part, index) => {
       if (part.type === "text") {
         return (
-          <div
-            className={cn(
-              "flex flex-col",
-              isUser ? "items-end" : "items-start"
-            )}
-            key={`text-${index}`}
-          >
-            <div className={cn(chatBubbleVariants({ isUser, animation }))}>
-              <MarkdownRenderer>{part.text}</MarkdownRenderer>
-              {actions ? (
-                <div className="absolute -bottom-4 right-2 flex space-x-1 rounded-lg border bg-background p-1 text-foreground opacity-0 transition-opacity group-hover/message:opacity-100">
-                  {actions}
-                </div>
-              ) : null}
-            </div>
+          <div className="w-full" key={`text-${index}`}>
+            <MarkdownRenderer>{part.text}</MarkdownRenderer>
+            {actions ? (
+              <div className="mt-2 flex space-x-1 rounded-lg border bg-background p-1 text-foreground">
+                {actions}
+              </div>
+            ) : null}
 
             {showTimeStamp && createdAt ? (
               <time
@@ -250,15 +242,13 @@ export const ChatMessage: React.FC<ChatMessageProps> = ({
   }
 
   return (
-    <div className={cn("flex flex-col", isUser ? "items-end" : "items-start")}>
-      <div className={cn(chatBubbleVariants({ isUser, animation }))}>
-        <MarkdownRenderer>{content}</MarkdownRenderer>
-        {actions ? (
-          <div className="absolute -bottom-4 right-2 flex space-x-1 rounded-lg border bg-background p-1 text-foreground opacity-0 transition-opacity group-hover/message:opacity-100">
-            {actions}
-          </div>
-        ) : null}
-      </div>
+    <div className="w-full">
+      <MarkdownRenderer>{content}</MarkdownRenderer>
+      {actions ? (
+        <div className="mt-2 flex space-x-1 rounded-lg border bg-background p-1 text-foreground">
+          {actions}
+        </div>
+      ) : null}
 
       {showTimeStamp && createdAt ? (
         <time
@@ -285,7 +275,7 @@ const ReasoningBlock = ({ part }: { part: ReasoningPart }) => {
   const [isOpen, setIsOpen] = useState(false)
 
   return (
-    <div className="mb-2 flex flex-col items-start sm:max-w-[70%]">
+    <div className="mb-2 w-full">
       <Collapsible
         open={isOpen}
         onOpenChange={setIsOpen}

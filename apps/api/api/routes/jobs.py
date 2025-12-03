@@ -76,6 +76,8 @@ async def update_job(job_id: int, job_data: JobUpdate, session: DBSession) -> Jo
         updates["job_description"] = job_data.description
     if job_data.favorite is not None:
         updates["is_favorite"] = job_data.favorite
+    if job_data.resume_chat_thread_id is not None:
+        updates["resume_chat_thread_id"] = job_data.resume_chat_thread_id
 
     job = JobService.update_job_fields(job_id, **updates)
     if not job:

@@ -7,12 +7,12 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.runnables import RunnableConfig
 from openai import RateLimitError
 from pydantic import BaseModel, Field
 
 from app.constants import LLMTag
 from app.exceptions import OpenAIQuotaExceededError
+from src.core.runnable_config import create_runnable_config
 from app.shared.formatters import format_all_experiences
 from src.core import ModelName, get_model
 from src.database import (
@@ -59,7 +59,7 @@ def extract_experience_updates(
         work_experience = format_all_experiences(experiences, achievements_by_exp)
 
         # Configure LLM call
-        config = RunnableConfig(
+        config = create_runnable_config(
             tags=[LLMTag.EXPERIENCE_EXTRACTION.value],
         )
 

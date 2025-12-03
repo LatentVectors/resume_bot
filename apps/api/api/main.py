@@ -25,7 +25,6 @@ from api.routes import (
     resumes,
     templates,
     users,
-    workflows,
 )
 from src.config import settings
 from src.logging_config import logger
@@ -99,7 +98,6 @@ app.include_router(cover_letters.router, prefix="/api/v1", tags=["cover_letters"
 app.include_router(templates.router, prefix="/api/v1", tags=["templates"])
 app.include_router(messages.router, prefix="/api/v1", tags=["messages"])
 app.include_router(responses.router, prefix="/api/v1", tags=["responses"])
-app.include_router(workflows.router, prefix="/api/v1", tags=["workflows"])
 app.include_router(notes.router, prefix="/api/v1", tags=["notes"])
 app.include_router(prompts.router, prefix="/api/v1", tags=["prompts"])
 

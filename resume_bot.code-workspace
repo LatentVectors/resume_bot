@@ -4,6 +4,9 @@
 			"path": "."
 		},
 		{
+			"path": "apps/agents"
+		},
+		{
 			"path": "apps/web"
 		},
 		{

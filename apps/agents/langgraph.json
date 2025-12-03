@@ -1,0 +1,12 @@
+{
+  "$schema": "https://langgra.ph/schema.json",
+  "dependencies": ["."],
+  "graphs": {
+    "resume_refinement": "./src/agents/resume_refinement/graph.py:graph",
+    "gap_analysis": "./src/agents/gap_analysis/graph.py:graph",
+    "stakeholder_analysis": "./src/agents/stakeholder_analysis/graph.py:graph",
+    "experience_extraction": "./src/agents/experience_extraction/graph.py:graph",
+    "job_details_extraction": "./src/agents/job_details_extraction/graph.py:graph"
+  },
+  "env": ".env"
+}

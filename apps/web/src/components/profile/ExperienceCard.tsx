@@ -343,7 +343,7 @@ export function ExperienceCard({ experience, userId }: ExperienceCardProps) {
                       key={achievement.id}
                       className="border rounded-md overflow-hidden"
                     >
-                      <button
+                      <div
                         onClick={() => {
                           const newExpanded = new Set(expandedAchievements);
                           if (isExpanded) {
@@ -353,7 +353,7 @@ export function ExperienceCard({ experience, userId }: ExperienceCardProps) {
                           }
                           setExpandedAchievements(newExpanded);
                         }}
-                        className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors"
+                        className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors cursor-pointer"
                       >
                         <div className="font-medium text-sm flex-1 text-left">
                           {achievement.title}
@@ -387,7 +387,7 @@ export function ExperienceCard({ experience, userId }: ExperienceCardProps) {
                             <ChevronDown className="size-4 ml-1" />
                           )}
                         </div>
-                      </button>
+                      </div>
                       {isExpanded && (
                         <div className="px-3 pb-3 text-sm text-muted-foreground">
                           {achievement.content}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Edit, Linkedin, Github } from "lucide-react";
+import { Plus, Edit } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -276,9 +276,8 @@ export default function ProfilePage() {
                   href={user.linkedin_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                  className="text-sm text-primary hover:underline"
                 >
-                  <Linkedin className="size-4" />
                   {user.linkedin_url}
                 </a>
               ) : (
@@ -294,9 +293,8 @@ export default function ProfilePage() {
                   href={user.github_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-sm text-primary hover:underline inline-flex items-center gap-1"
+                  className="text-sm text-primary hover:underline"
                 >
-                  <Github className="size-4" />
                   {user.github_url}
                 </a>
               ) : (

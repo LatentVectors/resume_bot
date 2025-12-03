@@ -23,10 +23,12 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useCurrentUser } from "@/lib/hooks/useUser";
 import { useCreateJob, useUpdateJob } from "@/lib/hooks/useJobMutations";
+import { useIntakeInitialization } from "@/lib/hooks/useIntakeInitialization";
 import { useIntakeStore } from "@/lib/store/intake";
-import { workflowsAPI } from "@/lib/api/workflows";
+import { langgraphWorkflowsAPI } from "@/lib/api/workflows";
 import { toast } from "sonner";
 import { IntakeStepHeader } from "@/components/intake/IntakeStepHeader";
 
@@ -63,7 +65,13 @@ export function JobDetailsForm({
   const { data: user } = useCurrentUser();
   const createJob = useCreateJob();
   const updateJob = useUpdateJob();
-  const { setJobId, setCurrentStep, setJobDetails } = useIntakeStore();
+  const { 
+    initializeIntake, 
+    isInitializing, 
+    statusMessage: initStatusMessage,
+    error: initError,
+  } = useIntakeInitialization();
+  const { setJobId, setCurrentStep, setJobDetails, setSessionId } = useIntakeStore();
 
   const form = useForm<JobDetailsFormData>({
     resolver: zodResolver(jobDetailsSchema),
@@ -91,7 +99,7 @@ export function JobDetailsForm({
 
     setIsExtracting(true);
     try {
-      const result = await workflowsAPI.extractJobDetails({
+      const result = await langgraphWorkflowsAPI.extractJobDetails({
         job_description: description,
       });
 
@@ -147,6 +155,20 @@ export function JobDetailsForm({
           description: data.description.trim(),
         });
 
+        // Initialize intake session with analyses
+        try {
+          const result = await initializeIntake({
+            jobId: job.id,
+            userId: user.id,
+            jobDescription: data.description.trim(),
+          });
+          setSessionId(result.sessionId.toString());
+        } catch (initError) {
+          console.error("Failed to initialize intake:", initError);
+          // Still navigate to experience page, but show error
+          toast.error("Failed to prepare analyses. Some features may be limited.");
+        }
+
         // Notify parent component
         if (onJobCreated) {
           onJobCreated(job.id);
@@ -199,6 +221,17 @@ export function JobDetailsForm({
     watchedCompany?.trim().length > 0 &&
     watchedDescription?.trim().length > 0;
 
+  // Determine button label based on state
+  const getButtonLabel = () => {
+    if (isInitializing && initStatusMessage) {
+      return initStatusMessage;
+    }
+    if (isSubmitting) {
+      return mode === "create" ? "Creating..." : "Saving...";
+    }
+    return "Next";
+  };
+
   const handleCancel = () => {
     if (mode === "create") {
       router.push("/jobs");
@@ -219,20 +252,28 @@ export function JobDetailsForm({
                   label: "Cancel",
                   variant: "outline",
                   onClick: onCancel,
+                  disabled: isSubmitting || isInitializing,
                 },
               ]
             : undefined
         }
         rightButtons={[
           {
-            label: "Next",
+            label: getButtonLabel(),
             type: "submit",
             form: "job-details-form",
-            disabled: isSubmitting || isExtracting || !isFormValid,
-            loading: isSubmitting,
+            disabled: isSubmitting || isExtracting || isInitializing || !isFormValid,
+            loading: isSubmitting || isInitializing,
           },
         ]}
       />
+      
+      {/* Show initialization error if present */}
+      {initError && (
+        <Alert variant="destructive">
+          <AlertDescription>{initError}</AlertDescription>
+        </Alert>
+      )}
         <Form {...form}>
           <form
             id="job-details-form"

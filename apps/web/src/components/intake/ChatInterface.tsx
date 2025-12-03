@@ -4,6 +4,7 @@ import { useState, useCallback } from "react";
 import { ChatContainer, ChatMessages, ChatForm } from "@/components/ui/chat";
 import { MessageList } from "@/components/ui/message-list";
 import { MessageInput } from "@/components/ui/message-input";
+import { ScrollFadeContainer } from "@/components/ui/scroll-fade-container";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Loader2 } from "lucide-react";
 import type { Message } from "@/components/ui/chat-message";
@@ -110,58 +111,70 @@ export function ChatInterface({
   const isTyping = isLoading && chatMessages.length > 0;
 
   return (
-    <ChatContainer className="flex h-full flex-col">
-      {/* Quota Error Banner */}
-      {quotaError && (
-        <Alert className="m-4 border-destructive bg-destructive/10">
-          <AlertDescription className="text-destructive">
-            {quotaError}
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Message Container */}
-      <div className="flex-1 overflow-y-auto p-4 h-[calc(100vh-400px)]">
-        {isEmpty ? (
-          <div className="flex h-full items-center justify-center text-muted-foreground">
-            <div className="text-center">
-              <p className="mb-2">Start a conversation with the Resume Agent</p>
-              <p className="text-sm">Ask for resume changes...</p>
-            </div>
-          </div>
-        ) : (
-          <ChatMessages messages={chatMessages}>
-            <MessageList messages={chatMessages} isTyping={isTyping} />
-          </ChatMessages>
-        )}
-      </div>
-
-      {/* Loading Indicator */}
-      {isLoading && (
-        <div className="flex items-center gap-2 border-t px-4 py-2 text-sm text-muted-foreground">
-          <Loader2 className="size-4 animate-spin" />
-          <span>Thinking...</span>
-        </div>
-      )}
-
-      {/* Chat Input */}
-      <ChatForm
-        isPending={isSubmitting || isLoading}
-        handleSubmit={handleSubmit}
-        className="border-t"
+    <ChatContainer className="h-full">
+      {/* Message Container - Scrollable with fade indicators (grid row 1: 1fr) */}
+      <ScrollFadeContainer
+        className="min-h-0"
+        scrollClassName="flex flex-col"
+        topGradientHeight={32}
+        bottomGradientHeight={80}
+        fadeThreshold={100}
       >
-        {() => (
-          <div className="p-4">
-            <MessageInput
-              value={input}
-              onChange={handleInputChange}
-              placeholder="Ask for resume changes..."
-              isGenerating={isLoading}
-              allowAttachments={false}
-            />
+        {/* Quota Error Banner - Sticky at top of scrollable area */}
+        {quotaError && (
+          <Alert className="my-4 mr-4 ml-0 border-destructive bg-destructive/10 shrink-0">
+            <AlertDescription className="text-destructive">
+              {quotaError}
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Messages content */}
+        <div className="flex-1 min-h-0">
+          <div className="pr-4 pt-4">
+            {isEmpty ? (
+              <div className="flex h-full items-center justify-center text-muted-foreground">
+                <div className="text-center">
+                  <p className="mb-2">Start a conversation with the Resume Agent</p>
+                  <p className="text-sm">Ask for resume changes...</p>
+                </div>
+              </div>
+            ) : (
+              <ChatMessages messages={chatMessages}>
+                <MessageList messages={chatMessages} isTyping={isTyping} />
+              </ChatMessages>
+            )}
+          </div>
+        </div>
+      </ScrollFadeContainer>
+
+      {/* Loading Indicator and Chat Input - Fixed at bottom (grid row 2: auto) */}
+      <div className="shrink-0">
+        {isLoading && (
+          <div className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+            <span>Thinking...</span>
           </div>
         )}
-      </ChatForm>
+
+        {/* Chat Input - Fixed at bottom */}
+        <ChatForm
+          isPending={isSubmitting || isLoading}
+          handleSubmit={handleSubmit}
+        >
+          {() => (
+            <div className="px-4 pb-4">
+              <MessageInput
+                value={input}
+                onChange={handleInputChange}
+                placeholder="Ask for resume changes..."
+                isGenerating={isLoading}
+                allowAttachments={false}
+              />
+            </div>
+          )}
+        </ChatForm>
+      </div>
     </ChatContainer>
   );
 }

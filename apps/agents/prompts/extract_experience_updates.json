@@ -1,0 +1,923 @@
+{
+  "id": "6d24bb2b-635e-4d0c-97f9-3893e6fe0d8a",
+  "name": "extract_experience_updates",
+  "repo_handle": "extract_experience_updates",
+  "full_name": "extract_experience_updates",
+  "description": "",
+  "readme": "",
+  "tags": [
+    "ChatPromptTemplate",
+    "StructuredPrompt",
+    "StructuredPrompt"
+  ],
+  "created_at": "2025-10-30T23:27:23.534036",
+  "updated_at": "2025-10-30T23:33:16.126212",
+  "is_public": false,
+  "is_archived": false,
+  "num_likes": 0,
+  "num_downloads": 22,
+  "num_views": 4,
+  "last_commit_hash": "3a3104a484301d6d647a4834fe871560cce9200700075afaba0346d146c0eeac",
+  "num_commits": 3,
+  "prompt_template": {
+    "lc": 1,
+    "type": "constructor",
+    "id": [
+      "langchain",
+      "schema",
+      "runnable",
+      "RunnableSequence"
+    ],
+    "kwargs": {
+      "first": {
+        "lc": 1,
+        "type": "constructor",
+        "id": [
+          "langchain_core",
+          "prompts",
+          "structured",
+          "StructuredPrompt"
+        ],
+        "kwargs": {
+          "input_variables": [
+            "chat_history",
+            "work_experience"
+          ],
+          "metadata": {
+            "lc_hub_owner": "-",
+            "lc_hub_repo": "extract_experience_updates",
+            "lc_hub_commit_hash": "3a3104a484301d6d647a4834fe871560cce9200700075afaba0346d146c0eeac"
+          },
+          "messages": [
+            {
+              "lc": 1,
+              "type": "constructor",
+              "id": [
+                "langchain",
+                "prompts",
+                "chat",
+                "SystemMessagePromptTemplate"
+              ],
+              "kwargs": {
+                "prompt": {
+                  "lc": 1,
+                  "type": "constructor",
+                  "id": [
+                    "langchain",
+                    "prompts",
+                    "prompt",
+                    "PromptTemplate"
+                  ],
+                  "kwargs": {
+                    "input_variables": [
+                      "work_experience"
+                    ],
+                    "template": "## **System Instructions: Work Experience Enhancement Workflow**\n\n### **Goal**\nThe goal of this workflow is to synthesize new information gathered from a user conversation into a set of clear, actionable suggestions for updating and extending the user's `<work_experience>` document. The process prioritizes enhancing existing content and preserving historical accuracy over creating new entries.\n\n### **My Role/Persona**\nIn this role, you are a **Strategic Portfolio Curator**. Your primary function is to be meticulous, collaborative, and focused on preserving the integrity of the user's professional history. You are enhancing a foundational career asset, not just editing a document.\n\n### **Key Principles & Constraints**\nAdhere to these rules without exception:\n\n1.  **Uphold Absolute Factual Accuracy:** This document is a non-speculative record of past events. It must not contain any conjecture, exaggeration, extrapolation, or inference. All statements must be grounded in what actually happened.\n    *   Avoid unprovable superlatives (e.g., \"dramatically improved\") unless the user provides a direct, verifiable metric to support it.\n    *   It is acceptable to describe qualitative outcomes when quantitative data is unavailable, but they must be stated as factual observations (e.g., \"This reinforced trust in the team's data...\"), not as forward-looking statements about future ability.\n\n2.  **Handle Clarifications and Corrections with Precision:** When user input clarifies or corrects existing content, prioritize the new information. Make the smallest, most precise edit required to align the text with the user's updated account. This may involve adding, modifying, or **explicitly removing** details to ensure factual accuracy.\n\n3.  **Do Not Infer Content:** Your suggestions must be based *only* on the explicit details the user provides. If conversational input is too vague to form a complete, impactful achievement (a clear action and a tangible result), do not create a suggestion for it.\n\n4.  **Prioritize Narrative Clarity:**\n    *   When new context shares the same core accomplishment as an existing achievement, **update** that achievement.\n    *   If the new context describes a *fundamentally different accomplishment or outcome*—even if part of the same project—**add** it as a new, distinct achievement to avoid diluting the narrative of existing entries.\n\n5.  **Uphold Skill Granularity:** Each skill should represent a distinct, focused competency. Prefer adding a new, specific skill (e.g., `ADD SKILL`: 'Pandas') over combining it with an existing one (e.g., updating 'Python' to 'Python (Pandas)'). Avoid creating long, run-on skill entries.\n\n6.  **Provide Full Context for Updates:** When proposing an `UPDATE`, you must provide the **complete, final text** for that entire section (e.g., the full achievement content), incorporating all changes.\n\n7.  **No ID Generation:** Never invent a new ID for an `ADD` suggestion. IDs are only used to reference existing content in `UPDATE` suggestions.\n\n### **Required Output Format**\nAll suggestions must be provided as a single, valid JSON object. The JSON object must conform to the schema described below.\n\n#### **Root Schema**\nThe root object must contain four top-level keys: `role_overviews`, `company_overviews`, `skills`, and `achievements`. Each key holds an array of suggestion objects specific to that type.\n\n```json\n{{\n  \"role_overviews\": [],\n  \"company_overviews\": [],\n  \"skills\": [],\n  \"achievements\": []\n}}\n```\n\n---\n\n#### **Schema for `role_overviews` and `company_overviews`**\nThese arrays contain objects for updating overviews.\n*   **`command`**: `string` - Must be `\"UPDATE\"`.\n*   **`experience_id`**: `integer` - The ID of the work experience to update.\n*   **`content`**: `string` - The complete, new text for the overview.\n\n**Example Object:**\n```json\n{{\n  \"command\": \"UPDATE\",\n  \"experience_id\": 1,\n  \"content\": \"The full, updated paragraph text for the role overview.\"\n}}\n```\n\n---\n\n#### **Schema for `skills`**\nThis array contains objects for adding new skills.\n*   **`command`**: `string` - Must be `\"ADD\"`.\n*   **`experience_id`**: `integer` - The ID of the work experience to add skills to.\n*   **`skills`**: `array[string]` - A list of new, granular skills to add.\n\n**Example Object:**\n```json\n{{\n  \"command\": \"ADD\",\n  \"experience_id\": 1,\n  \"skills\": [\n    \"Stakeholder Education & Mentoring\",\n    \"Data Culture Development\"\n  ]\n}}\n```\n\n---\n\n#### **Schema for `achievements`**\nThis array can contain a mix of two types of objects: additions and updates.\n\n**1. For Adding a New Achievement:**\n*   **`command`**: `string` - Must be `\"ADD\"`.\n*   **`experience_id`**: `integer` - The ID of the parent work experience.\n*   **`title`**: `string` - The required title for the new achievement.\n*   **`content`**: `string` - The full content of the new achievement.\n\n**Example Object (Addition):**\n```json\n{{\n  \"command\": \"ADD\",\n  \"experience_id\": 1,\n  \"title\": \"A New, Descriptive Title for the New Achievement\",\n  \"content\": \"The full text for the new achievement...\"\n}}\n```\n\n**2. For Updating an Existing Achievement:**\n*   **`command`**: `string` - Must be `\"UPDATE\"`.\n*   **`experience_id`**: `integer` - The ID of the parent work experience.\n*   **`achievement_id`**: `integer` - The required ID of the achievement to update.\n*   **`title`**: `string | null` - An optional new title. If `null` or omitted, the existing title is preserved.\n*   **`content`**: `string` - The complete, new text for the achievement's content.\n\n**Example Object (Update):**\n```json\n{{\n  \"command\": \"UPDATE\",\n  \"experience_id\": 1,\n  \"achievement_id\": 157,\n  \"title\": \"An Optional, Updated Title for the Achievement\",\n  \"content\": \"The complete, updated text for the achievement...\"\n}}\n```\n\n---\n\n<work_experience>\n{work_experience}\n</work_experience>",
+                    "template_format": "f-string"
+                  },
+                  "name": "PromptTemplate"
+                }
+              }
+            },
+            {
+              "lc": 1,
+              "type": "constructor",
+              "id": [
+                "langchain",
+                "prompts",
+                "chat",
+                "MessagesPlaceholder"
+              ],
+              "kwargs": {
+                "variable_name": "chat_history"
+              }
+            }
+          ],
+          "schema_": {
+            "title": "WorkExperienceEnhancementSuggestions",
+            "description": "A set of clear, actionable suggestions for updating and extending a user's work experience document. The output must conform to this schema.",
+            "type": "object",
+            "properties": {
+              "role_overviews": {
+                "type": "array",
+                "description": "A list of suggestions for updating role overviews.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "description": "The operation to perform. Must be 'UPDATE' for role overviews.",
+                      "const": "UPDATE"
+                    },
+                    "experience_id": {
+                      "type": "integer",
+                      "description": "The unique identifier of the work experience entry to update."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "The complete, new text for the role overview."
+                    }
+                  },
+                  "required": [
+                    "command",
+                    "experience_id",
+                    "content"
+                  ]
+                }
+              },
+              "company_overviews": {
+                "type": "array",
+                "description": "A list of suggestions for updating company overviews.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "description": "The operation to perform. Must be 'UPDATE' for company overviews.",
+                      "const": "UPDATE"
+                    },
+                    "experience_id": {
+                      "type": "integer",
+                      "description": "The unique identifier of the work experience entry to update."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "The complete, new text for the company overview."
+                    }
+                  },
+                  "required": [
+                    "command",
+                    "experience_id",
+                    "content"
+                  ]
+                }
+              },
+              "skills": {
+                "type": "array",
+                "description": "A list of suggestions for adding new skills.",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "description": "The operation to perform. Must be 'ADD' for skills.",
+                      "const": "ADD"
+                    },
+                    "experience_id": {
+                      "type": "integer",
+                      "description": "The unique identifier of the work experience entry to add skills to."
+                    },
+                    "skills": {
+                      "type": "array",
+                      "description": "A list of new, granular skills to add.",
+                      "items": {
+                        "type": "string"
+                      }
+                    }
+                  },
+                  "required": [
+                    "command",
+                    "experience_id",
+                    "skills"
+                  ]
+                }
+              },
+              "achievements": {
+                "type": "array",
+                "description": "A list of suggestions for adding or updating achievements.",
+                "items": {
+                  "oneOf": [
+                    {
+                      "title": "AddNewAchievement",
+                      "type": "object",
+                      "properties": {
+                        "command": {
+                          "type": "string",
+                          "description": "The operation to perform. Must be 'ADD' for a new achievement.",
+                          "const": "ADD"
+                        },
+                        "experience_id": {
+                          "type": "integer",
+                          "description": "The unique identifier of the parent work experience."
+                        },
+                        "title": {
+                          "type": "string",
+                          "description": "The required title for the new achievement."
+                        },
+                        "content": {
+                          "type": "string",
+                          "description": "The full content of the new achievement."
+                        }
+                      },
+                      "required": [
+                        "command",
+                        "experience_id",
+                        "title",
+                        "content"
+                      ]
+                    },
+                    {
+                      "title": "UpdateExistingAchievement",
+                      "type": "object",
+                      "properties": {
+                        "command": {
+                          "type": "string",
+                          "description": "The operation to perform. Must be 'UPDATE' for an existing achievement.",
+                          "const": "UPDATE"
+                        },
+                        "experience_id": {
+                          "type": "integer",
+                          "description": "The unique identifier of the parent work experience."
+                        },
+                        "achievement_id": {
+                          "type": "integer",
+                          "description": "The required unique identifier of the achievement to update."
+                        },
+                        "title": {
+                          "type": [
+                            "string",
+                            "null"
+                          ],
+                          "description": "An optional new title. If null or omitted, the existing title is preserved."
+                        },
+                        "content": {
+                          "type": "string",
+                          "description": "The complete, new text for the achievement's content."
+                        }
+                      },
+                      "required": [
+                        "command",
+                        "experience_id",
+                        "achievement_id",
+                        "content"
+                      ]
+                    }
+                  ]
+                }
+              }
+            },
+            "required": [
+              "role_overviews",
+              "company_overviews",
+              "skills",
+              "achievements"
+            ]
+          }
+        },
+        "name": "StructuredPrompt"
+      },
+      "middle": [
+        {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "schema",
+            "runnable",
+            "RunnableBinding"
+          ],
+          "kwargs": {
+            "bound": {
+              "lc": 1,
+              "type": "constructor",
+              "id": [
+                "langchain",
+                "chat_models",
+                "openai",
+                "ChatOpenAI"
+              ],
+              "kwargs": {
+                "model_name": "gpt-5-mini",
+                "model_kwargs": {
+                  "extra_headers": {}
+                },
+                "openai_api_key": {
+                  "lc": 1,
+                  "type": "secret",
+                  "id": [
+                    "OPENAI_API_KEY"
+                  ]
+                },
+                "top_p": 1.0,
+                "service_tier": "auto",
+                "output_version": "v0"
+              },
+              "name": "ChatOpenAI"
+            },
+            "kwargs": {
+              "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                  "name": "WorkExperienceEnhancementSuggestions",
+                  "description": "A set of clear, actionable suggestions for updating and extending a user's work experience document. The output must conform to this schema.",
+                  "strict": false,
+                  "schema": {
+                    "type": "object",
+                    "properties": {
+                      "role_overviews": {
+                        "type": "array",
+                        "description": "A list of suggestions for updating role overviews.",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "command": {
+                              "type": "string",
+                              "description": "The operation to perform. Must be 'UPDATE' for role overviews.",
+                              "const": "UPDATE"
+                            },
+                            "experience_id": {
+                              "type": "integer",
+                              "description": "The unique identifier of the work experience entry to update."
+                            },
+                            "content": {
+                              "type": "string",
+                              "description": "The complete, new text for the role overview."
+                            }
+                          },
+                          "required": [
+                            "command",
+                            "experience_id",
+                            "content"
+                          ]
+                        }
+                      },
+                      "company_overviews": {
+                        "type": "array",
+                        "description": "A list of suggestions for updating company overviews.",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "command": {
+                              "type": "string",
+                              "description": "The operation to perform. Must be 'UPDATE' for company overviews.",
+                              "const": "UPDATE"
+                            },
+                            "experience_id": {
+                              "type": "integer",
+                              "description": "The unique identifier of the work experience entry to update."
+                            },
+                            "content": {
+                              "type": "string",
+                              "description": "The complete, new text for the company overview."
+                            }
+                          },
+                          "required": [
+                            "command",
+                            "experience_id",
+                            "content"
+                          ]
+                        }
+                      },
+                      "skills": {
+                        "type": "array",
+                        "description": "A list of suggestions for adding new skills.",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "command": {
+                              "type": "string",
+                              "description": "The operation to perform. Must be 'ADD' for skills.",
+                              "const": "ADD"
+                            },
+                            "experience_id": {
+                              "type": "integer",
+                              "description": "The unique identifier of the work experience entry to add skills to."
+                            },
+                            "skills": {
+                              "type": "array",
+                              "description": "A list of new, granular skills to add.",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          },
+                          "required": [
+                            "command",
+                            "experience_id",
+                            "skills"
+                          ]
+                        }
+                      },
+                      "achievements": {
+                        "type": "array",
+                        "description": "A list of suggestions for adding or updating achievements.",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "title": "AddNewAchievement",
+                              "type": "object",
+                              "properties": {
+                                "command": {
+                                  "type": "string",
+                                  "description": "The operation to perform. Must be 'ADD' for a new achievement.",
+                                  "const": "ADD"
+                                },
+                                "experience_id": {
+                                  "type": "integer",
+                                  "description": "The unique identifier of the parent work experience."
+                                },
+                                "title": {
+                                  "type": "string",
+                                  "description": "The required title for the new achievement."
+                                },
+                                "content": {
+                                  "type": "string",
+                                  "description": "The full content of the new achievement."
+                                }
+                              },
+                              "required": [
+                                "command",
+                                "experience_id",
+                                "title",
+                                "content"
+                              ]
+                            },
+                            {
+                              "title": "UpdateExistingAchievement",
+                              "type": "object",
+                              "properties": {
+                                "command": {
+                                  "type": "string",
+                                  "description": "The operation to perform. Must be 'UPDATE' for an existing achievement.",
+                                  "const": "UPDATE"
+                                },
+                                "experience_id": {
+                                  "type": "integer",
+                                  "description": "The unique identifier of the parent work experience."
+                                },
+                                "achievement_id": {
+                                  "type": "integer",
+                                  "description": "The required unique identifier of the achievement to update."
+                                },
+                                "title": {
+                                  "type": [
+                                    "string",
+                                    "null"
+                                  ],
+                                  "description": "An optional new title. If null or omitted, the existing title is preserved."
+                                },
+                                "content": {
+                                  "type": "string",
+                                  "description": "The complete, new text for the achievement's content."
+                                }
+                              },
+                              "required": [
+                                "command",
+                                "experience_id",
+                                "achievement_id",
+                                "content"
+                              ]
+                            }
+                          ]
+                        }
+                      }
+                    },
+                    "required": [
+                      "role_overviews",
+                      "company_overviews",
+                      "skills",
+                      "achievements"
+                    ]
+                  }
+                }
+              },
+              "ls_structured_output_format": {
+                "kwargs": {
+                  "method": "json_schema",
+                  "strict": null
+                },
+                "schema": {
+                  "type": "function",
+                  "function": {
+                    "name": "WorkExperienceEnhancementSuggestions",
+                    "description": "A set of clear, actionable suggestions for updating and extending a user's work experience document. The output must conform to this schema.",
+                    "parameters": {
+                      "type": "object",
+                      "properties": {
+                        "role_overviews": {
+                          "type": "array",
+                          "description": "A list of suggestions for updating role overviews.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "command": {
+                                "type": "string",
+                                "description": "The operation to perform. Must be 'UPDATE' for role overviews.",
+                                "const": "UPDATE"
+                              },
+                              "experience_id": {
+                                "type": "integer",
+                                "description": "The unique identifier of the work experience entry to update."
+                              },
+                              "content": {
+                                "type": "string",
+                                "description": "The complete, new text for the role overview."
+                              }
+                            },
+                            "required": [
+                              "command",
+                              "experience_id",
+                              "content"
+                            ]
+                          }
+                        },
+                        "company_overviews": {
+                          "type": "array",
+                          "description": "A list of suggestions for updating company overviews.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "command": {
+                                "type": "string",
+                                "description": "The operation to perform. Must be 'UPDATE' for company overviews.",
+                                "const": "UPDATE"
+                              },
+                              "experience_id": {
+                                "type": "integer",
+                                "description": "The unique identifier of the work experience entry to update."
+                              },
+                              "content": {
+                                "type": "string",
+                                "description": "The complete, new text for the company overview."
+                              }
+                            },
+                            "required": [
+                              "command",
+                              "experience_id",
+                              "content"
+                            ]
+                          }
+                        },
+                        "skills": {
+                          "type": "array",
+                          "description": "A list of suggestions for adding new skills.",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "command": {
+                                "type": "string",
+                                "description": "The operation to perform. Must be 'ADD' for skills.",
+                                "const": "ADD"
+                              },
+                              "experience_id": {
+                                "type": "integer",
+                                "description": "The unique identifier of the work experience entry to add skills to."
+                              },
+                              "skills": {
+                                "type": "array",
+                                "description": "A list of new, granular skills to add.",
+                                "items": {
+                                  "type": "string"
+                                }
+                              }
+                            },
+                            "required": [
+                              "command",
+                              "experience_id",
+                              "skills"
+                            ]
+                          }
+                        },
+                        "achievements": {
+                          "type": "array",
+                          "description": "A list of suggestions for adding or updating achievements.",
+                          "items": {
+                            "oneOf": [
+                              {
+                                "title": "AddNewAchievement",
+                                "type": "object",
+                                "properties": {
+                                  "command": {
+                                    "type": "string",
+                                    "description": "The operation to perform. Must be 'ADD' for a new achievement.",
+                                    "const": "ADD"
+                                  },
+                                  "experience_id": {
+                                    "type": "integer",
+                                    "description": "The unique identifier of the parent work experience."
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                    "description": "The required title for the new achievement."
+                                  },
+                                  "content": {
+                                    "type": "string",
+                                    "description": "The full content of the new achievement."
+                                  }
+                                },
+                                "required": [
+                                  "command",
+                                  "experience_id",
+                                  "title",
+                                  "content"
+                                ]
+                              },
+                              {
+                                "title": "UpdateExistingAchievement",
+                                "type": "object",
+                                "properties": {
+                                  "command": {
+                                    "type": "string",
+                                    "description": "The operation to perform. Must be 'UPDATE' for an existing achievement.",
+                                    "const": "UPDATE"
+                                  },
+                                  "experience_id": {
+                                    "type": "integer",
+                                    "description": "The unique identifier of the parent work experience."
+                                  },
+                                  "achievement_id": {
+                                    "type": "integer",
+                                    "description": "The required unique identifier of the achievement to update."
+                                  },
+                                  "title": {
+                                    "type": [
+                                      "string",
+                                      "null"
+                                    ],
+                                    "description": "An optional new title. If null or omitted, the existing title is preserved."
+                                  },
+                                  "content": {
+                                    "type": "string",
+                                    "description": "The complete, new text for the achievement's content."
+                                  }
+                                },
+                                "required": [
+                                  "command",
+                                  "experience_id",
+                                  "achievement_id",
+                                  "content"
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      },
+                      "required": [
+                        "role_overviews",
+                        "company_overviews",
+                        "skills",
+                        "achievements"
+                      ]
+                    }
+                  }
+                }
+              }
+            },
+            "config": {}
+          },
+          "name": "ChatOpenAI"
+        }
+      ],
+      "last": {
+        "lc": 1,
+        "type": "not_implemented",
+        "id": [
+          "langchain_core",
+          "output_parsers",
+          "json",
+          "JsonOutputParser"
+        ],
+        "repr": "JsonOutputParser()",
+        "name": "JsonOutputParser"
+      }
+    },
+    "name": "RunnableSequence"
+  },
+  "committed_prompt": {
+    "lc": 1,
+    "type": "constructor",
+    "id": [
+      "langchain_core",
+      "prompts",
+      "structured",
+      "StructuredPrompt"
+    ],
+    "kwargs": {
+      "input_variables": [
+        "chat_history",
+        "work_experience"
+      ],
+      "metadata": {
+        "lc_hub_owner": "-",
+        "lc_hub_repo": "extract_experience_updates",
+        "lc_hub_commit_hash": "3a3104a484301d6d647a4834fe871560cce9200700075afaba0346d146c0eeac"
+      },
+      "messages": [
+        {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "prompts",
+            "chat",
+            "SystemMessagePromptTemplate"
+          ],
+          "kwargs": {
+            "prompt": {
+              "lc": 1,
+              "type": "constructor",
+              "id": [
+                "langchain",
+                "prompts",
+                "prompt",
+                "PromptTemplate"
+              ],
+              "kwargs": {
+                "input_variables": [
+                  "work_experience"
+                ],
+                "template": "## **System Instructions: Work Experience Enhancement Workflow**\n\n### **Goal**\nThe goal of this workflow is to synthesize new information gathered from a user conversation into a set of clear, actionable suggestions for updating and extending the user's `<work_experience>` document. The process prioritizes enhancing existing content and preserving historical accuracy over creating new entries.\n\n### **My Role/Persona**\nIn this role, you are a **Strategic Portfolio Curator**. Your primary function is to be meticulous, collaborative, and focused on preserving the integrity of the user's professional history. You are enhancing a foundational career asset, not just editing a document.\n\n### **Key Principles & Constraints**\nAdhere to these rules without exception:\n\n1.  **Uphold Absolute Factual Accuracy:** This document is a non-speculative record of past events. It must not contain any conjecture, exaggeration, extrapolation, or inference. All statements must be grounded in what actually happened.\n    *   Avoid unprovable superlatives (e.g., \"dramatically improved\") unless the user provides a direct, verifiable metric to support it.\n    *   It is acceptable to describe qualitative outcomes when quantitative data is unavailable, but they must be stated as factual observations (e.g., \"This reinforced trust in the team's data...\"), not as forward-looking statements about future ability.\n\n2.  **Handle Clarifications and Corrections with Precision:** When user input clarifies or corrects existing content, prioritize the new information. Make the smallest, most precise edit required to align the text with the user's updated account. This may involve adding, modifying, or **explicitly removing** details to ensure factual accuracy.\n\n3.  **Do Not Infer Content:** Your suggestions must be based *only* on the explicit details the user provides. If conversational input is too vague to form a complete, impactful achievement (a clear action and a tangible result), do not create a suggestion for it.\n\n4.  **Prioritize Narrative Clarity:**\n    *   When new context shares the same core accomplishment as an existing achievement, **update** that achievement.\n    *   If the new context describes a *fundamentally different accomplishment or outcome*—even if part of the same project—**add** it as a new, distinct achievement to avoid diluting the narrative of existing entries.\n\n5.  **Uphold Skill Granularity:** Each skill should represent a distinct, focused competency. Prefer adding a new, specific skill (e.g., `ADD SKILL`: 'Pandas') over combining it with an existing one (e.g., updating 'Python' to 'Python (Pandas)'). Avoid creating long, run-on skill entries.\n\n6.  **Provide Full Context for Updates:** When proposing an `UPDATE`, you must provide the **complete, final text** for that entire section (e.g., the full achievement content), incorporating all changes.\n\n7.  **No ID Generation:** Never invent a new ID for an `ADD` suggestion. IDs are only used to reference existing content in `UPDATE` suggestions.\n\n### **Required Output Format**\nAll suggestions must be provided as a single, valid JSON object. The JSON object must conform to the schema described below.\n\n#### **Root Schema**\nThe root object must contain four top-level keys: `role_overviews`, `company_overviews`, `skills`, and `achievements`. Each key holds an array of suggestion objects specific to that type.\n\n```json\n{{\n  \"role_overviews\": [],\n  \"company_overviews\": [],\n  \"skills\": [],\n  \"achievements\": []\n}}\n```\n\n---\n\n#### **Schema for `role_overviews` and `company_overviews`**\nThese arrays contain objects for updating overviews.\n*   **`command`**: `string` - Must be `\"UPDATE\"`.\n*   **`experience_id`**: `integer` - The ID of the work experience to update.\n*   **`content`**: `string` - The complete, new text for the overview.\n\n**Example Object:**\n```json\n{{\n  \"command\": \"UPDATE\",\n  \"experience_id\": 1,\n  \"content\": \"The full, updated paragraph text for the role overview.\"\n}}\n```\n\n---\n\n#### **Schema for `skills`**\nThis array contains objects for adding new skills.\n*   **`command`**: `string` - Must be `\"ADD\"`.\n*   **`experience_id`**: `integer` - The ID of the work experience to add skills to.\n*   **`skills`**: `array[string]` - A list of new, granular skills to add.\n\n**Example Object:**\n```json\n{{\n  \"command\": \"ADD\",\n  \"experience_id\": 1,\n  \"skills\": [\n    \"Stakeholder Education & Mentoring\",\n    \"Data Culture Development\"\n  ]\n}}\n```\n\n---\n\n#### **Schema for `achievements`**\nThis array can contain a mix of two types of objects: additions and updates.\n\n**1. For Adding a New Achievement:**\n*   **`command`**: `string` - Must be `\"ADD\"`.\n*   **`experience_id`**: `integer` - The ID of the parent work experience.\n*   **`title`**: `string` - The required title for the new achievement.\n*   **`content`**: `string` - The full content of the new achievement.\n\n**Example Object (Addition):**\n```json\n{{\n  \"command\": \"ADD\",\n  \"experience_id\": 1,\n  \"title\": \"A New, Descriptive Title for the New Achievement\",\n  \"content\": \"The full text for the new achievement...\"\n}}\n```\n\n**2. For Updating an Existing Achievement:**\n*   **`command`**: `string` - Must be `\"UPDATE\"`.\n*   **`experience_id`**: `integer` - The ID of the parent work experience.\n*   **`achievement_id`**: `integer` - The required ID of the achievement to update.\n*   **`title`**: `string | null` - An optional new title. If `null` or omitted, the existing title is preserved.\n*   **`content`**: `string` - The complete, new text for the achievement's content.\n\n**Example Object (Update):**\n```json\n{{\n  \"command\": \"UPDATE\",\n  \"experience_id\": 1,\n  \"achievement_id\": 157,\n  \"title\": \"An Optional, Updated Title for the Achievement\",\n  \"content\": \"The complete, updated text for the achievement...\"\n}}\n```\n\n---\n\n<work_experience>\n{work_experience}\n</work_experience>",
+                "template_format": "f-string"
+              },
+              "name": "PromptTemplate"
+            }
+          }
+        },
+        {
+          "lc": 1,
+          "type": "constructor",
+          "id": [
+            "langchain",
+            "prompts",
+            "chat",
+            "MessagesPlaceholder"
+          ],
+          "kwargs": {
+            "variable_name": "chat_history"
+          }
+        }
+      ],
+      "schema_": {
+        "title": "WorkExperienceEnhancementSuggestions",
+        "description": "A set of clear, actionable suggestions for updating and extending a user's work experience document. The output must conform to this schema.",
+        "type": "object",
+        "properties": {
+          "role_overviews": {
+            "type": "array",
+            "description": "A list of suggestions for updating role overviews.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "The operation to perform. Must be 'UPDATE' for role overviews.",
+                  "const": "UPDATE"
+                },
+                "experience_id": {
+                  "type": "integer",
+                  "description": "The unique identifier of the work experience entry to update."
+                },
+                "content": {
+                  "type": "string",
+                  "description": "The complete, new text for the role overview."
+                }
+              },
+              "required": [
+                "command",
+                "experience_id",
+                "content"
+              ]
+            }
+          },
+          "company_overviews": {
+            "type": "array",
+            "description": "A list of suggestions for updating company overviews.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "The operation to perform. Must be 'UPDATE' for company overviews.",
+                  "const": "UPDATE"
+                },
+                "experience_id": {
+                  "type": "integer",
+                  "description": "The unique identifier of the work experience entry to update."
+                },
+                "content": {
+                  "type": "string",
+                  "description": "The complete, new text for the company overview."
+                }
+              },
+              "required": [
+                "command",
+                "experience_id",
+                "content"
+              ]
+            }
+          },
+          "skills": {
+            "type": "array",
+            "description": "A list of suggestions for adding new skills.",
+            "items": {
+              "type": "object",
+              "properties": {
+                "command": {
+                  "type": "string",
+                  "description": "The operation to perform. Must be 'ADD' for skills.",
+                  "const": "ADD"
+                },
+                "experience_id": {
+                  "type": "integer",
+                  "description": "The unique identifier of the work experience entry to add skills to."
+                },
+                "skills": {
+                  "type": "array",
+                  "description": "A list of new, granular skills to add.",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "command",
+                "experience_id",
+                "skills"
+              ]
+            }
+          },
+          "achievements": {
+            "type": "array",
+            "description": "A list of suggestions for adding or updating achievements.",
+            "items": {
+              "oneOf": [
+                {
+                  "title": "AddNewAchievement",
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "description": "The operation to perform. Must be 'ADD' for a new achievement.",
+                      "const": "ADD"
+                    },
+                    "experience_id": {
+                      "type": "integer",
+                      "description": "The unique identifier of the parent work experience."
+                    },
+                    "title": {
+                      "type": "string",
+                      "description": "The required title for the new achievement."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "The full content of the new achievement."
+                    }
+                  },
+                  "required": [
+                    "command",
+                    "experience_id",
+                    "title",
+                    "content"
+                  ]
+                },
+                {
+                  "title": "UpdateExistingAchievement",
+                  "type": "object",
+                  "properties": {
+                    "command": {
+                      "type": "string",
+                      "description": "The operation to perform. Must be 'UPDATE' for an existing achievement.",
+                      "const": "UPDATE"
+                    },
+                    "experience_id": {
+                      "type": "integer",
+                      "description": "The unique identifier of the parent work experience."
+                    },
+                    "achievement_id": {
+                      "type": "integer",
+                      "description": "The required unique identifier of the achievement to update."
+                    },
+                    "title": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "An optional new title. If null or omitted, the existing title is preserved."
+                    },
+                    "content": {
+                      "type": "string",
+                      "description": "The complete, new text for the achievement's content."
+                    }
+                  },
+                  "required": [
+                    "command",
+                    "experience_id",
+                    "achievement_id",
+                    "content"
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "role_overviews",
+          "company_overviews",
+          "skills",
+          "achievements"
+        ]
+      }
+    },
+    "name": "StructuredPrompt"
+  }
+}

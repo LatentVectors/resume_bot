@@ -3,7 +3,8 @@
 This service handles the multi-step intake process including:
 - Step 2: Experience & Resume Development (unified conversation)
 
-All AI interactions and data persistence for the intake flow are centralized here.
+AI interactions are now handled by LangGraph agents deployed separately.
+This service handles data persistence and validation for the intake flow.
 """
 
 from __future__ import annotations
@@ -13,8 +14,6 @@ import json
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from api.services.chat_message_service import ChatMessageService
-from api.services.experience_service import ExperienceService
-from api.services.job_intake_service.workflows import extract_experience_updates, run_resume_chat
 from api.services.job_service import JobService
 from api.services.resume_service import ResumeService
 from src.database import (
@@ -33,7 +32,6 @@ from src.database import (
 )
 from src.features.resume.types import ResumeData
 from src.logging_config import logger
-from src.shared.formatters import format_all_experiences
 
 
 class JobIntakeService:
@@ -74,70 +72,6 @@ class JobIntakeService:
             ChatMessageService.append_messages(session_id, step=2, messages_json=messages_json)
         except Exception as exc:
             logger.exception("Error saving step 2 messages: %s", exc)
-
-    @staticmethod
-    def get_resume_chat_response(
-        messages: list,
-        job,
-        selected_version,
-        gap_analysis: str,
-        stakeholder_analysis: str,
-        user_id: int,
-    ) -> tuple[AIMessage, int | None]:
-        """Get AI response for Step 2 unified conversation (experience & resume).
-
-        Args:
-            messages: Chat history.
-            job: Job object.
-            selected_version: Selected resume version.
-            gap_analysis: Gap analysis markdown from job intake session.
-            stakeholder_analysis: Stakeholder analysis markdown from job intake session.
-            user_id: User ID for fetching experiences.
-
-        Returns:
-            Tuple of (AIMessage response, new_version_id if tool was used, else None).
-
-        Raises:
-            ValueError: If gap_analysis or stakeholder_analysis are missing.
-            OpenAIQuotaExceededError: If OpenAI API quota is exceeded.
-        """
-        # Validate required analyses are present
-        if not gap_analysis:
-            error_msg = "Gap analysis missing. Please restart the intake flow."
-            logger.error(error_msg)
-            return AIMessage(content=error_msg), None
-
-        if not stakeholder_analysis:
-            error_msg = "Stakeholder analysis missing. Please restart the intake flow."
-            logger.error(error_msg)
-            return AIMessage(content=error_msg), None
-
-        # Get and format user's work experience
-        try:
-            experiences = ExperienceService.list_user_experiences(user_id)
-
-            # Build achievements dict for formatting
-            achievements_by_exp: dict[int, list] = {}
-            for exp in experiences:
-                achievements = db_manager.list_experience_achievements(exp.id)
-                achievements_by_exp[exp.id] = achievements
-
-            # Format all experiences with their achievements
-            work_experience = format_all_experiences(experiences, achievements_by_exp)
-
-        except Exception as exc:
-            logger.exception("Error formatting work experience: %s", exc)
-            work_experience = "No work experience available."
-
-        # Call resume chat with all required context
-        return run_resume_chat(
-            messages=messages,
-            job=job,
-            selected_version=selected_version,
-            gap_analysis=gap_analysis,
-            stakeholder_analysis=stakeholder_analysis,
-            work_experience=work_experience,
-        )
 
     @staticmethod
     def save_manual_resume_edit(
@@ -209,142 +143,6 @@ class JobIntakeService:
             raise
 
     # ==================== Step 3: Experience Updates ====================
-
-    @staticmethod
-    def extract_experience_proposals(session_id: int, job_id: int, user_id: int) -> list[ExperienceProposal]:
-        """Extract experience proposals from Step 2 conversation.
-
-        Calls the extraction workflow which returns a Pydantic model with structured output,
-        then creates ExperienceProposal database records from the workflow output.
-
-        **DEVELOPMENT MODE**: Returns in-memory proposal objects only. Does NOT persist to database.
-
-        Args:
-            session_id: Intake session ID.
-            job_id: Job ID (used to get experiences).
-            user_id: User ID for fetching experiences.
-
-        Returns:
-            List of created proposal records (in-memory only, not persisted).
-
-        Raises:
-            ValueError: If session or job not found.
-            OpenAIQuotaExceededError: If OpenAI API quota is exceeded.
-        """
-        try:
-            # Get session and job
-            session = JobService.get_intake_session(job_id)
-            if not session:
-                raise ValueError(f"Intake session not found for job {job_id}")
-
-            job = JobService.get_job(job_id)
-            if not job:
-                raise ValueError(f"Job {job_id} not found")
-
-            # Get Step 2 chat messages
-            messages_dict = ChatMessageService.get_messages_for_step(session_id, step=2)
-            if not messages_dict:
-                logger.warning("No Step 2 messages found for session %s", session_id)
-                return []
-
-            # Convert dict messages to LangChain message objects
-            chat_messages: list[HumanMessage | AIMessage] = []
-            for msg_dict in messages_dict:
-                if msg_dict.get("type") == "human":
-                    chat_messages.append(HumanMessage(content=msg_dict.get("content", "")))
-                elif msg_dict.get("type") == "ai":
-                    chat_messages.append(AIMessage(content=msg_dict.get("content", "")))
-                # Skip tool messages for extraction
-
-            # Get all user experiences
-            experiences = ExperienceService.list_user_experiences(user_id)
-            if not experiences:
-                logger.info("No experiences found for user %s", user_id)
-                return []
-
-            # Call extraction workflow
-            suggestions = extract_experience_updates(chat_messages, experiences)
-
-            # Convert Pydantic model output to ExperienceProposal records
-            proposals: list[ExperienceProposal] = []
-
-            # Process role overview updates
-            for role_update in suggestions.role_overviews:
-                proposal = ExperienceProposal(
-                    session_id=session_id,
-                    proposal_type=ProposalType.role_overview_update,
-                    experience_id=role_update.experience_id,
-                    achievement_id=None,
-                    proposed_content=ExperienceProposal.serialize_proposed_content(role_update),
-                    original_proposed_content=ExperienceProposal.serialize_proposed_content(role_update),
-                    status=ProposalStatus.pending,
-                )
-                proposals.append(proposal)
-
-            # Process company overview updates
-            for company_update in suggestions.company_overviews:
-                proposal = ExperienceProposal(
-                    session_id=session_id,
-                    proposal_type=ProposalType.company_overview_update,
-                    experience_id=company_update.experience_id,
-                    achievement_id=None,
-                    proposed_content=ExperienceProposal.serialize_proposed_content(company_update),
-                    original_proposed_content=ExperienceProposal.serialize_proposed_content(company_update),
-                    status=ProposalStatus.pending,
-                )
-                proposals.append(proposal)
-
-            # Process skill additions
-            for skill_add in suggestions.skills:
-                proposal = ExperienceProposal(
-                    session_id=session_id,
-                    proposal_type=ProposalType.skill_add,
-                    experience_id=skill_add.experience_id,
-                    achievement_id=None,
-                    proposed_content=ExperienceProposal.serialize_proposed_content(skill_add),
-                    original_proposed_content=ExperienceProposal.serialize_proposed_content(skill_add),
-                    status=ProposalStatus.pending,
-                )
-                proposals.append(proposal)
-
-            # Process achievement additions and updates
-            for achievement in suggestions.achievements:
-                if isinstance(achievement, AchievementAdd):
-                    proposal = ExperienceProposal(
-                        session_id=session_id,
-                        proposal_type=ProposalType.achievement_add,
-                        experience_id=achievement.experience_id,
-                        achievement_id=None,
-                        proposed_content=ExperienceProposal.serialize_proposed_content(achievement),
-                        original_proposed_content=ExperienceProposal.serialize_proposed_content(achievement),
-                        status=ProposalStatus.pending,
-                    )
-                    proposals.append(proposal)
-                elif isinstance(achievement, AchievementUpdate):
-                    proposal = ExperienceProposal(
-                        session_id=session_id,
-                        proposal_type=ProposalType.achievement_update,
-                        experience_id=achievement.experience_id,
-                        achievement_id=achievement.achievement_id,
-                        proposed_content=ExperienceProposal.serialize_proposed_content(achievement),
-                        original_proposed_content=ExperienceProposal.serialize_proposed_content(achievement),
-                        status=ProposalStatus.pending,
-                    )
-                    proposals.append(proposal)
-
-            logger.info(
-                "Extracted %d experience proposals for session %s",
-                len(proposals),
-                session_id,
-                extra={"session_id": session_id, "proposal_count": len(proposals)},
-            )
-
-            # **DEVELOPMENT MODE**: Return in-memory objects only, do NOT persist
-            return proposals
-
-        except Exception as exc:
-            logger.exception("Error extracting experience proposals: %s", exc)
-            raise
 
     @staticmethod
     def get_pending_proposals(session_id: int) -> list[ExperienceProposal]:

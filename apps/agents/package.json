@@ -1,0 +1,10 @@
+{
+  "name": "@resume/agents",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "dev": "source .venv/bin/activate && langgraph dev",
+    "setup": "source .venv/bin/activate && pip install -e '.[dev]'"
+  }
+}
+
