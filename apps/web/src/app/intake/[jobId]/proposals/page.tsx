@@ -21,9 +21,7 @@ import { useIntakeStore } from "@/lib/store/intake";
 import { jobsAPI } from "@/lib/api/jobs";
 import { experiencesAPI } from "@/lib/api/experiences";
 import { IntakeStepHeader } from "@/components/intake/IntakeStepHeader";
-import type { components } from "@/types/api";
-
-type ProposalResponse = components["schemas"]["ProposalResponse"];
+import type { ExperienceProposal } from "@resume/database/types";
 
 export default function IntakeProposalsPage() {
   const params = useParams();
@@ -31,7 +29,7 @@ export default function IntakeProposalsPage() {
   const jobId = parseInt(params.jobId as string, 10);
   const { clearIntake } = useIntakeStore();
 
-  const [proposals, setProposals] = useState<ProposalResponse[]>([]);
+  const [proposals, setProposals] = useState<ExperienceProposal[]>([]);
 
   // Fetch job data
   const { data: job, isLoading: isLoadingJob } = useJob(jobId);

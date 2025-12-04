@@ -1,22 +1,55 @@
 // Shared application types
 // This file will contain TypeScript types that are shared across the application
-// and are not generated from the API schema
+// and are not generated from the database schema
 
-import type { components } from "./api";
-
-/**
- * Extended JobResponse that includes resume_chat_thread_id.
- * This extends the generated type until api.ts is regenerated.
- */
-export interface JobResponseExtended
-  extends components["schemas"]["JobResponse"] {
-  resume_chat_thread_id?: string | null;
-}
-
-/**
- * Extended JobUpdate that includes resume_chat_thread_id.
- * This extends the generated type until api.ts is regenerated.
- */
-export interface JobUpdateExtended extends components["schemas"]["JobUpdate"] {
-  resume_chat_thread_id?: string | null;
-}
+// Re-export commonly used types from the database package for convenience
+export type {
+  Job,
+  JobInsert,
+  JobUpdate,
+  JobStatus,
+  Experience,
+  ExperienceInsert,
+  ExperienceUpdate,
+  Achievement,
+  AchievementInsert,
+  AchievementUpdate,
+  Education,
+  EducationInsert,
+  EducationUpdate,
+  Certification,
+  CertificationInsert,
+  CertificationUpdate,
+  User,
+  UserInsert,
+  UserUpdate,
+  Resume,
+  ResumeInsert,
+  ResumeUpdate,
+  ResumeVersion,
+  ResumeVersionInsert,
+  ResumeVersionUpdate,
+  CoverLetter,
+  CoverLetterInsert,
+  CoverLetterUpdate,
+  CoverLetterVersion,
+  CoverLetterVersionInsert,
+  CoverLetterVersionUpdate,
+  Note,
+  NoteInsert,
+  NoteUpdate,
+  ExperienceProposal,
+  ExperienceProposalInsert,
+  ExperienceProposalUpdate,
+  JobIntakeSession,
+  JobIntakeSessionInsert,
+  JobIntakeSessionUpdate,
+  Template,
+  TemplateInsert,
+  TemplateUpdate,
+  // Resume JSON data types
+  ResumeData,
+  ResumeExperience,
+  ResumeEducation,
+  ResumeCertification,
+} from "@resume/database/types";

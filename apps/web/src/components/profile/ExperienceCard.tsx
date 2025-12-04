@@ -47,10 +47,7 @@ import {
   useUpdateAchievement,
   useDeleteAchievement,
 } from "@/lib/hooks/useExperienceMutations";
-import type { components } from "@/types/api";
-
-type ExperienceResponse = components["schemas"]["ExperienceResponse"];
-type AchievementResponse = components["schemas"]["AchievementResponse"];
+import type { Experience, Achievement as AchievementType } from "@resume/database/types";
 
 const experienceSchema = z.object({
   company_name: z.string().min(1, "Company name is required"),
@@ -72,7 +69,7 @@ type ExperienceFormData = z.infer<typeof experienceSchema>;
 type AchievementFormData = z.infer<typeof achievementSchema>;
 
 interface ExperienceCardProps {
-  experience: ExperienceResponse;
+  experience: Experience;
   userId: number;
 }
 
@@ -82,7 +79,7 @@ export function ExperienceCard({ experience, userId }: ExperienceCardProps) {
   const [showAddAchievementDialog, setShowAddAchievementDialog] =
     useState(false);
   const [editingAchievement, setEditingAchievement] =
-    useState<AchievementResponse | null>(null);
+    useState<AchievementType | null>(null);
   const [deletingAchievementId, setDeletingAchievementId] = useState<
     number | null
   >(null);
@@ -199,7 +196,7 @@ export function ExperienceCard({ experience, userId }: ExperienceCardProps) {
     return text.slice(0, maxLength) + "...";
   };
 
-  const startEditAchievement = (achievement: AchievementResponse) => {
+  const startEditAchievement = (achievement: AchievementType) => {
     setEditingAchievement(achievement);
     achievementForm.reset({
       title: achievement.title,

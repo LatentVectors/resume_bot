@@ -9,14 +9,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { DeleteConfirmationDialog } from "@/components/ui/delete-confirmation-dialog";
 import { useNotes } from "@/lib/hooks/useNotes";
 import { useCreateNote, useUpdateNote, useDeleteNote } from "@/lib/hooks/useNoteMutations";
-import type { NoteResponse } from "@/lib/api/notes";
-import type { components } from "@/types/api";
-
-type JobResponse = components["schemas"]["JobResponse"];
+import type { Note, Job } from "@resume/database/types";
 
 interface NotesTabProps {
   jobId: number;
-  job: JobResponse;
+  job: Job;
 }
 
 export function NotesTab({ jobId }: NotesTabProps) {
@@ -26,7 +23,7 @@ export function NotesTab({ jobId }: NotesTabProps) {
   const [originalEditingContent, setOriginalEditingContent] = useState("");
   const [expandedNoteIds, setExpandedNoteIds] = useState<Set<number>>(new Set());
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [noteToDelete, setNoteToDelete] = useState<NoteResponse | null>(null);
+  const [noteToDelete, setNoteToDelete] = useState<Note | null>(null);
 
   const { data: notes = [], isLoading } = useNotes(jobId);
   const createNote = useCreateNote();
@@ -52,7 +49,7 @@ export function NotesTab({ jobId }: NotesTabProps) {
     }
   };
 
-  const handleStartEdit = (note: NoteResponse) => {
+  const handleStartEdit = (note: Note) => {
     setEditingNoteId(note.id);
     setEditingContent(note.content);
     setOriginalEditingContent(note.content);
@@ -81,7 +78,7 @@ export function NotesTab({ jobId }: NotesTabProps) {
     }
   };
 
-  const handleDeleteClick = (note: NoteResponse) => {
+  const handleDeleteClick = (note: Note) => {
     setNoteToDelete(note);
     setDeleteDialogOpen(true);
   };

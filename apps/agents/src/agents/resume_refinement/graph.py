@@ -77,6 +77,9 @@ def propose_resume_draft(
     Creates a new resume version with the proposed content. Each call must include
     complete resume data (title, summary, skills, all experiences with bullet points).
 
+    In the consolidated data model, resume versions are created directly without
+    needing a parent resume record to exist first.
+
     Args:
         title: Professional title/headline for the resume.
         professional_summary: Professional summary tailored to the job.
@@ -89,6 +92,8 @@ def propose_resume_draft(
     Returns:
         Dict with version_id, version_index, and confirmation message.
     """
+    import json
+
     try:
         # Access runtime context
         runtime = get_runtime(ResumeRefinementContext)
@@ -104,36 +109,45 @@ def propose_resume_draft(
                 )
             )
 
-        # Build request payload matching FastAPI ResumeCreate schema
+        # Get API base URL (Next.js API)
+        api_base = os.getenv("API_BASE_URL", "http://localhost:3000")
+
+        # Build resume_json object
+        resume_json_obj = {
+            "name": "",  # Will be filled by frontend from user record
+            "title": title,
+            "email": "",
+            "phone": "",
+            "linkedin_url": "",
+            "professional_summary": professional_summary,
+            "skills": skills,
+            "experience": [
+                {
+                    "experience_id": exp.experience_id,
+                    "title": exp.title,
+                    "points": exp.points,
+                }
+                for exp in parsed_experiences
+            ],
+            "education_ids": education_ids,
+            "certification_ids": certification_ids,
+        }
+
+        # Build request payload matching Next.js resumeVersionCreateSchema
+        # In the consolidated model, we create versions directly via POST /api/resumes
         payload = {
+            "job_id": runtime.context.job_id,
             "template_name": runtime.context.template_name,
             "event_type": "generate",
             "parent_version_id": runtime.context.parent_version_id,
-            "resume_json": {
-                "name": "",  # Will be filled by backend from user record
-                "title": title,
-                "email": "",
-                "phone": "",
-                "linkedin_url": "",
-                "professional_summary": professional_summary,
-                "skills": skills,
-                "experience": [
-                    {
-                        "experience_id": exp.experience_id,
-                        "title": exp.title,
-                        "points": exp.points,
-                    }
-                    for exp in parsed_experiences
-                ],
-                "education_ids": education_ids,
-                "certification_ids": certification_ids,
-            },
+            "created_by_user_id": runtime.context.user_id,
+            "resume_json": json.dumps(resume_json_obj),
+            "is_pinned": False,  # Draft versions are not pinned by default
         }
 
-        # Call FastAPI backend to persist the version
-        api_base = os.getenv("FASTAPI_BASE_URL", "http://localhost:8000")
+        # Create the resume version directly
         response = httpx.post(
-            f"{api_base}/api/v1/jobs/{runtime.context.job_id}/resumes",
+            f"{api_base}/api/resumes",
             json=payload,
             timeout=30.0,
         )

@@ -14,6 +14,20 @@
     },
     "typecheck": {
       "dependsOn": ["^typecheck"]
+    },
+    "db:start": {
+      "cache": false,
+      "persistent": true
+    },
+    "db:stop": {
+      "cache": false
+    },
+    "db:reset": {
+      "cache": false
+    },
+    "db:gen-types": {
+      "cache": false,
+      "outputs": ["src/types/database.types.ts"]
     }
   }
 }

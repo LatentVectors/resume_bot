@@ -24,17 +24,15 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useDeleteJob } from "@/lib/hooks/useJobMutations";
-import type { components } from "@/types/api";
-
-type JobResponse = components["schemas"]["JobResponse"];
+import type { Job, JobStatus } from "@resume/database/types";
 
 interface JobCardProps {
-  job: JobResponse;
+  job: Job;
   onDelete?: () => void;
 }
 
 const statusColors: Record<
-  components["schemas"]["JobStatus"],
+  JobStatus,
   "default" | "secondary" | "outline" | "destructive"
 > = {
   Saved: "secondary",

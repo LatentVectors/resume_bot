@@ -38,9 +38,7 @@ import {
   useUpdateEducation,
   useDeleteEducation,
 } from "@/lib/hooks/useEducationMutations";
-import type { components } from "@/types/api";
-
-type EducationResponse = components["schemas"]["EducationResponse"];
+import type { Education } from "@resume/database/types";
 
 const educationSchema = z.object({
   institution: z.string().min(1, "Institution is required"),
@@ -52,7 +50,7 @@ const educationSchema = z.object({
 type EducationFormData = z.infer<typeof educationSchema>;
 
 interface EducationCardProps {
-  education: EducationResponse | null;
+  education: Education | null;
   userId: number;
   onAdd?: () => void;
 }

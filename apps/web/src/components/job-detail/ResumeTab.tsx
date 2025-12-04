@@ -1,9 +1,7 @@
 "use client";
 
 import { ExperienceResumeInterface } from "@/components/intake/ExperienceResumeInterface";
-import type { components } from "@/types/api";
-
-type JobStatus = components["schemas"]["JobStatus"];
+import type { JobStatus } from "@resume/database/types";
 
 interface ResumeTabProps {
   jobId: number;

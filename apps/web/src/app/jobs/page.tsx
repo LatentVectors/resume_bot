@@ -52,9 +52,7 @@ import {
   useDeleteJob,
   useToggleFavorite,
 } from "@/lib/hooks/useJobMutations";
-import type { components } from "@/types/api";
-
-type JobStatus = components["schemas"]["JobStatus"];
+import type { JobStatus } from "@resume/database/types";
 
 const STATUS_OPTIONS: { value: JobStatus; label: string }[] = [
   { value: "Saved", label: "Saved" },

@@ -38,9 +38,7 @@ import {
   useUpdateCertificate,
   useDeleteCertificate,
 } from "@/lib/hooks/useCertificateMutations";
-import type { components } from "@/types/api";
-
-type CertificateResponse = components["schemas"]["CertificateResponse"];
+import type { Certification } from "@resume/database/types";
 
 const certificateSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -51,7 +49,7 @@ const certificateSchema = z.object({
 type CertificateFormData = z.infer<typeof certificateSchema>;
 
 interface CertificateCardProps {
-  certificate: CertificateResponse | null;
+  certificate: Certification | null;
   userId: number;
   onAdd?: () => void;
 }

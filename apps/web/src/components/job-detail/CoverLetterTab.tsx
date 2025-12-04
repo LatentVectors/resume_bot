@@ -26,10 +26,8 @@ import {
   usePinCoverLetterVersion,
 } from "@/lib/hooks/useCoverLetters";
 import { coverLettersAPI } from "@/lib/api/cover-letters";
-import type { components } from "@/types/api";
+import type { CoverLetterVersion } from "@resume/database/types";
 
-type CoverLetterVersionResponse =
-  components["schemas"]["CoverLetterVersionResponse"];
 // CoverLetterData is parsed from cover_letter_json string
 type CoverLetterData = {
   name: string;

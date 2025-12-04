@@ -119,11 +119,13 @@ packages/web/
 
 ### Type Safety
 
-All API calls are typed using generated types from `src/types/api.ts`. Import types like:
+All types are generated from the Supabase database schema in `packages/database`. Import types like:
 
 ```typescript
-import type { components } from "@/types/api";
-type JobResponse = components["schemas"]["JobResponse"];
+import type { Job, JobInsert, JobStatus } from "@resume/database/types";
+
+// Or use the convenience re-exports from the web app:
+import type { Job } from "@/types";
 ```
 
 ### API Client

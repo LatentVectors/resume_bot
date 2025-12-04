@@ -9,12 +9,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { components } from "@/types/api";
+import type {
+  ResumeData,
+  ResumeExperience,
+  ResumeEducation,
+  ResumeCertification,
+} from "@resume/database/types";
 
-type ResumeData = components["schemas"]["ResumeData"];
-type ResumeExperience = components["schemas"]["ResumeExperience"];
-type ResumeEducation = components["schemas"]["ResumeEducation"];
-type ResumeCertification = components["schemas"]["ResumeCertification"];
+// Re-export types for backwards compatibility
+export type { ResumeData, ResumeExperience, ResumeEducation, ResumeCertification };
 
 interface ResumeEditorProps {
   resumeData: ResumeData;

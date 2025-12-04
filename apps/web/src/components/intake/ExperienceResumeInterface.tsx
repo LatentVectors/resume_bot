@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,19 +33,16 @@ import {
   useUnpinResume,
   useCreateResumeVersion,
 } from "@/lib/hooks/useResumes";
-import { resumesAPI } from "@/lib/api/resumes";
 import { VersionNavigation } from "@/components/intake/VersionNavigation";
 import { MarkdownContent } from "@/components/intake/MarkdownContent";
 import { MarkdownRenderer } from "@/components/intake/MarkdownRenderer";
 import { ResumeChat } from "@/components/resume-chat/ResumeChat";
 import { ResumeEditor } from "@/components/resume/ResumeEditor";
-import { PDFPreview } from "@/components/intake/PDFPreview";
+import { ResumePDFPreview } from "@/components/pdf/ResumePDFPreview";
+import { usePdfGeneration, generateResumeFilename } from "@/lib/hooks/usePdfGeneration";
 import { IntakeStepHeader } from "@/components/intake/IntakeStepHeader";
 import { toast } from "sonner";
-import type { components } from "@/types/api";
-import type { JobResponseExtended } from "@/types";
-
-type ResumeData = components["schemas"]["ResumeData"];
+import type { Job, Achievement, ResumeVersionEvent, ResumeData } from "@resume/database/types";
 
 interface ExperienceResumeInterfaceProps {
   jobId: number;
@@ -67,6 +64,7 @@ export function ExperienceResumeInterface({
   );
   const [loadedVersionId, setLoadedVersionId] = useState<number | null>(null);
   const [draftResume, setDraftResume] = useState<ResumeData | null>(null);
+  const [loadedResumeJson, setLoadedResumeJson] = useState<string | null>(null);
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingVersionChange, setPendingVersionChange] = useState<
     number | null
@@ -74,9 +72,6 @@ export function ExperienceResumeInterface({
   const [pendingNavigation, setPendingNavigation] = useState<
     (() => void) | null
   >(null);
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
-  const [isLoadingPdf, setIsLoadingPdf] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
   const [initializationError, setInitializationError] = useState<string | null>(
     null
@@ -88,6 +83,7 @@ export function ExperienceResumeInterface({
   const [resumeChatThreadId, setResumeChatThreadId] = useState<string | null>(
     null
   );
+  const [pendingAgentVersion, setPendingAgentVersion] = useState(false);
 
   // Fetch job data
   const { data: job, isLoading: isLoadingJob, error: jobError } = useJob(jobId);
@@ -133,6 +129,13 @@ export function ExperienceResumeInterface({
   // Mutations
   const pinVersion = usePinResumeVersion();
   const unpinResume = useUnpinResume();
+  const queryClient = useQueryClient();
+
+  // Callback when agent creates a new resume version via tool call
+  const handleResumeVersionCreated = useCallback(() => {
+    setPendingAgentVersion(true);
+    queryClient.invalidateQueries({ queryKey: ["resumes", jobId] });
+  }, [queryClient, jobId]);
   const createVersion = useCreateResumeVersion();
 
   // Determine canonical version ID
@@ -155,6 +158,9 @@ export function ExperienceResumeInterface({
         ) as ResumeData;
         setDraftResume(resumeData);
         setLoadedVersionId(selectedVersion.id);
+        // Store normalized JSON for accurate dirty comparison
+        // (JSON.stringify may produce different output than the original database string)
+        setLoadedResumeJson(JSON.stringify(resumeData));
       } catch (error) {
         console.error("Failed to parse resume JSON:", error);
         toast.error("Failed to load resume data");
@@ -175,12 +181,28 @@ export function ExperienceResumeInterface({
       };
       setDraftResume(emptyDraft);
       setLoadedVersionId(null);
+      setLoadedResumeJson(JSON.stringify(emptyDraft));
     }
   }, [selectedVersion, loadedVersionId, versions.length, user]);
 
+  // Auto-select latest version when agent creates a new one
+  useEffect(() => {
+    if (pendingAgentVersion && versions.length > 0) {
+      const latestVersion = [...versions].sort((a, b) => {
+        const indexA = a.version_index || 0;
+        const indexB = b.version_index || 0;
+        return indexB - indexA;
+      })[0];
+      if (latestVersion?.id) {
+        setSelectedVersionId(latestVersion.id);
+        setPendingAgentVersion(false);
+      }
+    }
+  }, [pendingAgentVersion, versions]);
+
   // Calculate dirty state
   const isDirty = useMemo(() => {
-    if (!draftResume || !loadedVersionId || !selectedVersion) {
+    if (!draftResume || !loadedVersionId || !selectedVersion || !loadedResumeJson) {
       // If no loaded version, consider dirty if any content exists
       if (!loadedVersionId && draftResume) {
         return !!(
@@ -196,10 +218,16 @@ export function ExperienceResumeInterface({
       }
       return false;
     }
-    const loadedJson = selectedVersion.resume_json;
+    // If we're in a transitional state (switching versions), don't consider dirty
+    // This happens when selectedVersion has loaded but the effect hasn't updated draftResume yet
+    if (selectedVersion.id !== loadedVersionId) {
+      return false;
+    }
+    // Compare against the normalized JSON we stored when loading
+    // (avoids false positives from JSON serialization differences)
     const currentJson = JSON.stringify(draftResume);
-    return currentJson !== loadedJson;
-  }, [draftResume, loadedVersionId, selectedVersion]);
+    return currentJson !== loadedResumeJson;
+  }, [draftResume, loadedVersionId, selectedVersion, loadedResumeJson]);
 
   // Initialization sequence
   useEffect(() => {
@@ -329,10 +357,7 @@ export function ExperienceResumeInterface({
     if (!user?.id) return "No work experience available.";
     try {
       const experiences = await experiencesAPI.list(user.id);
-      const achievementsByExp = new Map<
-        number,
-        components["schemas"]["AchievementResponse"][]
-      >();
+      const achievementsByExp = new Map<number, Achievement[]>();
 
       await Promise.all(
         experiences.map(async (exp) => {
@@ -432,57 +457,24 @@ export function ExperienceResumeInterface({
     toast.success("Resume text copied to clipboard");
   };
 
+  // PDF generation hook
+  const { downloadPdf, isGenerating: isGeneratingPdf } = usePdfGeneration();
+
   // Handle download resume
   const handleDownloadResume = async () => {
-    if (
-      !selectedVersionId ||
-      !canonicalVersionId ||
-      selectedVersionId !== canonicalVersionId
-    ) {
-      toast.error("Can only download pinned versions");
+    if (!draftResume) {
+      toast.error("No resume data to download");
       return;
     }
+
     try {
-      const blob = await resumesAPI.downloadPDF(jobId, selectedVersionId);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-
-      // Build filename matching Streamlit format: Resume - {company} - {title} - {name} - {yyyy_mm_dd}.pdf
-      const sanitize = (value: string) => {
-        return value
-          .trim()
-          .replace(/[/\\:*?"<>|]/g, "-")
-          .replace(/\s+/g, " ");
-      };
-
-      const companyName = sanitize(job?.company_name || "Unknown Company");
-      const jobTitle = sanitize(job?.job_title || "Unknown Title");
-
-      // Parse resume_json to get name
-      let fullName = "Unknown Name";
-      try {
-        const resumeData = selectedVersion?.resume_json
-          ? JSON.parse(selectedVersion.resume_json)
-          : null;
-        fullName = sanitize(resumeData?.name || "Unknown Name");
-      } catch {
-        // Use default if parsing fails
-      }
-
-      // Format date as YYYY_MM_DD
-      const now = new Date();
-      const dateStr = `${now.getFullYear()}_${String(
-        now.getMonth() + 1
-      ).padStart(2, "0")}_${String(now.getDate()).padStart(2, "0")}`;
-
-      const filename = `Resume - ${companyName} - ${jobTitle} - ${fullName} - ${dateStr}.pdf`;
-
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      const filename = generateResumeFilename(
+        job?.company_name,
+        job?.job_title,
+        draftResume.name
+      );
+      await downloadPdf(draftResume, filename);
+      toast.success("Resume downloaded successfully");
     } catch (error) {
       console.error("Failed to download PDF:", error);
       toast.error("Failed to download resume");
@@ -495,6 +487,7 @@ export function ExperienceResumeInterface({
       setSelectedVersionId(pendingVersionChange);
       setDraftResume(null);
       setLoadedVersionId(null);
+      setLoadedResumeJson(null);
     }
     if (pendingNavigation) {
       pendingNavigation();
@@ -522,26 +515,25 @@ export function ExperienceResumeInterface({
     try {
       const templateName = selectedVersion?.template_name || "resume_000.html";
 
-      const createPayload: components["schemas"]["ResumeCreate"] = {
-        resume_json: JSON.stringify(draftResume),
-        template_name: templateName,
-        event_type: "save" as components["schemas"]["ResumeVersionEvent"],
-        parent_version_id: selectedVersion?.id || null,
-      };
-
       const version = await createVersion.mutateAsync({
         jobId,
-        data: createPayload,
+        data: {
+          resume_json: JSON.stringify(draftResume),
+          template_name: templateName,
+          event_type: "save" as ResumeVersionEvent,
+          parent_version_id: selectedVersion?.id || null,
+          created_by_user_id: user!.id,
+        },
       });
 
       if (version.id) {
         setSelectedVersionId(version.id);
       }
       setLoadedVersionId(version.id || null);
+      // Update the normalized JSON to match the saved draft (clears dirty state)
+      setLoadedResumeJson(JSON.stringify(draftResume));
 
       toast.success("Changes saved as new version!");
-
-      refreshPdfPreview();
     } catch (error: unknown) {
       console.error("Failed to save resume:", error);
       const err = error as { status?: number; detail?: string };
@@ -590,6 +582,7 @@ export function ExperienceResumeInterface({
       setSelectedVersionId(pendingVersionChange);
       setDraftResume(null);
       setLoadedVersionId(null);
+      setLoadedResumeJson(null);
     }
     if (pendingNavigation) {
       pendingNavigation();
@@ -598,74 +591,6 @@ export function ExperienceResumeInterface({
     setShowUnsavedDialog(false);
     setPendingVersionChange(null);
   };
-
-  // Refresh PDF preview
-  const refreshPdfPreview = useCallback(async () => {
-    if (!selectedVersionId || !selectedVersion) {
-      setPdfPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
-      return;
-    }
-
-    setIsLoadingPdf(true);
-    setPdfError(null);
-
-    try {
-      const resumeJson =
-        isDirty && draftResume
-          ? draftResume
-          : (JSON.parse(selectedVersion.resume_json) as ResumeData);
-
-      const templateName = selectedVersion.template_name || "resume_000.html";
-
-      const blob = await resumesAPI.previewPDF(
-        jobId,
-        selectedVersionId,
-        resumeJson,
-        templateName
-      );
-
-      setPdfPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return URL.createObjectURL(blob);
-      });
-    } catch (error) {
-      console.error("Failed to load PDF preview:", error);
-      setPdfError("Failed to render PDF preview");
-      setPdfPreviewUrl((prev) => {
-        if (prev) URL.revokeObjectURL(prev);
-        return null;
-      });
-    } finally {
-      setIsLoadingPdf(false);
-    }
-  }, [
-    selectedVersionId,
-    selectedVersion?.id,
-    selectedVersion?.resume_json,
-    selectedVersion?.template_name,
-    isDirty,
-    draftResume,
-    jobId,
-  ]);
-
-  // Load PDF preview when version changes or after save
-  useEffect(() => {
-    if (selectedTab === "preview" && selectedVersionId && selectedVersion) {
-      refreshPdfPreview();
-    }
-  }, [selectedTab, selectedVersionId, selectedVersion, refreshPdfPreview]);
-
-  // Cleanup PDF URL on unmount
-  useEffect(() => {
-    return () => {
-      if (pdfPreviewUrl) {
-        URL.revokeObjectURL(pdfPreviewUrl);
-      }
-    };
-  }, [pdfPreviewUrl]);
 
   const handleNext = async () => {
     try {
@@ -916,12 +841,14 @@ ${workExperience}
                 jobId={jobId}
                 initialThreadId={resumeChatThreadId}
                 onThreadCreated={handleThreadCreated}
+                onResumeVersionCreated={handleResumeVersionCreated}
                 context={{
                   job_id: jobId,
                   user_id: user.id,
                   gap_analysis: gapAnalysis || "",
                   stakeholder_analysis: stakeholderAnalysis || "",
                   work_experience: "", // Will be populated on first message
+                  job_description: job?.job_description || "",
                   selected_version_id: selectedVersionId,
                   template_name:
                     selectedVersion?.template_name || "resume_000.html",
@@ -1076,12 +1003,12 @@ ${workExperience}
                       </div>
                     )}
 
-                    {/* PDF Preview */}
-                    <div className="h-[600px] overflow-y-auto border rounded-lg p-4 bg-gray-50">
-                      <PDFPreview
-                        url={pdfPreviewUrl}
-                        isLoading={isLoadingPdf}
-                        error={pdfError}
+                    {/* PDF Preview - Client-side generation */}
+                    <div className="h-[600px] overflow-y-auto border rounded-lg bg-gray-50">
+                      <ResumePDFPreview
+                        resumeData={draftResume}
+                        autoGenerate={true}
+                        className="h-full"
                       />
                     </div>
                   </div>

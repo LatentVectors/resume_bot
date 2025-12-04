@@ -2,12 +2,10 @@
 
 import { useMemo } from "react";
 import CalendarHeatmap from "react-calendar-heatmap";
-import type { components } from "@/types/api";
-
-type JobResponse = components["schemas"]["JobResponse"];
+import type { Job } from "@resume/database/types";
 
 interface ActivityHeatMapProps {
-  jobs: JobResponse[];
+  jobs: Job[];
 }
 
 interface HeatMapValue {

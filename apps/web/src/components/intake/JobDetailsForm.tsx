@@ -139,10 +139,10 @@ export function JobDetailsForm({
         const job = await createJob.mutateAsync({
           user_id: user.id,
           data: {
-            title: data.title.trim(),
-            company: data.company.trim(),
-            description: data.description.trim(),
-            favorite: data.favorite,
+            job_title: data.title.trim(),
+            company_name: data.company.trim(),
+            job_description: data.description.trim(),
+            is_favorite: data.favorite,
             status: "Saved",
           },
         });
@@ -183,10 +183,10 @@ export function JobDetailsForm({
         await updateJob.mutateAsync({
           jobId,
           data: {
-            title: data.title.trim(),
-            company: data.company.trim(),
-            description: data.description.trim(),
-            favorite: data.favorite,
+            job_title: data.title.trim(),
+            company_name: data.company.trim(),
+            job_description: data.description.trim(),
+            is_favorite: data.favorite,
           },
         });
 

@@ -22,12 +22,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { components } from "@/types/api";
-
-type ResumeVersionResponse = components["schemas"]["ResumeVersionResponse"];
+import type { ResumeVersion } from "@resume/database/types";
 
 interface VersionNavigationProps {
-  versions: ResumeVersionResponse[];
+  versions: ResumeVersion[];
   selectedVersionId: number | null;
   canonicalVersionId: number | null;
   onVersionChange: (versionId: number | null) => void;

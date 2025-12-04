@@ -23,7 +23,6 @@ out/
 .vercel/
 
 # Legacy paths (keep for backward compatibility during migration)
-packages/
 data/
 log/
 

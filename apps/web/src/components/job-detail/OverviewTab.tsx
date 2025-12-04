@@ -48,10 +48,7 @@ import { jobsAPI } from "@/lib/api/jobs";
 import { experiencesAPI } from "@/lib/api/experiences";
 import { formatAllExperiences } from "@/lib/utils/formatExperiences";
 import { formatResumeAsText } from "@/lib/utils/formatResume";
-import type { components } from "@/types/api";
-
-type JobResponse = components["schemas"]["JobResponse"];
-type JobStatus = components["schemas"]["JobStatus"];
+import type { Job, JobStatus, Achievement } from "@resume/database/types";
 
 const STATUS_OPTIONS: JobStatus[] = [
   "Saved",
@@ -63,7 +60,7 @@ const STATUS_OPTIONS: JobStatus[] = [
 ];
 
 interface OverviewTabProps {
-  job: JobResponse;
+  job: Job;
 }
 
 export function OverviewTab({ job }: OverviewTabProps) {
@@ -274,7 +271,7 @@ export function OverviewTab({ job }: OverviewTabProps) {
       ]);
 
       // Fetch achievements for each experience
-      const achievementsByExp = new Map<number, components["schemas"]["AchievementResponse"][]>();
+      const achievementsByExp = new Map<number, Achievement[]>();
       if (userExperiences) {
         await Promise.all(
           userExperiences.map(async (exp) => {
