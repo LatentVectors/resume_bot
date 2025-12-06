@@ -4,7 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "source .venv/bin/activate && langgraph dev",
-    "setup": "source .venv/bin/activate && pip install -e '.[dev]'"
+    "setup": "source .venv/bin/activate && pip install -e '.[dev]'",
+    "setup:tools": "source .venv/bin/activate && pip install -e '.[tools]'",
+    "sync:prompts": "source .venv/bin/activate && python -m tools prompts sync",
+    "sync:models": "source .venv/bin/activate && python -m tools models sync",
+    "generate:prompts": "source .venv/bin/activate && python -m tools prompts generate"
   }
 }
 

@@ -17,6 +17,7 @@ from langchain_core.output_parsers import StrOutputParser
 from pydantic import BaseModel, Field
 
 from src.shared.llm import get_openrouter_model
+from src.shared.model_names import ModelName
 from src.shared.prompts import PromptName, load_prompt
 
 
@@ -68,7 +69,7 @@ class Node(StrEnum):
 
 
 _prompt = load_prompt(PromptName.GAP_ANALYSIS)
-_llm = get_openrouter_model("openai/gpt-4o")
+_llm = get_openrouter_model(ModelName.OPENAI__GPT_4O)
 _chain = _prompt | _llm | StrOutputParser()
 
 

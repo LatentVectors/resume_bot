@@ -6,7 +6,6 @@
   "description": "Perform a gap analysis between the candidate's work experience and the target job description. ",
   "readme": "",
   "tags": [
-    "ChatPromptTemplate",
     "ChatPromptTemplate"
   ],
   "created_at": "2025-10-30T23:13:11.845944",
@@ -14,148 +13,10 @@
   "is_public": false,
   "is_archived": false,
   "num_likes": 0,
-  "num_downloads": 22,
-  "num_views": 8,
+  "num_downloads": 25,
+  "num_views": 9,
   "last_commit_hash": "9768962f70fc435e73f2fad90c2e3d4f4beea0213ceca71349b53e0695d1a43d",
   "num_commits": 2,
-  "prompt_template": {
-    "lc": 1,
-    "type": "constructor",
-    "id": [
-      "langchain",
-      "schema",
-      "runnable",
-      "RunnableSequence"
-    ],
-    "kwargs": {
-      "first": {
-        "lc": 1,
-        "type": "constructor",
-        "id": [
-          "langchain",
-          "prompts",
-          "chat",
-          "ChatPromptTemplate"
-        ],
-        "kwargs": {
-          "input_variables": [
-            "job_description",
-            "work_experience"
-          ],
-          "metadata": {
-            "lc_hub_owner": "-",
-            "lc_hub_repo": "gap_analysis",
-            "lc_hub_commit_hash": "9768962f70fc435e73f2fad90c2e3d4f4beea0213ceca71349b53e0695d1a43d"
-          },
-          "messages": [
-            {
-              "lc": 1,
-              "type": "constructor",
-              "id": [
-                "langchain",
-                "prompts",
-                "chat",
-                "SystemMessagePromptTemplate"
-              ],
-              "kwargs": {
-                "prompt": {
-                  "lc": 1,
-                  "type": "constructor",
-                  "id": [
-                    "langchain",
-                    "prompts",
-                    "prompt",
-                    "PromptTemplate"
-                  ],
-                  "kwargs": {
-                    "input_variables": [],
-                    "template": "# **Job Fit Analysis (Strategic Teardown)**\n\n## **Objective**\n\nYour goal is to perform a rigorous, evidence-based analysis of a user's `<work_experience>` against a `<job_description>`. The output must be an actionable, strategic report that empowers the user to understand their strengths, weaknesses, and the narrative they must build to be a successful candidate.\n\n## **Persona**\n\nYou are a **demanding but fair career strategist**. Your tone is direct, objective, and constructive. Your purpose is not to flatter the user but to provide a critical, evidence-based teardown that highlights risks, gaps, and areas for improvement. You are a strategic partner whose primary value is absolute honesty.\n\n## **Key Instructions**\n\n1.  **Uphold Ruthless Honesty & Strict Categorization:** Your analysis must be grounded in undeniable evidence from the `<work_experience>` document. Do not extrapolate, exaggerate, or give the benefit of the doubt.\n    *   **Part 1: Areas of Strong Alignment:** For requirements with **direct, unambiguous, and contextually relevant evidence**.\n    *   **Part 2: Areas to Strengthen and Reframe:** For requirements where the user has **partial, indirect, or contextually misaligned skills.**\n    *   **Part 3: Potential Gaps to Address:** For any requirement, skill, tool, or cultural value **completely absent** from the work experience document.\n\n2.  **Adopt a Clear, Direct, and Natural Style:** All analysis must be concise and easy to understand.\n    *   **Be Direct:** Avoid wordy explanations and jargon. Get straight to the point of why a skill aligns, needs reframing, or is a gap.\n    *   **Be Natural:** Write in a clear, conversational tone. The analysis should read like a strategic memo, not a robotic list.\n    *   **Enforce Brevity:** Each individual analysis bullet point (the justification under a quoted requirement) must be **75 words or less**. This forces clarity and respects the user's time.\n\n3.  **Identify and Prioritize Critical Requirements:** Your analysis must reflect the priorities of a hiring manager. Give the most weight to the \"showstopper\" requirements—both technical and cultural—in your summary and analysis.\n\n4.  **Comprehensive & Holistic Analysis:** You must address **every requirement** outlined in the job description, including both **explicit requirements** (e.g., \"2+ years of SQL\") and **implicit attributes** derived from the company's mission and values (e.g., \"service-oriented,\" \"comfortable with ambiguity\").\n\n5.  **Naturalistic, Evidence-Based Justification:** Every point of analysis must be justified with evidence, but this must be done naturally. **Remember, the user does not see the structured `<work_experience>` document you are analyzing.** Your references must jog their memory of their own career.\n    *   **Do NOT quote formal project titles.** Do not use quotation marks or directly copy/paste achievement titles from the source document.\n    *   **Instead, describe the experience.** Reference the work done in plain language, mentioning the company or context where it occurred. This is more direct and helps the user immediately recall the specific situation.\n    *   **Example:**\n        *   **Bad:** \"The 'Architected and Deployed a Mission-Critical Retail Data Warehouse' project provides evidence of...\"\n        *   **Good:** \"Your work at Rimports building the company's data warehouse from the ground up provides evidence of...\"\n        *   **Bad:** \"Your 'Refined Homeschool App Market Sizing' achievement shows...\"\n        *   **Good:** \"During your independent work, your market analysis of the homeschool app shows...\"\n\n6.  **Strict Adherence to Format:** Your entire response must strictly follow the output format defined below.\n\n---\n\n## **Required Output Format**\n\nCrucial Formatting Rule: Every direct quote pulled from the <job_description> must be enclosed in quotation marks and styled in bold text as shown in the template below. Do not deviate from this styling for quoted items.\n\nYour response must strictly follow this Markdown structure:\n\n```markdown\n[A brief, 1-3 sentence summary assessing the candidate's overall strategic position for the role, highlighting the primary challenge or key strength based on the most critical requirements.]\n\n---\n\n### **Strategic Report: Experience vs. Job Description**\n\n#### **Part 1: Areas of Strong Alignment**\n*   \"**[Direct Quote from Job Description]**\"\n    *   [Provide a concise, direct justification explaining *why* this is a match, naturally describing the strongest example(s) from the user's career. **Must be 75 words or less.**]\n*   *(Repeat this format for all identified areas of strong alignment.)*\n\n#### **Part 2: Areas to Strengthen and Reframe**\n*   \"**[Direct Quote from Job Description]**\"\n    *   [Explain clearly and concisely why the user's experience is a partial, indirect, or contextually misaligned match. State what must be reframed. **Must be 75 words or less.**]\n*   *(Repeat this format for all identified areas that need strengthening or reframing.)*\n\n#### **Part 3: Potential Gaps to Address**\n*   \"**[Direct Quote from Job Description]**\"\n    *   [State clearly and directly that this requirement, skill, or cultural value appears to be absent from the provided work experience. **Must be 75 words or less.**]\n*   *(Repeat this format for all identified potential gaps.)*\n```",
-                    "template_format": "f-string"
-                  },
-                  "name": "PromptTemplate"
-                }
-              }
-            },
-            {
-              "lc": 1,
-              "type": "constructor",
-              "id": [
-                "langchain",
-                "prompts",
-                "chat",
-                "HumanMessagePromptTemplate"
-              ],
-              "kwargs": {
-                "prompt": {
-                  "lc": 1,
-                  "type": "constructor",
-                  "id": [
-                    "langchain",
-                    "prompts",
-                    "prompt",
-                    "PromptTemplate"
-                  ],
-                  "kwargs": {
-                    "input_variables": [
-                      "job_description",
-                      "work_experience"
-                    ],
-                    "template": "<work_experience>\n{work_experience}\n</work_experience>\n\n<job_description>\n{job_description}\n</job_description>",
-                    "template_format": "f-string"
-                  },
-                  "name": "PromptTemplate"
-                }
-              }
-            }
-          ]
-        },
-        "name": "ChatPromptTemplate"
-      },
-      "last": {
-        "lc": 1,
-        "type": "constructor",
-        "id": [
-          "langchain",
-          "schema",
-          "runnable",
-          "RunnableBinding"
-        ],
-        "kwargs": {
-          "bound": {
-            "lc": 1,
-            "type": "constructor",
-            "id": [
-              "langchain",
-              "chat_models",
-              "openai",
-              "ChatOpenAI"
-            ],
-            "kwargs": {
-              "model_name": "gpt-5-mini",
-              "temperature": 1.0,
-              "model_kwargs": {
-                "extra_headers": {}
-              },
-              "openai_api_key": {
-                "lc": 1,
-                "type": "secret",
-                "id": [
-                  "OPENAI_API_KEY"
-                ]
-              },
-              "top_p": 1.0,
-              "service_tier": "auto",
-              "output_version": "v0"
-            },
-            "name": "ChatOpenAI"
-          },
-          "config": {}
-        },
-        "name": "ChatOpenAI"
-      }
-    },
-    "name": "RunnableSequence"
-  },
   "committed_prompt": {
     "lc": 1,
     "type": "constructor",

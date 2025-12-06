@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .formatters import format_all_experiences, format_experience_with_achievements
 from .llm import get_openrouter_model
+from .model_names import ModelName
 from .models import (
     AchievementAdd,
     AchievementUpdate,
@@ -19,6 +20,7 @@ from .prompts import PROMPTS_DIR, PromptName, load_prompt
 __all__ = [
     # LLM utilities
     "get_openrouter_model",
+    "ModelName",
     # Prompt utilities
     "load_prompt",
     "PromptName",

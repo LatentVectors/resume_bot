@@ -14,6 +14,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph_sdk import get_client
 
 from src.shared.llm import get_openrouter_model
+from src.shared.model_names import ModelName
 from src.shared.models import WorkExperienceEnhancementSuggestions
 
 logger = logging.getLogger(__name__)
@@ -132,7 +133,7 @@ async def extract_experience_updates(
             return {"suggestions": WorkExperienceEnhancementSuggestions()}
 
         # Initialize LLM with structured output
-        llm = get_openrouter_model("openai/gpt-4o")
+        llm = get_openrouter_model(ModelName.OPENAI__GPT_4O)
         llm_structured = llm.with_structured_output(WorkExperienceEnhancementSuggestions)
 
         # Create prompt template

@@ -19,6 +19,7 @@ from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.runtime import Runtime, get_runtime
 
 from src.shared.llm import get_openrouter_model
+from src.shared.model_names import ModelName
 from src.shared.models import ProposedExperience
 from src.shared.prompts import PromptName, load_prompt
 
@@ -229,7 +230,7 @@ def call_model(
     """
     try:
         # Initialize LLM with tools
-        llm = get_openrouter_model("google/gemini-2.5-pro")
+        llm = get_openrouter_model(ModelName.GOOGLE__GEMINI_2_5_PRO)
         llm_with_tools = llm.bind_tools([propose_resume_draft])
 
         # Load prompts

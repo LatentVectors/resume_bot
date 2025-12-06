@@ -6,18 +6,20 @@ import os
 
 from langchain_openai import ChatOpenAI
 
+from .model_names import ModelName
 
-def get_openrouter_model(model_id: str) -> ChatOpenAI:
+
+def get_openrouter_model(model: ModelName) -> ChatOpenAI:
     """Initialize a ChatOpenAI model using OpenRouter.
 
     Args:
-        model_id: OpenRouter model identifier (e.g., 'google/gemini-2.5-pro', 'openai/gpt-4o')
+        model: ModelName enum member specifying the model to use.
 
     Returns:
         ChatOpenAI instance configured for OpenRouter.
     """
     return ChatOpenAI(
-        model=model_id,
+        model=model.value,
         base_url="https://openrouter.ai/api/v1",
         api_key=os.getenv("OPENROUTER_API_KEY"),
         default_headers={

@@ -16,6 +16,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from pydantic import BaseModel, Field
 
 from src.shared.llm import get_openrouter_model
+from src.shared.model_names import ModelName
 from src.shared.models import TitleCompany
 
 
@@ -81,7 +82,7 @@ Text:
 # ==================== LLM Setup ====================
 
 
-_llm = get_openrouter_model("openai/gpt-4o-mini")
+_llm = get_openrouter_model(ModelName.OPENAI__GPT_4O_MINI)
 _llm_structured = _llm.with_structured_output(TitleCompany)
 _chain = (
     ChatPromptTemplate.from_messages([
