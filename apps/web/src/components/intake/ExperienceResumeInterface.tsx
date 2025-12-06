@@ -22,7 +22,6 @@ import {
 import { MoreVertical, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useJob } from "@/lib/hooks/useJobs";
 import { useCurrentUser } from "@/lib/hooks/useUser";
-import { useExperiences } from "@/lib/hooks/useExperiences";
 import { useIntakeStore } from "@/lib/store/intake";
 import { jobsAPI } from "@/lib/api/jobs";
 import { experiencesAPI } from "@/lib/api/experiences";
@@ -50,10 +49,8 @@ import {
   usePdfGeneration,
   generateResumeFilename,
 } from "@/lib/hooks/usePdfGeneration";
-import { IntakeStepHeader } from "@/components/intake/IntakeStepHeader";
 import { toast } from "sonner";
 import type {
-  Job,
   Achievement,
   ResumeVersionEvent,
   ResumeData,
@@ -110,9 +107,6 @@ export function ExperienceResumeInterface({
     isLoading: isLoadingUser,
     error: userError,
   } = useCurrentUser();
-
-  // Fetch user experiences
-  const { data: experiences } = useExperiences(user?.id ?? 0);
 
   // Fetch intake session
   const {
@@ -880,10 +874,6 @@ ${workExperience}
                   context={{
                     job_id: jobId,
                     user_id: user.id,
-                    gap_analysis: gapAnalysis || "",
-                    stakeholder_analysis: stakeholderAnalysis || "",
-                    work_experience: "", // Will be populated on first message
-                    job_description: job?.job_description || "",
                     selected_version_id: selectedVersionId,
                     template_name:
                       selectedVersion?.template_name || "resume_000.html",

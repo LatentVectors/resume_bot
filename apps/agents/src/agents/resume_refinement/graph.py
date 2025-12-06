@@ -6,6 +6,7 @@ This is a stateful agent that requires thread persistence.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from dataclasses import dataclass
@@ -18,9 +19,16 @@ from langgraph.graph import END, START, MessagesState, StateGraph
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.runtime import Runtime, get_runtime
 
+from src.agents.resume_refinement.data_fetchers import (
+    JobContext,
+    fetch_experience,
+    fetch_formatted_work_experience,
+    fetch_job_context,
+    fetch_user_profile,
+    get_api_base,
+)
 from src.shared.llm import get_openrouter_model
 from src.shared.model_names import ModelName
-from src.shared.models import ProposedExperience
 from src.shared.prompts import PromptName, load_prompt
 
 logger = logging.getLogger(__name__)
@@ -35,14 +43,15 @@ class ResumeRefinementContext:
 
     Passed via context_schema when building the graph and accessed
     via Runtime object in nodes and get_runtime() in tools.
+
+    The agent fetches all needed data (work_experience, job_description,
+    gap_analysis, stakeholder_analysis) directly from the API using
+    job_id and user_id. This simplifies the frontend integration and
+    ensures data is always fresh and correctly formatted.
     """
 
     job_id: int
     user_id: int
-    gap_analysis: str
-    stakeholder_analysis: str
-    work_experience: str
-    job_description: str
     selected_version_id: int | None
     template_name: str
     parent_version_id: int | None
@@ -77,9 +86,8 @@ def propose_resume_draft(
 
     Creates a new resume version with the proposed content. Each call must include
     complete resume data (title, summary, skills, all experiences with bullet points).
-
-    In the consolidated data model, resume versions are created directly without
-    needing a parent resume record to exist first.
+    All text passed in as arguments should be plain text. Do not pass in JSON, HTML, or markdown.
+    Do not use bold, italic, or other formatting.
 
     Args:
         title: Professional title/headline for the resume.
@@ -87,49 +95,80 @@ def propose_resume_draft(
         skills: List of skills relevant to the position.
         experiences: Complete list of experiences to include in resume.
             Each experience should have: experience_id (int), title (str), points (list[str]).
+            Company name, location, and dates are fetched from the database by experience_id.
         education_ids: List of education record IDs to include in resume.
         certification_ids: List of certification record IDs to include in resume.
 
     Returns:
         Dict with version_id, version_index, and confirmation message.
     """
-    import json
-
     try:
         # Access runtime context
         runtime = get_runtime(ResumeRefinementContext)
 
-        # Parse experiences into ProposedExperience models
-        parsed_experiences = []
-        for exp in experiences:
-            parsed_experiences.append(
-                ProposedExperience(
-                    experience_id=exp["experience_id"],
-                    title=exp["title"],
-                    points=exp["points"],
-                )
-            )
-
         # Get API base URL (Next.js API)
-        api_base = os.getenv("API_BASE_URL", "http://localhost:3000")
+        api_base = get_api_base()
 
-        # Build resume_json object
+        # Fetch user profile data
+        user_profile = fetch_user_profile(api_base, runtime.context.user_id)
+        if user_profile:
+            user_name = f"{user_profile.get('first_name', '')} {user_profile.get('last_name', '')}".strip()
+            user_email = user_profile.get("email", "") or ""
+            user_phone = user_profile.get("phone_number", "") or ""
+            user_linkedin = user_profile.get("linkedin_url", "") or ""
+        else:
+            logger.warning(f"Could not fetch user profile for user_id={runtime.context.user_id}")
+            user_name = ""
+            user_email = ""
+            user_phone = ""
+            user_linkedin = ""
+
+        # Parse experiences and fetch metadata from database
+        experience_entries = []
+        for exp in experiences:
+            experience_id = exp["experience_id"]
+            exp_title = exp["title"]
+            exp_points = exp["points"]
+
+            # Fetch experience data from database
+            exp_data = fetch_experience(api_base, experience_id)
+            if exp_data:
+                experience_entries.append(
+                    {
+                        "experience_id": experience_id,
+                        "title": exp_title,
+                        "company": exp_data.get("company_name", ""),
+                        "location": exp_data.get("location", "") or "",
+                        "start_date": exp_data.get("start_date", ""),
+                        "end_date": exp_data.get("end_date"),
+                        "points": exp_points,
+                    }
+                )
+            else:
+                # Fall back to just the LLM-provided data if fetch fails
+                logger.warning(f"Could not fetch experience {experience_id}, using LLM data only")
+                experience_entries.append(
+                    {
+                        "experience_id": experience_id,
+                        "title": exp_title,
+                        "company": "",
+                        "location": "",
+                        "start_date": "",
+                        "end_date": None,
+                        "points": exp_points,
+                    }
+                )
+
+        # Build resume_json object with fetched data
         resume_json_obj = {
-            "name": "",  # Will be filled by frontend from user record
+            "name": user_name,
             "title": title,
-            "email": "",
-            "phone": "",
-            "linkedin_url": "",
+            "email": user_email,
+            "phone": user_phone,
+            "linkedin_url": user_linkedin,
             "professional_summary": professional_summary,
             "skills": skills,
-            "experience": [
-                {
-                    "experience_id": exp.experience_id,
-                    "title": exp.title,
-                    "points": exp.points,
-                }
-                for exp in parsed_experiences
-            ],
+            "experience": experience_entries,
             "education_ids": education_ids,
             "certification_ids": certification_ids,
         }
@@ -237,12 +276,22 @@ def call_model(
         system_prompt = _get_system_prompt()
         user_prompt_template = _get_user_prompt_template()
 
+        # Fetch all context data directly from the API
+        # This ensures we always have fresh, correctly formatted data
+        work_experience = fetch_formatted_work_experience(runtime.context.user_id)
+        job_context = fetch_job_context(runtime.context.job_id)
+
+        logger.info(
+            f"Fetched context for job {runtime.context.job_id}, user {runtime.context.user_id}: "
+            f"work_experience={len(work_experience)} chars"
+        )
+
         # Format user prompt with context
         user_prompt = user_prompt_template.format(
-            work_experience=runtime.context.work_experience,
-            job_description=runtime.context.job_description,
-            gap_analysis=runtime.context.gap_analysis,
-            stakeholder_analysis=runtime.context.stakeholder_analysis,
+            work_experience=work_experience,
+            job_description=job_context.job_description,
+            gap_analysis=job_context.gap_analysis,
+            stakeholder_analysis=job_context.stakeholder_analysis,
         )
 
         # Build the prompt template
@@ -302,4 +351,3 @@ def build_graph() -> StateGraph:
 
 # Compiled graph for LangGraph deployment
 graph = build_graph()
-

@@ -79,10 +79,6 @@ interface ResumeChatProps {
   context: {
     job_id: number;
     user_id: number;
-    gap_analysis: string;
-    stakeholder_analysis: string;
-    work_experience: string;
-    job_description: string;
     selected_version_id: number | null;
     template_name: string;
     parent_version_id: number | null;
