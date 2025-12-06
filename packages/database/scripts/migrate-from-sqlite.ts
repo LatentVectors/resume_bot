@@ -48,6 +48,7 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
 // SQLite table name to PostgreSQL table name mapping
 // Note: resumes and cover_letters tables have been consolidated into their versions tables
+// Note: messages, responses, and job_intake_chat_messages tables have been removed
 const TABLE_NAME_MAP: Record<string, string> = {
   user: "users",
   experience: "experiences",
@@ -57,11 +58,8 @@ const TABLE_NAME_MAP: Record<string, string> = {
   job: "jobs",
   resumeversion: "resume_versions",
   coverletterversion: "cover_letter_versions",
-  message: "messages",
-  response: "responses",
   note: "notes",
   jobintakesession: "job_intake_sessions",
-  jobintakechatmessage: "job_intake_chat_messages",
   experienceproposal: "experience_proposals",
 };
 
@@ -191,6 +189,7 @@ async function main() {
 
   // Migration order with custom queries for filtering by user
   // Note: resume and coverletter tables removed - data consolidated into versions tables
+  // Note: message, response, and jobintakechatmessage tables removed - data stored elsewhere
   const migrations: Array<{
     sqliteTable: string;
     query: string;
@@ -234,14 +233,6 @@ async function main() {
       query: `SELECT * FROM coverletterversion WHERE job_id IN (SELECT id FROM job WHERE user_id = ${PRIMARY_USER_ID})`,
     },
     {
-      sqliteTable: "message",
-      query: `SELECT * FROM message WHERE job_id IN (SELECT id FROM job WHERE user_id = ${PRIMARY_USER_ID})`,
-    },
-    {
-      sqliteTable: "response",
-      query: `SELECT * FROM response WHERE job_id IS NULL OR job_id IN (SELECT id FROM job WHERE user_id = ${PRIMARY_USER_ID})`,
-    },
-    {
       sqliteTable: "note",
       query: `SELECT * FROM note WHERE job_id IN (SELECT id FROM job WHERE user_id = ${PRIMARY_USER_ID})`,
     },
@@ -249,10 +240,6 @@ async function main() {
       sqliteTable: "jobintakesession",
       query: `SELECT * FROM jobintakesession WHERE job_id IN (SELECT id FROM job WHERE user_id = ${PRIMARY_USER_ID})`,
       collectIds: (row, ctx) => ctx.sessionIds.add(row.id as number),
-    },
-    {
-      sqliteTable: "jobintakechatmessage",
-      query: `SELECT * FROM jobintakechatmessage WHERE session_id IN (SELECT id FROM jobintakesession WHERE job_id IN (SELECT id FROM job WHERE user_id = ${PRIMARY_USER_ID}))`,
     },
     {
       sqliteTable: "experienceproposal",
@@ -503,6 +490,7 @@ async function resetSequences(): Promise<void> {
 
   // Tables with auto-increment id columns
   // Note: resumes and cover_letters tables have been removed (consolidated into versions)
+  // Note: messages, responses, and job_intake_chat_messages tables have been removed
   const tablesWithSequences = [
     "users",
     "experiences",
@@ -512,11 +500,8 @@ async function resetSequences(): Promise<void> {
     "jobs",
     "resume_versions",
     "cover_letter_versions",
-    "messages",
-    "responses",
     "notes",
     "job_intake_sessions",
-    "job_intake_chat_messages",
     "experience_proposals",
   ];
 

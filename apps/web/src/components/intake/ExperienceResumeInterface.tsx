@@ -33,16 +33,27 @@ import {
   useUnpinResume,
   useCreateResumeVersion,
 } from "@/lib/hooks/useResumes";
-import { VersionNavigation } from "@/components/intake/VersionNavigation";
+import {
+  VersionActionMenu,
+  VersionNavigation,
+} from "@/components/intake/VersionNavigation";
 import { MarkdownContent } from "@/components/intake/MarkdownContent";
 import { MarkdownRenderer } from "@/components/intake/MarkdownRenderer";
 import { ResumeChat } from "@/components/resume-chat/ResumeChat";
 import { ResumeEditor } from "@/components/resume/ResumeEditor";
 import { ResumePDFPreview } from "@/components/pdf/ResumePDFPreview";
-import { usePdfGeneration, generateResumeFilename } from "@/lib/hooks/usePdfGeneration";
+import {
+  usePdfGeneration,
+  generateResumeFilename,
+} from "@/lib/hooks/usePdfGeneration";
 import { IntakeStepHeader } from "@/components/intake/IntakeStepHeader";
 import { toast } from "sonner";
-import type { Job, Achievement, ResumeVersionEvent, ResumeData } from "@resume/database/types";
+import type {
+  Job,
+  Achievement,
+  ResumeVersionEvent,
+  ResumeData,
+} from "@resume/database/types";
 
 interface ExperienceResumeInterfaceProps {
   jobId: number;
@@ -202,7 +213,12 @@ export function ExperienceResumeInterface({
 
   // Calculate dirty state
   const isDirty = useMemo(() => {
-    if (!draftResume || !loadedVersionId || !selectedVersion || !loadedResumeJson) {
+    if (
+      !draftResume ||
+      !loadedVersionId ||
+      !selectedVersion ||
+      !loadedResumeJson
+    ) {
       // If no loaded version, consider dirty if any content exists
       if (!loadedVersionId && draftResume) {
         return !!(
@@ -228,6 +244,10 @@ export function ExperienceResumeInterface({
     const currentJson = JSON.stringify(draftResume);
     return currentJson !== loadedResumeJson;
   }, [draftResume, loadedVersionId, selectedVersion, loadedResumeJson]);
+
+  const versionControlsDisabled = isDirty || createVersion.isPending;
+  const isCurrentVersionPinned =
+    canonicalVersionId !== null && selectedVersionId === canonicalVersionId;
 
   // Initialization sequence
   useEffect(() => {
@@ -800,15 +820,10 @@ ${workExperience}
             </h1>
           </div>
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              onClick={handleBack}
-            >
+            <Button variant="outline" onClick={handleBack}>
               Back
             </Button>
-            <Button onClick={handleNext}>
-              Next
-            </Button>
+            <Button onClick={handleNext}>Next</Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
@@ -880,78 +895,103 @@ ${workExperience}
                 </TabsList>
               </div>
 
-              <ScrollFadeContainer
-                className="flex-1 min-h-0"
-                scrollClassName="p-4"
-                topGradientHeight={48}
-                bottomGradientHeight={96}
-                fadeThreshold={120}
-              >
+              <div className="flex-1 min-h-0 overflow-hidden">
                 <TabsContent value="job" className="h-full">
-                  <div className="space-y-4">
-                    <div>
-                      <strong>{job.job_title || "No title"}</strong> at{" "}
-                      <strong>{job.company_name || "No company"}</strong>
+                  <ScrollFadeContainer
+                    className="h-full"
+                    scrollClassName="px-4 pb-4 pt-0"
+                    topGradientHeight={48}
+                    bottomGradientHeight={96}
+                    fadeThreshold={120}
+                  >
+                    <div className="space-y-4">
+                      <div>
+                        <strong>{job.job_title || "No title"}</strong> at{" "}
+                        <strong>{job.company_name || "No company"}</strong>
+                      </div>
+                      {job.job_description ? (
+                        <MarkdownContent content={job.job_description} />
+                      ) : (
+                        <Alert>
+                          <AlertDescription>
+                            No job description available.
+                          </AlertDescription>
+                        </Alert>
+                      )}
                     </div>
-                    {job.job_description ? (
-                      <MarkdownContent content={job.job_description} />
-                    ) : (
-                      <Alert>
-                        <AlertDescription>
-                          No job description available.
-                        </AlertDescription>
-                      </Alert>
-                    )}
-                  </div>
+                  </ScrollFadeContainer>
                 </TabsContent>
 
                 <TabsContent value="gap-analysis" className="h-full">
-                  <MarkdownRenderer content={gapAnalysis || ""} />
+                  <ScrollFadeContainer
+                    className="h-full"
+                    scrollClassName="px-4 pb-4 pt-0"
+                    topGradientHeight={48}
+                    bottomGradientHeight={96}
+                    fadeThreshold={120}
+                  >
+                    <MarkdownRenderer content={gapAnalysis || ""} />
+                  </ScrollFadeContainer>
                 </TabsContent>
 
                 <TabsContent value="stakeholder-analysis" className="h-full">
-                  <MarkdownRenderer content={stakeholderAnalysis || ""} />
+                  <ScrollFadeContainer
+                    className="h-full"
+                    scrollClassName="px-4 pb-4 pt-0"
+                    topGradientHeight={48}
+                    bottomGradientHeight={96}
+                    fadeThreshold={120}
+                  >
+                    <MarkdownRenderer content={stakeholderAnalysis || ""} />
+                  </ScrollFadeContainer>
                 </TabsContent>
 
                 <TabsContent value="content" className="h-full">
-                  <div className="space-y-4">
-                    {/* Version Navigation - Only show when NOT dirty */}
-                    {!isDirty && versions.length > 0 && (
-                      <VersionNavigation
-                        versions={versions}
-                        selectedVersionId={selectedVersionId}
-                        canonicalVersionId={canonicalVersionId}
-                        onVersionChange={handleVersionChange}
-                        onPin={handlePin}
-                        onUnpin={handleUnpin}
-                        onCopyResume={handleCopyResume}
-                        onDownloadResume={handleDownloadResume}
-                      />
-                    )}
-
-                    {/* Save/Discard Buttons - Only show when dirty */}
-                    {isDirty && (
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={handleDiscard}
-                          disabled={createVersion.isPending}
-                        >
-                          Discard
-                        </Button>
-                        <Button
-                          onClick={handleSave}
-                          disabled={createVersion.isPending}
-                        >
-                          Save
-                        </Button>
+                  <div className="flex h-full min-h-0 flex-col gap-4">
+                    <div className="sticky top-0 z-20 bg-background">
+                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
+                        {versions.length > 0 && (
+                          <VersionNavigation
+                            versions={versions}
+                            selectedVersionId={selectedVersionId}
+                            canonicalVersionId={canonicalVersionId}
+                            onVersionChange={handleVersionChange}
+                            onPin={handlePin}
+                            onUnpin={handleUnpin}
+                            disabled={versionControlsDisabled}
+                            className="flex-wrap"
+                          />
+                        )}
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Button
+                            variant="outline"
+                            onClick={handleDiscard}
+                            disabled={!isDirty || createVersion.isPending}
+                          >
+                            Discard
+                          </Button>
+                          <Button
+                            onClick={handleSave}
+                            disabled={!isDirty || createVersion.isPending}
+                          >
+                            Save
+                          </Button>
+                          <VersionActionMenu
+                            disabled={versionControlsDisabled}
+                            isPinned={isCurrentVersionPinned}
+                            onCopyResume={handleCopyResume}
+                            onDownloadResume={handleDownloadResume}
+                          />
+                        </div>
                       </div>
-                    )}
+                    </div>
 
-                    {/* Resume Editor */}
-                    <div
-                      className="overflow-y-auto"
-                      style={{ height: "600px" }}
+                    <ScrollFadeContainer
+                      className="flex-1 min-h-0"
+                      scrollClassName="pb-4 px-4 pt-0"
+                      topGradientHeight={48}
+                      bottomGradientHeight={96}
+                      fadeThreshold={120}
                     >
                       {draftResume ? (
                         <ResumeEditor
@@ -964,56 +1004,62 @@ ${workExperience}
                           Loading resume data...
                         </div>
                       )}
-                    </div>
+                    </ScrollFadeContainer>
                   </div>
                 </TabsContent>
 
                 <TabsContent value="preview" className="h-full">
-                  <div className="space-y-4">
-                    {/* Version Navigation - Only show when NOT dirty */}
-                    {!isDirty && versions.length > 0 && (
-                      <VersionNavigation
-                        versions={versions}
-                        selectedVersionId={selectedVersionId}
-                        canonicalVersionId={canonicalVersionId}
-                        onVersionChange={handleVersionChange}
-                        onPin={handlePin}
-                        onUnpin={handleUnpin}
-                        onCopyResume={handleCopyResume}
-                        onDownloadResume={handleDownloadResume}
-                      />
-                    )}
+                  <div className="flex h-full min-h-0 flex-col gap-4">
+                    <div className="sticky top-0 z-20 bg-background">
+                      {!isDirty && versions.length > 0 && (
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
+                          <VersionNavigation
+                            versions={versions}
+                            selectedVersionId={selectedVersionId}
+                            canonicalVersionId={canonicalVersionId}
+                            onVersionChange={handleVersionChange}
+                            onPin={handlePin}
+                            onUnpin={handleUnpin}
+                            disabled={versionControlsDisabled}
+                            className="flex-wrap"
+                          />
+                          <VersionActionMenu
+                            disabled={versionControlsDisabled}
+                            isPinned={isCurrentVersionPinned}
+                            onCopyResume={handleCopyResume}
+                            onDownloadResume={handleDownloadResume}
+                          />
+                        </div>
+                      )}
 
-                    {/* Save/Discard Buttons - Only show when dirty */}
-                    {isDirty && (
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          onClick={handleDiscard}
-                          disabled={createVersion.isPending}
-                        >
-                          Discard
-                        </Button>
-                        <Button
-                          onClick={handleSave}
-                          disabled={createVersion.isPending}
-                        >
-                          Save
-                        </Button>
-                      </div>
-                    )}
+                      {isDirty && (
+                        <div className="flex items-center justify-end gap-2 pb-2">
+                          <Button
+                            variant="outline"
+                            onClick={handleDiscard}
+                            disabled={createVersion.isPending}
+                          >
+                            Discard
+                          </Button>
+                          <Button
+                            onClick={handleSave}
+                            disabled={createVersion.isPending}
+                          >
+                            Save
+                          </Button>
+                        </div>
+                      )}
+                    </div>
 
-                    {/* PDF Preview - Client-side generation */}
-                    <div className="h-[600px] overflow-y-auto border rounded-lg bg-gray-50">
+                    <div className="flex-1 min-h-0 px-4 pb-4">
                       <ResumePDFPreview
                         resumeData={draftResume}
-                        autoGenerate={true}
                         className="h-full"
                       />
                     </div>
                   </div>
                 </TabsContent>
-              </ScrollFadeContainer>
+              </div>
             </Tabs>
           </div>
         </div>

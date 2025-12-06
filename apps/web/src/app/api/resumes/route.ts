@@ -24,14 +24,20 @@ export async function GET(req: NextRequest) {
   try {
     const searchParams = req.nextUrl.searchParams;
     const jobIdParam = searchParams.get("job_id");
+    const includeHistory =
+      (searchParams.get("history") || "").toLowerCase() === "true" ||
+      searchParams.get("history") === "1";
 
     const supabase = await getSupabaseServerClient();
 
     let query = supabase
       .from("resume_versions")
       .select("*")
-      .eq("is_pinned", true)
-      .order("created_at", { ascending: false });
+      .order("version_index", { ascending: false });
+
+    if (!includeHistory) {
+      query = query.eq("is_pinned", true);
+    }
 
     // Apply job_id filter if provided
     if (jobIdParam) {

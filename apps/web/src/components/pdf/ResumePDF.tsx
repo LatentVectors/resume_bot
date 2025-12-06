@@ -24,7 +24,7 @@ import type {
 const colors = {
   primary: "#1a1a1a",
   secondary: "#4a4a4a",
-  accent: "#2563eb",
+  accent: "#1f3b8a",
   muted: "#6b7280",
   border: "#e5e7eb",
 };
@@ -33,37 +33,41 @@ const colors = {
 const styles = StyleSheet.create({
   page: {
     fontFamily: "Helvetica",
-    fontSize: 10,
-    paddingTop: 36,
-    paddingBottom: 36,
-    paddingHorizontal: 40,
+    fontSize: 11,
+    paddingTop: 50,
+    paddingBottom: 50,
+    paddingHorizontal: 50,
     color: colors.primary,
   },
   // Header section
   header: {
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    paddingBottom: 12,
+    marginBottom: 12,
+  },
+  nameTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-end",
+    marginBottom: 8,
   },
   name: {
-    fontSize: 22,
+    flex: 1,
+    fontSize: 26,
     fontFamily: "Helvetica-Bold",
-    marginBottom: 4,
     color: colors.primary,
   },
   title: {
-    fontSize: 12,
+    fontSize: 26,
     color: colors.accent,
-    marginBottom: 8,
+    textAlign: "right",
   },
   contactRow: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 12,
+    marginBottom: 18,
   },
   contactItem: {
-    fontSize: 9,
+    fontSize: 11,
     color: colors.secondary,
   },
   link: {
@@ -75,7 +79,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: 14,
     fontFamily: "Helvetica-Bold",
     color: colors.primary,
     marginBottom: 8,
@@ -87,7 +91,7 @@ const styles = StyleSheet.create({
   },
   // Summary
   summary: {
-    fontSize: 10,
+    fontSize: 11,
     lineHeight: 1.5,
     color: colors.secondary,
     textAlign: "justify",
@@ -102,23 +106,18 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   experienceTitle: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: "Helvetica-Bold",
     color: colors.primary,
   },
-  experienceCompany: {
-    fontSize: 10,
+  experienceMeta: {
+    fontSize: 12,
     color: colors.secondary,
-    marginBottom: 2,
+    marginBottom: 4,
   },
   experienceDate: {
-    fontSize: 9,
+    fontSize: 12,
     color: colors.muted,
-  },
-  experienceLocation: {
-    fontSize: 9,
-    color: colors.muted,
-    marginBottom: 4,
   },
   bulletList: {
     marginTop: 4,
@@ -129,12 +128,12 @@ const styles = StyleSheet.create({
   },
   bullet: {
     width: 10,
-    fontSize: 9,
+    fontSize: 11,
     color: colors.secondary,
   },
   bulletText: {
     flex: 1,
-    fontSize: 9,
+    fontSize: 11,
     lineHeight: 1.4,
     color: colors.secondary,
   },
@@ -148,16 +147,16 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   educationInstitution: {
-    fontSize: 10,
+    fontSize: 12,
     fontFamily: "Helvetica-Bold",
     color: colors.primary,
   },
   educationDegree: {
-    fontSize: 9,
+    fontSize: 12,
     color: colors.secondary,
   },
   educationDate: {
-    fontSize: 9,
+    fontSize: 12,
     color: colors.muted,
   },
   // Certifications
@@ -165,11 +164,11 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   certificationTitle: {
-    fontSize: 10,
+    fontSize: 12,
     color: colors.primary,
   },
   certificationOrg: {
-    fontSize: 9,
+    fontSize: 12,
     color: colors.muted,
   },
   // Skills
@@ -179,7 +178,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   skillItem: {
-    fontSize: 9,
+    fontSize: 11,
     color: colors.secondary,
     backgroundColor: "#f3f4f6",
     paddingHorizontal: 8,
@@ -245,8 +244,12 @@ function Header({ data }: { data: ResumeData }) {
 
   return (
     <View style={styles.header}>
-      {data.name && <Text style={styles.name}>{data.name}</Text>}
-      {data.title && <Text style={styles.title}>{data.title}</Text>}
+      {(data.name || data.title) && (
+        <View style={styles.nameTitleRow}>
+          {data.name && <Text style={styles.name}>{data.name}</Text>}
+          {data.title && <Text style={styles.title}>{data.title}</Text>}
+        </View>
+      )}
       {contactItems.length > 0 && (
         <View style={styles.contactRow}>
           {contactItems.map((item, index) => (
@@ -269,7 +272,11 @@ function SummarySection({ summary }: { summary: string }) {
 }
 
 // Experience Section
-function ExperienceSection({ experiences }: { experiences: ResumeExperience[] }) {
+function ExperienceSection({
+  experiences,
+}: {
+  experiences: ResumeExperience[];
+}) {
   if (!experiences || experiences.length === 0) return null;
 
   return (
@@ -283,9 +290,10 @@ function ExperienceSection({ experiences }: { experiences: ResumeExperience[] })
               {formatDate(exp.start_date)} – {formatDate(exp.end_date)}
             </Text>
           </View>
-          <Text style={styles.experienceCompany}>{exp.company}</Text>
-          {exp.location && (
-            <Text style={styles.experienceLocation}>{exp.location}</Text>
+          {(exp.company || exp.location) && (
+            <Text style={styles.experienceMeta}>
+              {[exp.company, exp.location].filter(Boolean).join(" | ")}
+            </Text>
           )}
           {exp.points && exp.points.length > 0 && (
             <View style={styles.bulletList}>
@@ -315,7 +323,9 @@ function EducationSection({ education }: { education: ResumeEducation[] }) {
           <View style={styles.educationHeader}>
             <Text style={styles.educationInstitution}>{edu.institution}</Text>
             {edu.grad_date && (
-              <Text style={styles.educationDate}>{formatDate(edu.grad_date)}</Text>
+              <Text style={styles.educationDate}>
+                {formatDate(edu.grad_date)}
+              </Text>
             )}
           </View>
           <Text style={styles.educationDegree}>
@@ -382,7 +392,7 @@ interface ResumePDFProps {
 
 export function ResumePDF({ data }: ResumePDFProps) {
   return (
-    <Document>
+    <Document pageLayout="singlePage">
       <Page size="LETTER" style={styles.page}>
         <Header data={data} />
 
@@ -411,4 +421,3 @@ export function ResumePDF({ data }: ResumePDFProps) {
 }
 
 export default ResumePDF;
-

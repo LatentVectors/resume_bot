@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ name }} - Cover Letter</title>
+    <style>
+        body {
+            font-family: Calibri, Arial, Helvetica, sans-serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #000000;
+            margin: 27px;
+            max-width: 21cm;
+        }
+        .sender-info {
+            border-top: 1px solid #000000;
+            border-bottom: 2px solid #000000;
+            padding: 12px 0;
+            margin-bottom: 18px;
+        }
+        .header-left {
+            margin-bottom: 6px;
+        }
+        .sender-name {
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 22pt;
+            font-weight: bold;
+            line-height: 1.2;
+        }
+        .sender-title {
+            font-family: Georgia, "Times New Roman", serif;
+            font-size: 12pt;
+            color: #333333;
+            line-height: 1.3;
+        }
+        .header-right {
+            text-align: left;
+        }
+        .sender-contact {
+            font-size: 10.5pt;
+            color: #333333;
+            line-height: 1.4;
+            white-space: nowrap;
+        }
+        .date {
+            margin-bottom: 18px;
+        }
+        .salutation {
+            margin-bottom: 14px;
+        }
+        .body-paragraph {
+            margin: 0 0 15px 0;
+            text-align: justify;
+        }
+        .closing {
+            margin-top: 26px;
+            margin-bottom: 8px;
+        }
+        .signature-name {
+            margin-top: 42px;
+        }
+    </style>
+</head>
+<body>
+    <div class="sender-info">
+        <div class="header-left">
+            <div class="sender-name">{{ name }}</div>
+            {% if title %}<div class="sender-title">{{ title }}</div>{% endif %}
+        </div>
+        <div class="header-right">
+            <div class="sender-contact">{{ email }}{% if phone %} | {{ phone }}{% endif %}</div>
+        </div>
+    </div>
+
+    <div class="date">{{ date.strftime('%B %d, %Y') }}</div>
+
+    <div class="salutation">Dear Hiring Manager,</div>
+
+    {% for paragraph in body_paragraphs %}
+    <p class="body-paragraph">{{ paragraph }}</p>
+    {% endfor %}
+
+    <div class="closing">Sincerely,</div>
+    <div class="signature-name">{{ name }}</div>
+</body>
+</html>
+

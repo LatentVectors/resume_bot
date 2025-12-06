@@ -16,7 +16,7 @@
     "db:stop": "supabase stop",
     "db:reset": "supabase db reset",
     "db:gen-types": "supabase gen types typescript --local > src/types/database.types.ts",
-    "migrate:from-sqlite": "npx tsx scripts/migrate-from-sqlite.ts",
+    "migrate:from-sqlite": "dotenv -- npx tsx scripts/migrate-from-sqlite.ts",
     "seed:templates": "npx tsx scripts/seed-templates.ts"
   },
   "dependencies": {
@@ -26,9 +26,9 @@
   },
   "devDependencies": {
     "@types/node": "^20",
+    "dotenv-cli": "^11.0.0",
     "sql.js": "^1.12.0",
     "tsx": "^4.19.2",
     "typescript": "^5"
   }
 }
-

@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ name }} - Resume</title>
+    <style>
+        @page { margin: 25px 32px 35px 32px; }
+        body { font-family: Calibri, Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #222222; background-color: #FFFFFF; margin: 25px 32px 35px 32px; }
+        a { color: inherit; text-decoration: none; }
+        h1, h2, h3 { margin: 0; }
+        h1 { font-size: 28pt; font-weight: bold; color: #000000; margin-bottom: 4px; }
+        h2 { font-size: 14pt; font-weight: bold; color: #1f4e79; text-transform: uppercase; border-bottom: 2px solid #1f4e79; padding-bottom: 6px; margin-top: 22px; margin-bottom: 14px; }
+        h3 { font-size: 12pt; font-weight: bold; color: #000000; margin-bottom: 2px; }
+        header { margin-bottom: 14px; }
+        .current-title { font-weight: 700; color: #1f4e79; text-transform: uppercase; margin-bottom: 3px; }
+        .contact-info { font-size: 10pt; color: #444444; margin-top: 0; margin-bottom: 12px; }
+        .section { margin-bottom: 8px; }
+        .job, .education-entry, .certification-entry { margin-bottom: 18px; }
+        .job-subheader p { margin: 0; font-size: 11pt; font-style: italic; color: #444444; }
+        ul { padding-left: 20px; margin-top: 8px; }
+        li { margin-bottom: 6px; }
+        .skills-list { padding-left: 0; list-style-position: inside; column-count: 3; column-gap: 20px; margin: 0; }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>{{ name }}</h1>
+        <p class="current-title">{{ title }}</p>
+        <p class="contact-info"><a href="mailto:{{ email }}">{{ email }}</a> | <a href="tel:{{ phone }}">{{ phone }}</a> | <a href="{{ linkedin_url }}">{{ linkedin_url }}</a></p>
+    </header>
+
+    {% if professional_summary %}
+    <section class="section">
+        <p>{{ professional_summary }}</p>
+    </section>
+    {% endif %}
+
+    {% if experience %}
+    <section class="section">
+        <h2>Professional Experience</h2>
+        {% for job in experience %}
+        <div class="job">
+            <h3>{{ job.title }}</h3>
+            <div class="job-subheader">
+                <p><strong>{{ job.company }}</strong> | {{ job.location }} | <em>{{ job.start_date.strftime('%b %Y') }} – {{ job.end_date.strftime('%b %Y') if job.end_date else 'Present' }}</em></p>
+            </div>
+            <ul>
+                {% for point in job.points %}
+                <li>{{ point }}</li>
+                {% endfor %}
+            </ul>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if skills %}
+    <section class="section">
+        <h2>Skills</h2>
+        <ul class="skills-list">
+            {% for skill in skills %}
+            <li>{{ skill }}</li>
+            {% endfor %}
+        </ul>
+    </section>
+    {% endif %}
+
+    {% if education %}
+    <section class="section">
+        <h2>Education</h2>
+        {% for edu in education %}
+        <div class="education-entry">
+            <h3>{{ edu.degree }}, {{ edu.major }}</h3>
+            <p><strong>{{ edu.institution }}</strong> | {{ edu.grad_date.strftime('%b %Y') }}</p>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+
+    {% if certifications %}
+    <section class="section">
+        <h2>Certifications</h2>
+        {% for cert in certifications %}
+        <div class="certification-entry">
+            <p><strong>{{ cert.title }}</strong>, {{ cert.date.strftime('%b %Y') }}</p>
+        </div>
+        {% endfor %}
+    </section>
+    {% endif %}
+</body>
+</html>
+

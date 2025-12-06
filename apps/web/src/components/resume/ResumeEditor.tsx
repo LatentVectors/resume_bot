@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import type { ReactNode } from "react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type {
   ResumeData,
   ResumeExperience,
@@ -26,89 +25,103 @@ interface ResumeEditorProps {
 }
 
 export function ResumeEditor({ resumeData, updateResume, readOnly = false }: ResumeEditorProps) {
-  const [activeTab, setActiveTab] = useState<"profile" | "experience" | "education" | "certifications" | "skills">("profile");
-
   return (
-    <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)}>
-      <TabsList>
-        <TabsTrigger value="profile">Profile</TabsTrigger>
-        <TabsTrigger value="experience">Experience</TabsTrigger>
-        <TabsTrigger value="education">Education</TabsTrigger>
-        <TabsTrigger value="certifications">Certifications</TabsTrigger>
-        <TabsTrigger value="skills">Skills</TabsTrigger>
-      </TabsList>
-
-      <TabsContent value="profile" className="space-y-4 mt-4">
-        <ProfileTab resumeData={resumeData} updateResume={updateResume} readOnly={readOnly} />
-      </TabsContent>
-
-      <TabsContent value="experience" className="space-y-4 mt-4">
-        <ExperienceTab resumeData={resumeData} updateResume={updateResume} readOnly={readOnly} />
-      </TabsContent>
-
-      <TabsContent value="education" className="space-y-4 mt-4">
-        <EducationTab resumeData={resumeData} updateResume={updateResume} readOnly={readOnly} />
-      </TabsContent>
-
-      <TabsContent value="certifications" className="space-y-4 mt-4">
-        <CertificationsTab resumeData={resumeData} updateResume={updateResume} readOnly={readOnly} />
-      </TabsContent>
-
-      <TabsContent value="skills" className="space-y-4 mt-4">
-        <SkillsTab resumeData={resumeData} updateResume={updateResume} readOnly={readOnly} />
-      </TabsContent>
-    </Tabs>
+    <div className="space-y-4">
+      <ExpandableSection title="Profile" description="Key personal details">
+        <ProfileSection resumeData={resumeData} updateResume={updateResume} readOnly={readOnly} />
+      </ExpandableSection>
+      <ExpandableSection title="Experience" description="Chronicle your past roles">
+        <ExperienceSection resumeData={resumeData} updateResume={updateResume} readOnly={readOnly} />
+      </ExpandableSection>
+      <ExpandableSection title="Education" description="Academic background">
+        <EducationSection resumeData={resumeData} updateResume={updateResume} readOnly={readOnly} />
+      </ExpandableSection>
+      <ExpandableSection title="Certifications" description="Certifications and licenses">
+        <CertificationsSection resumeData={resumeData} updateResume={updateResume} readOnly={readOnly} />
+      </ExpandableSection>
+      <ExpandableSection title="Skills" description="Tools and proficiencies">
+        <SkillsSection resumeData={resumeData} updateResume={updateResume} readOnly={readOnly} />
+      </ExpandableSection>
+    </div>
   );
 }
 
-// Profile Tab Component
-interface ProfileTabProps {
+interface ExpandableSectionProps {
+  title: string;
+  description?: string;
+  open?: boolean;
+  children: ReactNode;
+}
+
+function ExpandableSection({ title, description, open = true, children }: ExpandableSectionProps) {
+  return (
+    <details
+      open={open}
+      className="group cursor-pointer rounded-lg border border-border bg-card"
+    >
+      <summary className="flex items-center justify-between gap-4 px-4 py-3 text-sm font-semibold list-none text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+        <div>
+          <span className="font-semibold">{title}</span>
+          {description && <p className="text-xs text-muted-foreground">{description}</p>}
+        </div>
+        <ChevronDown className="size-4 transition-transform duration-150 group-open:-rotate-180" />
+      </summary>
+      <div className="border-t border-border px-4 py-4">{children}</div>
+    </details>
+  );
+}
+
+interface SectionProps {
   resumeData: ResumeData;
   updateResume: (updater: (prev: ResumeData) => ResumeData) => void;
   readOnly: boolean;
 }
 
-function ProfileTab({ resumeData, updateResume, readOnly }: ProfileTabProps) {
+function ProfileSection({ resumeData, updateResume, readOnly }: SectionProps) {
   return (
     <div className="space-y-4">
-      <div>
-        <Label htmlFor="name">Name *</Label>
-        <Input
-          id="name"
-          value={resumeData.name || ""}
-          onChange={(e) => updateResume((prev) => ({ ...prev, name: e.target.value }))}
-          disabled={readOnly}
-        />
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <Label htmlFor="name">Name *</Label>
+          <Input
+            id="name"
+            value={resumeData.name || ""}
+            onChange={(e) => updateResume((prev) => ({ ...prev, name: e.target.value }))}
+            disabled={readOnly}
+          />
+        </div>
+        <div>
+          <Label htmlFor="title">
+            Title <span className="text-muted-foreground">(AI-editable)</span>
+          </Label>
+          <Input
+            id="title"
+            value={resumeData.title || ""}
+            onChange={(e) => updateResume((prev) => ({ ...prev, title: e.target.value }))}
+            disabled={readOnly}
+          />
+        </div>
       </div>
-      <div>
-        <Label htmlFor="title">
-          Title <span className="text-muted-foreground">(AI-editable)</span>
-        </Label>
-        <Input
-          id="title"
-          value={resumeData.title || ""}
-          onChange={(e) => updateResume((prev) => ({ ...prev, title: e.target.value }))}
-          disabled={readOnly}
-        />
-      </div>
-      <div>
-        <Label htmlFor="email">Email *</Label>
-        <Input
-          id="email"
-          type="email"
-          value={resumeData.email || ""}
-          onChange={(e) => updateResume((prev) => ({ ...prev, email: e.target.value }))}
-          disabled={readOnly}
-        />
-      </div>
-      <div>
-        <Label htmlFor="phone">Phone</Label>
-        <Input
-          id="phone"
-          value={resumeData.phone || ""}
-          onChange={(e) => updateResume((prev) => ({ ...prev, phone: e.target.value }))}
-          disabled={readOnly}
-        />
+      <div className="grid gap-4 md:grid-cols-2">
+        <div>
+          <Label htmlFor="email">Email *</Label>
+          <Input
+            id="email"
+            type="email"
+            value={resumeData.email || ""}
+            onChange={(e) => updateResume((prev) => ({ ...prev, email: e.target.value }))}
+            disabled={readOnly}
+          />
+        </div>
+        <div>
+          <Label htmlFor="phone">Phone</Label>
+          <Input
+            id="phone"
+            value={resumeData.phone || ""}
+            onChange={(e) => updateResume((prev) => ({ ...prev, phone: e.target.value }))}
+            disabled={readOnly}
+          />
+        </div>
       </div>
       <div>
         <Label htmlFor="linkedin">LinkedIn URL</Label>
@@ -128,21 +141,14 @@ function ProfileTab({ resumeData, updateResume, readOnly }: ProfileTabProps) {
           value={resumeData.professional_summary || ""}
           onChange={(e) => updateResume((prev) => ({ ...prev, professional_summary: e.target.value }))}
           disabled={readOnly}
-          className="min-h-[250px]"
+          className="min-h-[125px]"
         />
       </div>
     </div>
   );
 }
 
-// Experience Tab Component
-interface ExperienceTabProps {
-  resumeData: ResumeData;
-  updateResume: (updater: (prev: ResumeData) => ResumeData) => void;
-  readOnly: boolean;
-}
-
-function ExperienceTab({ resumeData, updateResume, readOnly }: ExperienceTabProps) {
+function ExperienceSection({ resumeData, updateResume, readOnly }: SectionProps) {
   const updateExperience = (index: number, updater: (exp: ResumeExperience) => ResumeExperience) => {
     updateResume((prev) => ({
       ...prev,
@@ -240,7 +246,7 @@ function ExperienceTab({ resumeData, updateResume, readOnly }: ExperienceTabProp
                       }))
                     }
                     disabled={readOnly}
-                    className="min-h-[350px]"
+                    className="min-h-[175px]"
                   />
                 </div>
               </div>
@@ -263,14 +269,7 @@ function ExperienceTab({ resumeData, updateResume, readOnly }: ExperienceTabProp
   );
 }
 
-// Education Tab Component
-interface EducationTabProps {
-  resumeData: ResumeData;
-  updateResume: (updater: (prev: ResumeData) => ResumeData) => void;
-  readOnly: boolean;
-}
-
-function EducationTab({ resumeData, updateResume, readOnly }: EducationTabProps) {
+function EducationSection({ resumeData, updateResume, readOnly }: SectionProps) {
   const updateEducation = (index: number, updater: (edu: ResumeEducation) => ResumeEducation) => {
     updateResume((prev) => ({
       ...prev,
@@ -360,14 +359,7 @@ function EducationTab({ resumeData, updateResume, readOnly }: EducationTabProps)
   );
 }
 
-// Certifications Tab Component
-interface CertificationsTabProps {
-  resumeData: ResumeData;
-  updateResume: (updater: (prev: ResumeData) => ResumeData) => void;
-  readOnly: boolean;
-}
-
-function CertificationsTab({ resumeData, updateResume, readOnly }: CertificationsTabProps) {
+function CertificationsSection({ resumeData, updateResume, readOnly }: SectionProps) {
   const updateCertification = (index: number, updater: (cert: ResumeCertification) => ResumeCertification) => {
     updateResume((prev) => ({
       ...prev,
@@ -437,14 +429,7 @@ function CertificationsTab({ resumeData, updateResume, readOnly }: Certification
   );
 }
 
-// Skills Tab Component
-interface SkillsTabProps {
-  resumeData: ResumeData;
-  updateResume: (updater: (prev: ResumeData) => ResumeData) => void;
-  readOnly: boolean;
-}
-
-function SkillsTab({ resumeData, updateResume, readOnly }: SkillsTabProps) {
+function SkillsSection({ resumeData, updateResume, readOnly }: SectionProps) {
   const skillsText = (resumeData.skills || []).join("\n");
 
   return (
@@ -457,7 +442,6 @@ function SkillsTab({ resumeData, updateResume, readOnly }: SkillsTabProps) {
         value={skillsText}
         onChange={(e) => {
           const text = e.target.value;
-          // Parse both comma-separated and newline-separated
           const skills = text
             .split(/[,\n]/)
             .map((s) => s.trim())
@@ -465,10 +449,9 @@ function SkillsTab({ resumeData, updateResume, readOnly }: SkillsTabProps) {
           updateResume((prev) => ({ ...prev, skills }));
         }}
         disabled={readOnly}
-        className="mt-2 min-h-[400px]"
+        className="mt-2 min-h-[200px]"
         placeholder="Enter skills, one per line or comma-separated..."
       />
     </div>
   );
 }
-

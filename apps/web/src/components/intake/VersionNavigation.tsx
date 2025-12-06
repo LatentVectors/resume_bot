@@ -4,9 +4,9 @@ import {
   ChevronLeft,
   ChevronRight,
   Pin,
-  MoreVertical,
   Copy,
   Download,
+  MoreVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,6 +22,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 import type { ResumeVersion } from "@resume/database/types";
 
 interface VersionNavigationProps {
@@ -31,8 +32,8 @@ interface VersionNavigationProps {
   onVersionChange: (versionId: number | null) => void;
   onPin: (versionId: number) => void;
   onUnpin: () => void;
-  onCopyResume: () => void;
-  onDownloadResume: () => void;
+  className?: string;
+  disabled?: boolean;
 }
 
 export function VersionNavigation({
@@ -42,21 +43,19 @@ export function VersionNavigation({
   onVersionChange,
   onPin,
   onUnpin,
-  onCopyResume,
-  onDownloadResume,
+  className,
+  disabled = false,
 }: VersionNavigationProps) {
   if (!versions || versions.length === 0) {
     return null;
   }
 
-  // Sort versions by version_index descending (newest first)
   const sortedVersions = [...versions].sort((a, b) => {
     const indexA = a.version_index || 0;
     const indexB = b.version_index || 0;
     return indexB - indexA;
   });
 
-  // Find current version index
   const currentVersion = sortedVersions.find((v) => v.id === selectedVersionId);
   const currentVersionIndex = currentVersion?.version_index || 0;
   const oldestVersion = sortedVersions[sortedVersions.length - 1];
@@ -68,10 +67,12 @@ export function VersionNavigation({
   const canGoPrevious = currentVersionIndex > oldestVersionIndex;
   const canGoNext = currentVersionIndex < latestVersionIndex;
 
+  const containerClass = cn("flex items-center gap-2", className);
+  const navDisabled = disabled;
+
   const handlePrevious = () => {
-    const currentIdx = sortedVersions.findIndex(
-      (v) => v.id === selectedVersionId
-    );
+    if (navDisabled) return;
+    const currentIdx = sortedVersions.findIndex((v) => v.id === selectedVersionId);
     if (currentIdx < sortedVersions.length - 1) {
       const prevVersion = sortedVersions[currentIdx + 1];
       if (prevVersion?.id) {
@@ -81,9 +82,8 @@ export function VersionNavigation({
   };
 
   const handleNext = () => {
-    const currentIdx = sortedVersions.findIndex(
-      (v) => v.id === selectedVersionId
-    );
+    if (navDisabled) return;
+    const currentIdx = sortedVersions.findIndex((v) => v.id === selectedVersionId);
     if (currentIdx > 0) {
       const nextVersion = sortedVersions[currentIdx - 1];
       if (nextVersion?.id) {
@@ -93,6 +93,7 @@ export function VersionNavigation({
   };
 
   const handleVersionSelect = (value: string) => {
+    if (navDisabled) return;
     if (value === "null" || value === "") {
       onVersionChange(null);
     } else {
@@ -104,6 +105,7 @@ export function VersionNavigation({
   };
 
   const handlePinClick = () => {
+    if (navDisabled) return;
     if (isPinned) {
       onUnpin();
     } else if (selectedVersionId) {
@@ -112,12 +114,12 @@ export function VersionNavigation({
   };
 
   return (
-    <div className="flex items-center justify-end gap-2">
+    <div className={containerClass}>
       <Button
         variant="ghost"
         size="sm"
         onClick={handlePrevious}
-        disabled={!canGoPrevious}
+        disabled={navDisabled || !canGoPrevious}
       >
         <ChevronLeft className="size-4" />
       </Button>
@@ -125,6 +127,7 @@ export function VersionNavigation({
       <Select
         value={selectedVersionId?.toString() || "null"}
         onValueChange={handleVersionSelect}
+        disabled={navDisabled}
       >
         <SelectTrigger className="w-[150px]">
           <SelectValue />
@@ -143,7 +146,7 @@ export function VersionNavigation({
         variant="ghost"
         size="sm"
         onClick={handleNext}
-        disabled={!canGoNext}
+        disabled={navDisabled || !canGoNext}
       >
         <ChevronRight className="size-4" />
       </Button>
@@ -152,28 +155,45 @@ export function VersionNavigation({
         variant={isPinned ? "default" : "outline"}
         size="sm"
         onClick={handlePinClick}
-        disabled={!selectedVersionId}
+        disabled={navDisabled || !selectedVersionId}
       >
         <Pin className={`size-4 ${isPinned ? "fill-current" : ""}`} />
       </Button>
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm">
-            <MoreVertical className="size-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          <DropdownMenuItem onClick={onCopyResume}>
-            <Copy className="mr-2 size-4" />
-            Copy resume
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onDownloadResume} disabled={!isPinned}>
-            <Download className="mr-2 size-4" />
-            Download resume
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
     </div>
   );
 }
+
+interface VersionActionMenuProps {
+  disabled?: boolean;
+  isPinned: boolean;
+  onCopyResume: () => void;
+  onDownloadResume: () => void;
+}
+
+export function VersionActionMenu({
+  disabled = false,
+  isPinned,
+  onCopyResume,
+  onDownloadResume,
+}: VersionActionMenuProps) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" disabled={disabled}>
+          <MoreVertical className="size-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={onCopyResume} disabled={disabled}>
+          <Copy className="mr-2 size-4" />
+          Copy resume
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={onDownloadResume} disabled={!isPinned || disabled}>
+          <Download className="mr-2 size-4" />
+          Download resume
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+

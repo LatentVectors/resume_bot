@@ -19,18 +19,6 @@ CREATE TYPE job_status AS ENUM (
   'Hired'
 );
 
--- Message channel types
-CREATE TYPE message_channel AS ENUM (
-  'email',
-  'linkedin'
-);
-
--- Response source types
-CREATE TYPE response_source AS ENUM (
-  'manual',
-  'application'
-);
-
 -- Experience proposal types
 CREATE TYPE proposal_type AS ENUM (
   'achievement_add',
@@ -281,53 +269,6 @@ CREATE INDEX idx_cover_letter_versions_job_id_created_at_desc ON cover_letter_ve
 CREATE UNIQUE INDEX idx_cover_letter_versions_pinned ON cover_letter_versions(job_id) WHERE is_pinned = TRUE;
 
 -- =============================================================================
--- Messages Table
--- =============================================================================
-
-CREATE TABLE messages (
-  id SERIAL PRIMARY KEY,
-  job_id INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
-  channel message_channel NOT NULL,
-  body TEXT NOT NULL,
-  sent_at TIMESTAMPTZ,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_messages_job_id ON messages(job_id);
-
-CREATE TRIGGER update_messages_updated_at
-  BEFORE UPDATE ON messages
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
--- =============================================================================
--- Responses Table
--- =============================================================================
-
-CREATE TABLE responses (
-  id SERIAL PRIMARY KEY,
-  job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE,
-  prompt TEXT NOT NULL,
-  response TEXT NOT NULL,
-  source response_source NOT NULL,
-  ignore BOOLEAN NOT NULL DEFAULT FALSE,
-  locked BOOLEAN NOT NULL DEFAULT FALSE,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_responses_job_id ON responses(job_id);
-CREATE INDEX idx_responses_source ON responses(source);
-CREATE INDEX idx_responses_ignore ON responses(ignore);
-CREATE INDEX idx_responses_created_at ON responses(created_at DESC);
-
-CREATE TRIGGER update_responses_updated_at
-  BEFORE UPDATE ON responses
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-
--- =============================================================================
 -- Notes Table
 -- =============================================================================
 
@@ -373,22 +314,6 @@ CREATE TRIGGER update_job_intake_sessions_updated_at
   BEFORE UPDATE ON job_intake_sessions
   FOR EACH ROW
   EXECUTE FUNCTION update_updated_at_column();
-
--- =============================================================================
--- Job Intake Chat Messages Table
--- =============================================================================
-
-CREATE TABLE job_intake_chat_messages (
-  id SERIAL PRIMARY KEY,
-  session_id INTEGER NOT NULL REFERENCES job_intake_sessions(id) ON DELETE CASCADE,
-  step INTEGER NOT NULL,
-  messages JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT chk_step CHECK (step >= 1 AND step <= 3)
-);
-
-CREATE INDEX idx_job_intake_chat_messages_session_id ON job_intake_chat_messages(session_id);
-CREATE INDEX idx_job_intake_chat_messages_session_step ON job_intake_chat_messages(session_id, step);
 
 -- =============================================================================
 -- Experience Proposals Table
@@ -453,20 +378,15 @@ COMMENT ON TABLE certifications IS 'Professional certifications for users';
 COMMENT ON TABLE jobs IS 'Job applications being tracked';
 COMMENT ON TABLE resume_versions IS 'All resume versions for jobs. The pinned version (is_pinned=true) is the current resume.';
 COMMENT ON TABLE cover_letter_versions IS 'All cover letter versions for jobs. The pinned version (is_pinned=true) is the current cover letter.';
-COMMENT ON TABLE messages IS 'Outreach messages (email/LinkedIn) for jobs';
-COMMENT ON TABLE responses IS 'Saved responses for common application questions';
 COMMENT ON TABLE notes IS 'User notes attached to job applications';
-COMMENT ON TABLE job_intake_sessions IS 'Tracks state of job intake workflow';
-COMMENT ON TABLE job_intake_chat_messages IS 'Chat history for intake flow conversations';
+COMMENT ON TABLE job_intake_sessions IS 'Tracks state of job intake workflow. Chat messages stored in LangGraph threads.';
 COMMENT ON TABLE experience_proposals IS 'AI-generated proposals for updating experiences';
 COMMENT ON TABLE templates IS 'HTML templates for resumes and cover letters';
 
 COMMENT ON COLUMN experiences.skills IS 'Array of skill strings stored as JSONB';
 COMMENT ON COLUMN job_intake_sessions.resume_chat_thread_id IS 'LangGraph thread ID for resume chat session';
-COMMENT ON COLUMN job_intake_chat_messages.messages IS 'JSON array of LangChain message format';
 COMMENT ON COLUMN experience_proposals.proposed_content IS 'JSON containing the proposal data';
 COMMENT ON COLUMN experience_proposals.original_proposed_content IS 'Original AI-generated proposal for revert';
 COMMENT ON COLUMN templates.metadata IS 'Additional template configuration as JSON';
 COMMENT ON COLUMN resume_versions.is_pinned IS 'When true, this version is the current resume for the job';
 COMMENT ON COLUMN cover_letter_versions.is_pinned IS 'When true, this version is the current cover letter for the job';
-
