@@ -15,7 +15,8 @@ import { createThread, getThreadState, sendMessage } from "@/lib/langgraph";
 import { MarkdownRenderer } from "@/components/intake/MarkdownRenderer";
 import { useMessagePartText } from "@assistant-ui/react";
 import { ScrollFadeContainer } from "@/components/ui/scroll-fade-container";
-import { Dot } from "lucide-react";
+import { ArrowUp, Dot, Square } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 function TypingDots() {
   return (
@@ -31,7 +32,11 @@ function TypingDots() {
  * Internal component that monitors messages for propose_resume_draft tool calls
  * and triggers a callback when a new resume version is created.
  */
-function ResumeVersionMonitor({ onVersionCreated }: { onVersionCreated?: () => void }) {
+function ResumeVersionMonitor({
+  onVersionCreated,
+}: {
+  onVersionCreated?: () => void;
+}) {
   const messages = useThread((t) => t.messages);
   const isRunning = useThread((t) => t.isRunning);
   const wasRunningRef = useRef(false);
@@ -145,9 +150,13 @@ export function ResumeChat({
   const AssistantMessage = () => {
     const message = useMessage();
     const isInProgress = message.isLast && message.status?.type === "running";
-    const hasContent = message.content && message.content.length > 0 && 
-      message.content.some(part => part.type === "text" && part.text.length > 0);
-    
+    const hasContent =
+      message.content &&
+      message.content.length > 0 &&
+      message.content.some(
+        (part) => part.type === "text" && part.text.length > 0
+      );
+
     // Show typing dots if message is in progress but has no content yet
     if (isInProgress && !hasContent) {
       return (
@@ -158,7 +167,7 @@ export function ResumeChat({
         </MessagePrimitive.Root>
       );
     }
-    
+
     return (
       <MessagePrimitive.Root>
         <div className="w-full mb-4">
@@ -187,7 +196,9 @@ export function ResumeChat({
             <ThreadPrimitive.Empty>
               <div className="flex min-h-full items-center justify-center text-muted-foreground">
                 <div className="text-center">
-                  <p className="mb-2">Start a conversation with the Resume Agent</p>
+                  <p className="mb-2">
+                    Start a conversation with the Resume Agent
+                  </p>
                   <p className="text-sm">Ask for resume changes...</p>
                 </div>
               </div>
@@ -200,13 +211,30 @@ export function ResumeChat({
             />
           </ThreadPrimitive.Viewport>
         </ScrollFadeContainer>
-        <div className="shrink-0">
-          <ComposerPrimitive.Root className="px-4 pb-4">
+        <div className="shrink-0 px-4 pb-4">
+          <ComposerPrimitive.Root className="relative flex w-full items-end">
             <ComposerPrimitive.Input
               placeholder="Ask for resume changes..."
-              className="w-full rounded-xl border border-input bg-background p-3 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none"
+              minRows={4}
+              maxRows={4}
+              className="w-full resize-none rounded-xl border border-input bg-background p-3 pr-12 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:border-primary focus-visible:outline-none"
             />
-            <ComposerPrimitive.Send className="mt-2" />
+            <div className="absolute right-3 bottom-3">
+              <ThreadPrimitive.If running={false}>
+                <ComposerPrimitive.Send asChild>
+                  <Button size="icon-sm" aria-label="Send message">
+                    <ArrowUp className="size-4" />
+                  </Button>
+                </ComposerPrimitive.Send>
+              </ThreadPrimitive.If>
+              <ThreadPrimitive.If running>
+                <ComposerPrimitive.Cancel asChild>
+                  <Button size="icon-sm" aria-label="Stop generating">
+                    <Square className="size-3" fill="currentColor" />
+                  </Button>
+                </ComposerPrimitive.Cancel>
+              </ThreadPrimitive.If>
+            </div>
           </ComposerPrimitive.Root>
         </div>
       </ThreadPrimitive.Root>
