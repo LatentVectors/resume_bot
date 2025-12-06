@@ -7,15 +7,19 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Separator } from "@/components/ui/separator";
 import { ScrollFadeContainer } from "@/components/ui/scroll-fade-container";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "@/components/ui/resizable";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MoreVertical } from "lucide-react";
+import { MoreVertical, PanelRightClose, PanelRightOpen } from "lucide-react";
 import { useJob } from "@/lib/hooks/useJobs";
 import { useCurrentUser } from "@/lib/hooks/useUser";
 import { useExperiences } from "@/lib/hooks/useExperiences";
@@ -70,6 +74,7 @@ export function ExperienceResumeInterface({
   const { setCurrentStep, setSessionId } = useIntakeStore();
 
   const [selectedTab, setSelectedTab] = useState<string>("job");
+  const [isDrawerCollapsed, setIsDrawerCollapsed] = useState(false);
   const [selectedVersionId, setSelectedVersionId] = useState<number | null>(
     null
   );
@@ -846,223 +851,253 @@ ${workExperience}
         </div>
       )}
 
-      {/* Two-column grid layout */}
+      {/* Two-column resizable layout */}
       <div className="flex-1 min-h-0 pb-6">
-        <div className="grid gap-0 md:grid-cols-[40%_1px_1fr] h-full">
-          {/* Left column: Chat interface (40%) */}
-          <div className="h-full overflow-hidden">
-            {intakeSession && user && (
-              <ResumeChat
-                jobId={jobId}
-                initialThreadId={resumeChatThreadId}
-                onThreadCreated={handleThreadCreated}
-                onResumeVersionCreated={handleResumeVersionCreated}
-                context={{
-                  job_id: jobId,
-                  user_id: user.id,
-                  gap_analysis: gapAnalysis || "",
-                  stakeholder_analysis: stakeholderAnalysis || "",
-                  work_experience: "", // Will be populated on first message
-                  job_description: job?.job_description || "",
-                  selected_version_id: selectedVersionId,
-                  template_name:
-                    selectedVersion?.template_name || "resume_000.html",
-                  parent_version_id: selectedVersionId,
-                }}
-              />
-            )}
-          </div>
+        <ResizablePanelGroup direction="horizontal" className="h-full">
+          {/* Left panel: Chat interface */}
+          <ResizablePanel defaultSize={50} minSize={30}>
+            <div className="h-full overflow-hidden relative">
+              {/* Drawer toggle button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-2 right-2 z-10"
+                onClick={() => setIsDrawerCollapsed(!isDrawerCollapsed)}
+                title={isDrawerCollapsed ? "Show panel" : "Hide panel"}
+              >
+                {isDrawerCollapsed ? (
+                  <PanelRightOpen className="h-4 w-4" />
+                ) : (
+                  <PanelRightClose className="h-4 w-4" />
+                )}
+              </Button>
+              {intakeSession && user && (
+                <ResumeChat
+                  jobId={jobId}
+                  initialThreadId={resumeChatThreadId}
+                  onThreadCreated={handleThreadCreated}
+                  onResumeVersionCreated={handleResumeVersionCreated}
+                  context={{
+                    job_id: jobId,
+                    user_id: user.id,
+                    gap_analysis: gapAnalysis || "",
+                    stakeholder_analysis: stakeholderAnalysis || "",
+                    work_experience: "", // Will be populated on first message
+                    job_description: job?.job_description || "",
+                    selected_version_id: selectedVersionId,
+                    template_name:
+                      selectedVersion?.template_name || "resume_000.html",
+                    parent_version_id: selectedVersionId,
+                  }}
+                />
+              )}
+            </div>
+          </ResizablePanel>
 
-          {/* Vertical separator */}
-          <Separator orientation="vertical" />
-
-          {/* Right column: Tabs interface */}
-          <div className="flex flex-col overflow-hidden pl-6 min-h-0">
-            <Tabs
-              value={selectedTab}
-              onValueChange={setSelectedTab}
-              className="flex h-full min-h-0 flex-col"
-            >
-              <div className="px-4 py-2">
-                <TabsList>
-                  <TabsTrigger value="job">Job</TabsTrigger>
-                  <TabsTrigger value="gap-analysis">Gap Analysis</TabsTrigger>
-                  <TabsTrigger value="stakeholder-analysis">
-                    Stakeholder Analysis
-                  </TabsTrigger>
-                  <TabsTrigger value="content">Content</TabsTrigger>
-                  <TabsTrigger value="preview">Preview</TabsTrigger>
-                </TabsList>
-              </div>
-
-              <div className="flex-1 min-h-0 overflow-hidden">
-                <TabsContent value="job" className="h-full">
-                  <ScrollFadeContainer
-                    className="h-full"
-                    scrollClassName="px-4 pb-4 pt-0"
-                    topGradientHeight={48}
-                    bottomGradientHeight={96}
-                    fadeThreshold={120}
+          {/* Resizable handle and right panel (collapsible) */}
+          {!isDrawerCollapsed && (
+            <>
+              <ResizableHandle withHandle />
+              <ResizablePanel defaultSize={50} minSize={30}>
+                {/* Right column: Tabs interface */}
+                <div className="flex flex-col overflow-hidden pl-6 min-h-0 h-full">
+                  <Tabs
+                    value={selectedTab}
+                    onValueChange={setSelectedTab}
+                    className="flex h-full min-h-0 flex-col"
                   >
-                    <div className="space-y-4">
-                      <div>
-                        <strong>{job.job_title || "No title"}</strong> at{" "}
-                        <strong>{job.company_name || "No company"}</strong>
-                      </div>
-                      {job.job_description ? (
-                        <MarkdownContent content={job.job_description} />
-                      ) : (
-                        <Alert>
-                          <AlertDescription>
-                            No job description available.
-                          </AlertDescription>
-                        </Alert>
-                      )}
-                    </div>
-                  </ScrollFadeContainer>
-                </TabsContent>
-
-                <TabsContent value="gap-analysis" className="h-full">
-                  <ScrollFadeContainer
-                    className="h-full"
-                    scrollClassName="px-4 pb-4 pt-0"
-                    topGradientHeight={48}
-                    bottomGradientHeight={96}
-                    fadeThreshold={120}
-                  >
-                    <MarkdownRenderer content={gapAnalysis || ""} />
-                  </ScrollFadeContainer>
-                </TabsContent>
-
-                <TabsContent value="stakeholder-analysis" className="h-full">
-                  <ScrollFadeContainer
-                    className="h-full"
-                    scrollClassName="px-4 pb-4 pt-0"
-                    topGradientHeight={48}
-                    bottomGradientHeight={96}
-                    fadeThreshold={120}
-                  >
-                    <MarkdownRenderer content={stakeholderAnalysis || ""} />
-                  </ScrollFadeContainer>
-                </TabsContent>
-
-                <TabsContent value="content" className="h-full">
-                  <div className="flex h-full min-h-0 flex-col gap-4">
-                    <div className="sticky top-0 z-20 bg-background">
-                      <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
-                        {versions.length > 0 && (
-                          <VersionNavigation
-                            versions={versions}
-                            selectedVersionId={selectedVersionId}
-                            canonicalVersionId={canonicalVersionId}
-                            onVersionChange={handleVersionChange}
-                            onPin={handlePin}
-                            onUnpin={handleUnpin}
-                            disabled={versionControlsDisabled}
-                            className="flex-wrap"
-                          />
-                        )}
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button
-                            variant="outline"
-                            onClick={handleDiscard}
-                            disabled={!isDirty || createVersion.isPending}
-                          >
-                            Discard
-                          </Button>
-                          <Button
-                            onClick={handleSave}
-                            disabled={!isDirty || createVersion.isPending}
-                          >
-                            Save
-                          </Button>
-                          <VersionActionMenu
-                            disabled={versionControlsDisabled}
-                            isPinned={isCurrentVersionPinned}
-                            onCopyResume={handleCopyResume}
-                            onDownloadResume={handleDownloadResume}
-                          />
-                        </div>
-                      </div>
+                    <div className="px-4 py-2">
+                      <TabsList>
+                        <TabsTrigger value="job">Job</TabsTrigger>
+                        <TabsTrigger value="gap-analysis">
+                          Gap Analysis
+                        </TabsTrigger>
+                        <TabsTrigger value="stakeholder-analysis">
+                          Stakeholder Analysis
+                        </TabsTrigger>
+                        <TabsTrigger value="content">Content</TabsTrigger>
+                        <TabsTrigger value="preview">Preview</TabsTrigger>
+                      </TabsList>
                     </div>
 
-                    <ScrollFadeContainer
-                      className="flex-1 min-h-0"
-                      scrollClassName="pb-4 px-4 pt-0"
-                      topGradientHeight={48}
-                      bottomGradientHeight={96}
-                      fadeThreshold={120}
-                    >
-                      {draftResume ? (
-                        <ResumeEditor
-                          resumeData={draftResume}
-                          updateResume={updateDraftResume}
-                          readOnly={false}
-                        />
-                      ) : (
-                        <div className="text-muted-foreground p-4">
-                          Loading resume data...
-                        </div>
-                      )}
-                    </ScrollFadeContainer>
-                  </div>
-                </TabsContent>
+                    <div className="flex-1 min-h-0 overflow-hidden">
+                      <TabsContent value="job" className="h-full">
+                        <ScrollFadeContainer
+                          className="h-full"
+                          scrollClassName="px-4 pb-4 pt-0"
+                          topGradientHeight={48}
+                          bottomGradientHeight={96}
+                          fadeThreshold={120}
+                        >
+                          <div className="space-y-4">
+                            <div>
+                              <strong>{job.job_title || "No title"}</strong> at{" "}
+                              <strong>
+                                {job.company_name || "No company"}
+                              </strong>
+                            </div>
+                            {job.job_description ? (
+                              <MarkdownContent content={job.job_description} />
+                            ) : (
+                              <Alert>
+                                <AlertDescription>
+                                  No job description available.
+                                </AlertDescription>
+                              </Alert>
+                            )}
+                          </div>
+                        </ScrollFadeContainer>
+                      </TabsContent>
 
-                <TabsContent value="preview" className="h-full">
-                  <div className="flex h-full min-h-0 flex-col gap-4">
-                    <div className="sticky top-0 z-20 bg-background">
-                      {!isDirty && versions.length > 0 && (
-                        <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
-                          <VersionNavigation
-                            versions={versions}
-                            selectedVersionId={selectedVersionId}
-                            canonicalVersionId={canonicalVersionId}
-                            onVersionChange={handleVersionChange}
-                            onPin={handlePin}
-                            onUnpin={handleUnpin}
-                            disabled={versionControlsDisabled}
-                            className="flex-wrap"
-                          />
-                          <VersionActionMenu
-                            disabled={versionControlsDisabled}
-                            isPinned={isCurrentVersionPinned}
-                            onCopyResume={handleCopyResume}
-                            onDownloadResume={handleDownloadResume}
-                          />
-                        </div>
-                      )}
+                      <TabsContent value="gap-analysis" className="h-full">
+                        <ScrollFadeContainer
+                          className="h-full"
+                          scrollClassName="px-4 pb-4 pt-0"
+                          topGradientHeight={48}
+                          bottomGradientHeight={96}
+                          fadeThreshold={120}
+                        >
+                          <MarkdownRenderer content={gapAnalysis || ""} />
+                        </ScrollFadeContainer>
+                      </TabsContent>
 
-                      {isDirty && (
-                        <div className="flex items-center justify-end gap-2 pb-2">
-                          <Button
-                            variant="outline"
-                            onClick={handleDiscard}
-                            disabled={createVersion.isPending}
-                          >
-                            Discard
-                          </Button>
-                          <Button
-                            onClick={handleSave}
-                            disabled={createVersion.isPending}
-                          >
-                            Save
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="flex-1 min-h-0 px-4 pb-4">
-                      <ResumePDFPreview
-                        resumeData={draftResume}
+                      <TabsContent
+                        value="stakeholder-analysis"
                         className="h-full"
-                      />
+                      >
+                        <ScrollFadeContainer
+                          className="h-full"
+                          scrollClassName="px-4 pb-4 pt-0"
+                          topGradientHeight={48}
+                          bottomGradientHeight={96}
+                          fadeThreshold={120}
+                        >
+                          <MarkdownRenderer
+                            content={stakeholderAnalysis || ""}
+                          />
+                        </ScrollFadeContainer>
+                      </TabsContent>
+
+                      <TabsContent value="content" className="h-full">
+                        <div className="flex h-full min-h-0 flex-col gap-4">
+                          <div className="sticky top-0 z-20 bg-background">
+                            <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
+                              {versions.length > 0 && (
+                                <VersionNavigation
+                                  versions={versions}
+                                  selectedVersionId={selectedVersionId}
+                                  canonicalVersionId={canonicalVersionId}
+                                  onVersionChange={handleVersionChange}
+                                  onPin={handlePin}
+                                  onUnpin={handleUnpin}
+                                  disabled={versionControlsDisabled}
+                                  className="flex-wrap"
+                                />
+                              )}
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Button
+                                  variant="outline"
+                                  onClick={handleDiscard}
+                                  disabled={!isDirty || createVersion.isPending}
+                                >
+                                  Discard
+                                </Button>
+                                <Button
+                                  onClick={handleSave}
+                                  disabled={!isDirty || createVersion.isPending}
+                                >
+                                  Save
+                                </Button>
+                                <VersionActionMenu
+                                  disabled={versionControlsDisabled}
+                                  isPinned={isCurrentVersionPinned}
+                                  onCopyResume={handleCopyResume}
+                                  onDownloadResume={handleDownloadResume}
+                                />
+                              </div>
+                            </div>
+                          </div>
+
+                          <ScrollFadeContainer
+                            className="flex-1 min-h-0"
+                            scrollClassName="pb-4 px-4 pt-0"
+                            topGradientHeight={48}
+                            bottomGradientHeight={96}
+                            fadeThreshold={120}
+                          >
+                            {draftResume ? (
+                              <ResumeEditor
+                                resumeData={draftResume}
+                                updateResume={updateDraftResume}
+                                readOnly={false}
+                              />
+                            ) : (
+                              <div className="text-muted-foreground p-4">
+                                Loading resume data...
+                              </div>
+                            )}
+                          </ScrollFadeContainer>
+                        </div>
+                      </TabsContent>
+
+                      <TabsContent value="preview" className="h-full">
+                        <div className="flex h-full min-h-0 flex-col gap-4">
+                          <div className="sticky top-0 z-20 bg-background">
+                            {!isDirty && versions.length > 0 && (
+                              <div className="flex flex-wrap items-center justify-between gap-2 pb-2">
+                                <VersionNavigation
+                                  versions={versions}
+                                  selectedVersionId={selectedVersionId}
+                                  canonicalVersionId={canonicalVersionId}
+                                  onVersionChange={handleVersionChange}
+                                  onPin={handlePin}
+                                  onUnpin={handleUnpin}
+                                  disabled={versionControlsDisabled}
+                                  className="flex-wrap"
+                                />
+                                <VersionActionMenu
+                                  disabled={versionControlsDisabled}
+                                  isPinned={isCurrentVersionPinned}
+                                  onCopyResume={handleCopyResume}
+                                  onDownloadResume={handleDownloadResume}
+                                />
+                              </div>
+                            )}
+
+                            {isDirty && (
+                              <div className="flex items-center justify-end gap-2 pb-2">
+                                <Button
+                                  variant="outline"
+                                  onClick={handleDiscard}
+                                  disabled={createVersion.isPending}
+                                >
+                                  Discard
+                                </Button>
+                                <Button
+                                  onClick={handleSave}
+                                  disabled={createVersion.isPending}
+                                >
+                                  Save
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+
+                          <div className="flex-1 min-h-0 px-4 pb-4">
+                            <ResumePDFPreview
+                              resumeData={draftResume}
+                              className="h-full"
+                            />
+                          </div>
+                        </div>
+                      </TabsContent>
                     </div>
-                  </div>
-                </TabsContent>
-              </div>
-            </Tabs>
-          </div>
-        </div>
+                  </Tabs>
+                </div>
+              </ResizablePanel>
+            </>
+          )}
+        </ResizablePanelGroup>
       </div>
 
       {/* Unsaved Changes Dialog */}
