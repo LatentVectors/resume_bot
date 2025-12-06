@@ -13,7 +13,7 @@
  * Environment Variables Required:
  *   NEXT_PUBLIC_SUPABASE_URL - Supabase API URL
  *   SUPABASE_SERVICE_ROLE_KEY - Service role key for admin access
- *   SQLITE_DATABASE_PATH - Path to SQLite database (default: ../../apps/api/data/resume_bot.db)
+ *   SQLITE_DATABASE_PATH - Path to SQLite database (default: ../data/resume_bot.db)
  */
 
 import { createClient } from "@supabase/supabase-js";
@@ -29,7 +29,7 @@ const __dirname = path.dirname(__filename);
 // Configuration
 const SQLITE_DB_PATH =
   process.env.SQLITE_DATABASE_PATH ||
-  path.resolve(__dirname, "../../../apps/api/data/resume_bot.db");
+  path.resolve(__dirname, "../data/resume_bot.db");
 
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -108,7 +108,10 @@ function preScanLatestVersions(
   const resumeVersionCheck = db.exec(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='resumeversion'"
   );
-  if (resumeVersionCheck.length > 0 && resumeVersionCheck[0].values.length > 0) {
+  if (
+    resumeVersionCheck.length > 0 &&
+    resumeVersionCheck[0].values.length > 0
+  ) {
     const resumeVersions = db.exec(
       `SELECT job_id, MAX(version_index) as max_version 
        FROM resumeversion 
@@ -128,7 +131,10 @@ function preScanLatestVersions(
   const coverLetterVersionCheck = db.exec(
     "SELECT name FROM sqlite_master WHERE type='table' AND name='coverletterversion'"
   );
-  if (coverLetterVersionCheck.length > 0 && coverLetterVersionCheck[0].values.length > 0) {
+  if (
+    coverLetterVersionCheck.length > 0 &&
+    coverLetterVersionCheck[0].values.length > 0
+  ) {
     const coverLetterVersions = db.exec(
       `SELECT job_id, MAX(version_index) as max_version 
        FROM coverletterversion 
@@ -184,8 +190,12 @@ async function main() {
   // Pre-scan to find latest resume/cover letter version per job (needed for is_pinned)
   console.log("Pre-scanning for latest versions per job...");
   preScanLatestVersions(db, ctx, PRIMARY_USER_ID);
-  console.log(`  Found latest resume versions for ${ctx.latestResumeVersionByJob.size} jobs`);
-  console.log(`  Found latest cover letter versions for ${ctx.latestCoverLetterVersionByJob.size} jobs`);
+  console.log(
+    `  Found latest resume versions for ${ctx.latestResumeVersionByJob.size} jobs`
+  );
+  console.log(
+    `  Found latest cover letter versions for ${ctx.latestCoverLetterVersionByJob.size} jobs`
+  );
 
   // Migration order with custom queries for filtering by user
   // Note: resume and coverletter tables removed - data consolidated into versions tables
@@ -295,9 +305,7 @@ async function migrateTable(
       `SELECT name FROM sqlite_master WHERE type='table' AND name='${sqliteTable}'`
     );
     if (tableCheck.length === 0 || tableCheck[0].values.length === 0) {
-      console.log(
-        `  Table ${sqliteTable} does not exist in SQLite, skipping.`
-      );
+      console.log(`  Table ${sqliteTable} does not exist in SQLite, skipping.`);
       return stat;
     }
 
@@ -338,7 +346,9 @@ async function migrateTable(
         .select();
 
       if (error) {
-        stat.errors.push(`Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`);
+        stat.errors.push(
+          `Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${error.message}`
+        );
         console.error(`  Error inserting batch: ${error.message}`);
       } else {
         stat.migratedCount += data?.length || 0;
@@ -517,7 +527,9 @@ async function resetSequences(): Promise<void> {
 
       if (maxError && maxError.code !== "PGRST116") {
         // PGRST116 = no rows returned, which is fine
-        console.log(`  ⚠️ Could not get max ID for ${table}: ${maxError.message}`);
+        console.log(
+          `  ⚠️ Could not get max ID for ${table}: ${maxError.message}`
+        );
         continue;
       }
 
@@ -536,22 +548,35 @@ async function resetSequences(): Promise<void> {
 
       if (rpcError) {
         // Function might not exist yet - that's okay, we'll handle it
-        if (rpcError.message.includes("function") || rpcError.code === "42883") {
-          console.log(`  ℹ️ reset_table_sequence function not found. Run the sequence reset SQL manually.`);
+        if (
+          rpcError.message.includes("function") ||
+          rpcError.code === "42883"
+        ) {
+          console.log(
+            `  ℹ️ reset_table_sequence function not found. Run the sequence reset SQL manually.`
+          );
           break;
         } else {
-          console.log(`  ⚠️ Error resetting sequence for ${table}: ${rpcError.message}`);
+          console.log(
+            `  ⚠️ Error resetting sequence for ${table}: ${rpcError.message}`
+          );
         }
       } else {
         console.log(`  ✅ Reset sequence for ${table} to ${maxId}`);
       }
     } catch (error) {
-      console.log(`  ⚠️ Error processing ${table}: ${error instanceof Error ? error.message : String(error)}`);
+      console.log(
+        `  ⚠️ Error processing ${table}: ${
+          error instanceof Error ? error.message : String(error)
+        }`
+      );
     }
   }
 
   console.log("\nSequence reset complete.");
-  console.log("If sequences were not reset automatically, run this SQL in your database:");
+  console.log(
+    "If sequences were not reset automatically, run this SQL in your database:"
+  );
   console.log(`
 -- Reset all sequences to max(id) for each table
 DO $$
@@ -587,8 +612,8 @@ function printSummary(stats: MigrationStats[]) {
       stat.errors.length > 0
         ? "⚠️"
         : stat.migratedCount === stat.sourceCount
-          ? "✅"
-          : "⏳";
+        ? "✅"
+        : "⏳";
     console.log(
       `${status} ${stat.table}: ${stat.migratedCount}/${stat.sourceCount} rows`
     );
