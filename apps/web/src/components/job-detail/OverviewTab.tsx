@@ -2,7 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Star, Trash2, Edit2, Save, X, MoreVertical, Download, Copy, CheckCircle } from "lucide-react";
+import {
+  Star,
+  Trash2,
+  Edit2,
+  Save,
+  X,
+  MoreVertical,
+  Download,
+  Copy,
+  CheckCircle,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -108,9 +118,9 @@ export function OverviewTab({ job }: OverviewTabProps) {
       await updateJob.mutateAsync({
         jobId: job.id,
         data: {
-          title: formData.job_title || null,
-          company: formData.company_name || null,
-          description: formData.job_description || "",
+          job_title: formData.job_title || null,
+          company_name: formData.company_name || null,
+          job_description: formData.job_description || "",
         },
       });
       setIsEditing(false);
@@ -190,7 +200,7 @@ export function OverviewTab({ job }: OverviewTabProps) {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      
+
       // Build filename matching Streamlit format: Resume - {company} - {title} - {name} - {yyyy_mm_dd}.pdf
       const sanitize = (value: string) => {
         return value
@@ -198,10 +208,10 @@ export function OverviewTab({ job }: OverviewTabProps) {
           .replace(/[/\\:*?"<>|]/g, "-")
           .replace(/\s+/g, " ");
       };
-      
+
       const companyName = sanitize(job.company_name || "Unknown Company");
       const jobTitle = sanitize(job.job_title || "Unknown Title");
-      
+
       // Parse resume_json to get name
       let fullName = "Unknown Name";
       try {
@@ -210,13 +220,15 @@ export function OverviewTab({ job }: OverviewTabProps) {
       } catch {
         // Use default if parsing fails
       }
-      
+
       // Format date as YYYY_MM_DD
       const now = new Date();
-      const dateStr = `${now.getFullYear()}_${String(now.getMonth() + 1).padStart(2, "0")}_${String(now.getDate()).padStart(2, "0")}`;
-      
+      const dateStr = `${now.getFullYear()}_${String(
+        now.getMonth() + 1
+      ).padStart(2, "0")}_${String(now.getDate()).padStart(2, "0")}`;
+
       const filename = `Resume - ${companyName} - ${jobTitle} - ${fullName} - ${dateStr}.pdf`;
-      
+
       a.download = filename;
       document.body.appendChild(a);
       a.click();
@@ -241,10 +253,10 @@ export function OverviewTab({ job }: OverviewTabProps) {
     try {
       // Parse resume_json to get ResumeData object
       const resumeData = JSON.parse(currentResume.resume_json);
-      
+
       // Format resume as text
       const formattedText = formatResumeAsText(resumeData);
-      
+
       // Copy to clipboard
       await navigator.clipboard.writeText(formattedText);
       toast.success("Resume text copied to clipboard!");
@@ -276,10 +288,15 @@ export function OverviewTab({ job }: OverviewTabProps) {
         await Promise.all(
           userExperiences.map(async (exp) => {
             try {
-              const achievements = await experiencesAPI.listAchievements(exp.id);
+              const achievements = await experiencesAPI.listAchievements(
+                exp.id
+              );
               achievementsByExp.set(exp.id, achievements);
             } catch (error) {
-              console.error(`Failed to fetch achievements for experience ${exp.id}:`, error);
+              console.error(
+                `Failed to fetch achievements for experience ${exp.id}:`,
+                error
+              );
             }
           })
         );
@@ -395,12 +412,18 @@ ${stakeholderAnalysis}
               disabled={toggleFavorite.isPending}
             >
               <Star
-                className={`size-4 ${job.is_favorite ? "fill-yellow-400 text-yellow-400" : ""}`}
+                className={`size-4 ${
+                  job.is_favorite ? "fill-yellow-400 text-yellow-400" : ""
+                }`}
               />
             </Button>
             {!isEditing ? (
               <>
-                <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditing(true)}
+                >
                   Edit
                 </Button>
                 <Button
@@ -496,7 +519,10 @@ ${stakeholderAnalysis}
                   id="job_title"
                   value={formData.job_title}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, job_title: e.target.value }))
+                    setFormData((prev) => ({
+                      ...prev,
+                      job_title: e.target.value,
+                    }))
                   }
                   placeholder="Job title"
                 />
@@ -519,14 +545,19 @@ ${stakeholderAnalysis}
                   id="company_name"
                   value={formData.company_name}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, company_name: e.target.value }))
+                    setFormData((prev) => ({
+                      ...prev,
+                      company_name: e.target.value,
+                    }))
                   }
                   placeholder="Company name"
                 />
               ) : (
                 <div className="text-sm">
                   {job.company_name || (
-                    <span className="text-muted-foreground">No company name</span>
+                    <span className="text-muted-foreground">
+                      No company name
+                    </span>
                   )}
                 </div>
               )}
@@ -543,7 +574,9 @@ ${stakeholderAnalysis}
               {isEditing ? (
                 <Select
                   value={formData.status}
-                  onValueChange={(value) => handleStatusChange(value as JobStatus)}
+                  onValueChange={(value) =>
+                    handleStatusChange(value as JobStatus)
+                  }
                 >
                   <SelectTrigger id="status">
                     <SelectValue />
@@ -575,7 +608,9 @@ ${stakeholderAnalysis}
             <div className="space-y-2">
               <Label className="text-sm font-medium">Date Updated</Label>
               <div className="text-sm text-muted-foreground">
-                {job.updated_at ? new Date(job.updated_at).toLocaleDateString() : '—'}
+                {job.updated_at
+                  ? new Date(job.updated_at).toLocaleDateString()
+                  : "—"}
               </div>
             </div>
           </div>
@@ -592,7 +627,10 @@ ${stakeholderAnalysis}
                   id="job_description"
                   value={formData.job_description}
                   onChange={(e) =>
-                    setFormData((prev) => ({ ...prev, job_description: e.target.value }))
+                    setFormData((prev) => ({
+                      ...prev,
+                      job_description: e.target.value,
+                    }))
                   }
                   placeholder="Job description"
                   className="min-h-[200px]"
@@ -602,7 +640,9 @@ ${stakeholderAnalysis}
                   {job.job_description ? (
                     <p className="whitespace-pre-wrap">{job.job_description}</p>
                   ) : (
-                    <span className="text-muted-foreground">No description</span>
+                    <span className="text-muted-foreground">
+                      No description
+                    </span>
                   )}
                 </div>
               )}
@@ -652,7 +692,8 @@ ${stakeholderAnalysis}
           <DialogHeader>
             <DialogTitle>Delete Job</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this job? This action cannot be undone.
+              Are you sure you want to delete this job? This action cannot be
+              undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -676,4 +717,3 @@ ${stakeholderAnalysis}
     </>
   );
 }
-

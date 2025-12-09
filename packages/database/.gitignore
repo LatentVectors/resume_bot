@@ -1,3 +1,6 @@
+# Database Backups
+data/
+
 # Dependencies
 node_modules/
 

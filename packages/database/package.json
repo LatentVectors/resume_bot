@@ -17,7 +17,9 @@
     "db:reset": "supabase db reset",
     "db:gen-types": "supabase gen types typescript --local > src/types/database.types.ts",
     "migrate:from-sqlite": "dotenv -- npx tsx scripts/migrate-from-sqlite.ts",
-    "seed:templates": "npx tsx scripts/seed-templates.ts"
+    "seed:templates": "npx tsx scripts/seed-templates.ts",
+    "db:backup": "mkdir -p data && docker exec supabase_db_resume pg_dump -U postgres -d postgres > data/backup.sql",
+    "db:restore": "docker exec -i supabase_db_resume psql -U postgres -d postgres < data/backup.sql"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
